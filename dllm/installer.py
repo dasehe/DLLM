@@ -40,6 +40,11 @@ class InstallError(Exception):
     pass
 
 
+class PolicyBlocked(InstallError):
+    """Windows (Control inteligente de aplicaciones, AppLocker/WDAC) impide ejecutar llama.cpp: probar otro backend
+    no sirve, porque todos los paquetes llevan DLL sin firmar."""
+
+
 # ============================================================ plataforma
 def _cuda_version():
     try:
@@ -335,6 +340,11 @@ SAC_HINT = ("Windows lo ha bloqueado: el «Control inteligente de aplicaciones»
             "instalar. Ver docs/SOLUCION-PROBLEMAS.md")
 
 
+# Errores de Win32 (OSError.winerror) al lanzar un ejecutable que una directiva de control de aplicaciones bloquea
+WIN_POLICY_ERRORS = (4551, 1260)  # 4551: «Una directiva de Control de aplicaciones bloqueó este archivo»
+POLICY_HINT = "Una directiva de Control de aplicaciones de Windows ha bloqueado llama.cpp. " + SAC_HINT
+
+
 def explain_exit(code):
     """Texto para un código de salida de Windows que indica un bloqueo de carga, o None."""
     kind = WIN_BLOCKED.get((code or 0) & 0xFFFFFFFF)
@@ -363,6 +373,8 @@ def run_check(binary):
             msg += ". " + SAC_HINT
         return False, msg
     except Exception as e:
+        if getattr(e, "winerror", None) in WIN_POLICY_ERRORS:
+            return False, POLICY_HINT
         return False, str(e)
     out = (r.stdout + r.stderr).strip()
     if r.returncode and explain_exit(r.returncode):
@@ -386,6 +398,8 @@ def verify_bins(bin_dir, need):
             raise InstallError(f"falta {' o '.join(a + EXE for a in hw.bin_names(n))} en {bin_dir}")
         ok, out = run_check(p)
         if not ok:
+            if out in (POLICY_HINT, SAC_HINT):
+                raise PolicyBlocked(f"{n} no arranca: {out}")
             hint = ""
             if "libvulkan" in out:
                 hint = " (instala el driver Vulkan: sudo apt install libvulkan1)"

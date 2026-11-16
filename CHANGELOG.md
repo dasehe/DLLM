@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+### Corregido
+- **Instalador en Windows con Control inteligente de aplicaciones**: `[WinError 4551]` (y 1260) al lanzar llama.cpp se
+  reconoce como bloqueo de directiva y el asistente se detiene con la explicación, en vez de probar otro backend (CPU
+  también se bloquea y dejaba un orquestador inservible).
+
 ### Documentación
 - README: estado real (clúster de 2 equipos Windows probado con llama.cpp real), problema conocido con imágenes en
   modelos grandes repartidos, varios modelos y topología; instalación en Ubuntu desde GitHub (`docs/INSTALACION.md`).

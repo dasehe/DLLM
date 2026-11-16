@@ -211,7 +211,8 @@ class Setup:
                         backend = b
                         break
                     except installer.InstallError as e:
-                        if k == len(tries) - 1:
+                        # bloqueo de Windows por directiva: los demás backends llevan las mismas DLL, no se prueban
+                        if k == len(tries) - 1 or isinstance(e, installer.PolicyBlocked):
                             raise
                         self.emit(1, "warn", f"{b} no disponible ({str(e)[:160]}); se prueba {tries[k + 1]}",
                                   label=f"Backend {b}")

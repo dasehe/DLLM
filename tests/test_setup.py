@@ -292,6 +292,17 @@ class TestWindowsBlocked(unittest.TestCase):
             with mock.patch.object(hw, "smart_app_control", return_value=None):
                 self.assertNotIn("Smart App Control", installer.run_check("x")[1])
 
+    def test_winerror_4551_es_bloqueo_de_politica(self):
+        e = OSError(); e.winerror = 4551
+        with mock.patch.object(installer.subprocess, "run", side_effect=e):
+            ok, txt = installer.run_check("x")
+        self.assertFalse(ok)
+        self.assertIn("Control inteligente", txt)
+        with mock.patch.object(installer, "run_check", return_value=(False, installer.POLICY_HINT)), \
+                mock.patch.object(installer, "bin_path", return_value=Path(__file__)):
+            with self.assertRaises(installer.PolicyBlocked):
+                installer.verify_bins("d", ("llama-server",))
+
     def test_sac_state_off_windows(self):
         if os.name != "nt":
             self.assertIsNone(hw.smart_app_control())

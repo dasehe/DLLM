@@ -152,6 +152,9 @@ otro Windows con Vulkan funcionan juntos.
 **Windows 11 con Control inteligente de aplicaciones (Smart App Control):** bloquea las DLL sin firmar de llama.cpp
 (error `0xc0e90002` y aviso de Defender «Se ha bloqueado parte de esta aplicación»). Desactívalo en Seguridad de
 Windows → Control de aplicaciones y navegador antes de instalar; el asistente lo detecta y lo explica.
+Si Windows responde «`[WinError 4551]` Una directiva de Control de aplicaciones bloqueó este archivo», es lo mismo: el
+asistente **se detiene** con esa explicación en lugar de probar otro backend (CPU lleva las mismas DLL y también se
+bloquearía). Desactiva el control y repite la instalación.
 
 **CUDA en Linux** se descarga ya compilado (paquete oficial `ubuntu-cuda`, con su runtime); solo necesitas el
 driver de NVIDIA (`nvidia-smi` debe funcionar; en una VM, con la GPU en *passthrough*). Para compilarlo tú:
