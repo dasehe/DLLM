@@ -365,7 +365,10 @@ class TestFirewallAndFolders(unittest.TestCase):
                 for d in (tmp / "DLLM" / "llama.cpp" / "b1", tmp / "DLLM" / "models", tmp / "home"):
                     d.mkdir(parents=True)
                 (tmp / "DLLM" / "models" / "a.gguf").write_text("x")
-                with mock.patch.object(installer, "uninstall_service"), mock.patch.object(installer, "close_firewall"):
+                with mock.patch.object(installer, "uninstall_service"), mock.patch.object(installer, "close_firewall"), \
+                        mock.patch.object(installer.cleanup, "kill_all", return_value=([], [])), \
+                        mock.patch.object(installer.cleanup, "remove_legacy_service", return_value=[]), \
+                        mock.patch.object(installer.cleanup, "legacy_dirs", return_value=([], [])):
                     done = installer.uninstall_all(cfg, purge=True, models=False)
                     self.assertFalse((tmp / "DLLM" / "llama.cpp").exists())
                     self.assertFalse((tmp / "home").exists())

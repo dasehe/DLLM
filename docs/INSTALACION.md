@@ -269,6 +269,14 @@ dllm uninstall --purge           # además borra llama.cpp y ~/.dllm (configurac
 dllm uninstall --purge --models  # además borra los modelos, solo si están en <carpeta de DLLM>/models
 ```
 
+**La desinstalación es a fondo:** además de la tarea programada y las reglas del cortafuegos, **cierra todos los
+procesos** de DLLM (agente, orquestador, `llama-server`, `rpc-server`) repitiendo hasta que no quede ninguno, y si alguno
+no se deja cerrar lo dice con su PID. Con `--purge` borra las carpetas aunque tengan ficheros de solo lectura
+(reintenta si algo las usa un instante). También limpia los restos de la **versión anterior del programa** (tarea
+programada, servicio, accesos directos, reglas de cortafuegos, procesos y sus carpetas de configuración y llama.cpp),
+cuyo desinstalador dejaba procesos vivos; sus modelos no se tocan. Si algo no se pudo borrar, el resultado lo marca
+con «NO».
+
 Los modelos se conservan salvo que lo pidas, y una carpeta de modelos que no creó DLLM nunca se borra.
 
 Donde `dllm` equivale a `python ~/.dllm/dllm.pyz` (Windows: `py -3 %USERPROFILE%\.dllm\dllm.pyz`).

@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+### Cambiado
+- **Desinstalador a fondo**: cierra todos los procesos de DLLM (agente, orquestador, `llama-server`, `rpc-server`;
+  repite hasta que no quede ninguno y avisa de los que no se dejan), borra carpetas con reintentos y ficheros de solo
+  lectura, y elimina los restos de la versión anterior (tarea programada, servicio, accesos directos, reglas de
+  cortafuegos, procesos y carpetas; los modelos no se tocan). Nuevo módulo `dllm/cleanup.py`.
+
 ### Corregido
 - **El asistente explica por qué no usa CUDA** cuando detecta una GPU NVIDIA (p. ej. driver que solo admite CUDA < 12.4
   o `nvidia-smi` sin versión de CUDA, típico en una VM con el driver antiguo) en lugar de elegir Vulkan en silencio.

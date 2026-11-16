@@ -29,7 +29,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from . import config, hw
+from . import cleanup, config, hw
 
 GH_API = "https://api.github.com/repos/ggml-org/llama.cpp/releases"
 UA = {"User-Agent": "dllm-installer"}
@@ -768,6 +768,7 @@ def close_firewall(dry_run=False):
     if platform.system().lower() != "windows" or dry_run:
         return
     names = [f"{FW_PREFIX}-agente", f"{FW_PREFIX}-beacon", f"{FW_PREFIX}-API", "DLLM agent", "DLLM beacon"]
+    names += cleanup.legacy_firewall_names()  # reglas de la versión anterior
     if any(firewall_rule_exists(n) for n in names):
         _run_elevated_ps("\n".join(f"& netsh advfirewall firewall delete rule {_ps_quote('name=' + n)} | Out-Null"
                                    for n in names))
@@ -783,7 +784,14 @@ def uninstall_all(cfg=None, purge=True, models=False, dry_run=False):
     uninstall_service(dry_run)
     if not dry_run:
         remove_shortcuts()
-    done.append("programa parado y arranque automático y accesos directos eliminados")
+    done += cleanup.remove_legacy_service(dry_run)
+    done.append("arranque automático y accesos directos eliminados")
+    # cierra TODO lo que quede en marcha (agente, orquestador, llama-server, rpc-server), también de la versión anterior
+    llama = config.llama_dir(cfg)
+    closed, left = cleanup.kill_all([llama, config.home()] + cleanup.legacy_dirs()[1], dry_run)
+    done.append(("procesos cerrados: " + ", ".join(closed)) if closed else "no había procesos en marcha")
+    if left:
+        done.append("NO se pudieron cerrar: " + ", ".join(left) + " → ciérralos en el Administrador de tareas o reinicia el equipo")
     if platform.system().lower() == "windows":
         close_firewall(dry_run)
         done.append("reglas del cortafuegos eliminadas")
@@ -791,7 +799,8 @@ def uninstall_all(cfg=None, purge=True, models=False, dry_run=False):
         return done
     idir = Path(cfg["install_dir"]).resolve() if cfg.get("install_dir") else None
     mdir = Path(cfg["models_dir"]).resolve() if cfg.get("models_dir") else None
-    targets = [config.llama_dir(cfg), config.home()]
+    conf_old, llama_old = cleanup.legacy_dirs()
+    targets = [config.llama_dir(cfg), config.home()] + llama_old + conf_old
     if models and mdir:
         if idir and mdir == idir / "models":
             targets.append(mdir)
@@ -802,8 +811,9 @@ def uninstall_all(cfg=None, purge=True, models=False, dry_run=False):
     for t in targets:
         if Path(t).exists():
             if not dry_run:
-                shutil.rmtree(t, ignore_errors=True)
-            done.append(f"borrado {t}" if dry_run or not Path(t).exists() else f"no se pudo borrar del todo {t}")
+                cleanup.force_rmtree(t)
+            done.append(f"borrado {t}" if dry_run or not Path(t).exists() else
+                        f"NO se pudo borrar del todo {t} (algo lo está usando: reinicia el equipo y bórralo a mano)")
     if idir and idir.is_dir() and not dry_run:
         try:
             idir.rmdir()  # solo si ha quedado vacía
