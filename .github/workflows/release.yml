@@ -1,0 +1,49 @@
+name: release
+
+# Publica una release de GitHub con el paquete distribuible. Dos formas:
+#   - Botón "Run workflow" en Actions → release (sobre main): toma la versión de dllm/__init__.py y crea vX.Y.Z.
+#   - Subir una etiqueta vX.Y.Z (debe coincidir con dllm/__init__.py).
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Versión y etiqueta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(python -c "import dllm; print(dllm.__version__)")
+          TAG="v$V"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+            echo "la etiqueta $GITHUB_REF_NAME no coincide con la versión $V"; exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "la release $TAG ya existe: sube la versión en dllm/__init__.py y pyproject.toml"; exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "V=$V" >> "$GITHUB_ENV"
+      - name: Tests
+        run: python -m unittest discover -s tests
+      - name: Construir paquete
+        run: python scripts/build_package.py --out dist
+      - name: Notas de la versión (sección del CHANGELOG)
+        run: |
+          awk -v v="$V" '/^## \[/{p=($0 ~ "\\[" v "\\]")} p' CHANGELOG.md > notes.md
+          test -s notes.md || echo "Versión $V" > notes.md
+      - name: Crear release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" dist/dllm-package-*.zip dist/dllm-package-*/SHA256SUMS \
+            --target "$GITHUB_SHA" --title "DLLM $TAG" --notes-file notes.md

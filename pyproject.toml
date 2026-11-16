@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dllm"
+version = "0.6.0"
+description = "Distributed LLM: orquestador de inferencia distribuida sobre llama.cpp RPC"
+requires-python = ">=3.9"
+license = {text = "AGPL-3.0-or-later"}
+authors = [{name = "David Serrano Hernando"}]
+readme = "README.md"
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Natural Language :: Spanish",
+]
+
+[project.urls]
+Homepage = "https://github.com/dasehe/dllm"
+dependencies = []
+
+[project.scripts]
+dllm = "dllm.cli:main"
+
+[tool.setuptools]
+packages = ["dllm"]
+
+[tool.setuptools.package-data]
+dllm = ["ui.html", "setup.html"]

@@ -1,0 +1,46 @@
+DLLM (Distributed LLM)
+Copyright (C) 2026 David Serrano Hernando y colaboradores de DLLM
+
+Idea original, diseño y desarrollo inicial: David Serrano Hernando
+Repositorio original: https://github.com/dasehe/dllm
+
+Este programa es software libre: puede redistribuirlo y/o modificarlo según los términos de la
+Licencia Pública General Affero de GNU (GNU AGPL), publicada por la Free Software Foundation, en su
+versión 3 o (a su elección) cualquier versión posterior. Se distribuye con la esperanza de que sea útil,
+pero SIN NINGUNA GARANTÍA; ni siquiera la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA UN
+FIN DETERMINADO. Consulte el fichero LICENSE (texto oficial, en inglés, que es el que tiene validez).
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+-------------------------------------------------------------------------------------------------
+TÉRMINOS ADICIONALES (sección 7 de la GNU AGPL versión 3)
+-------------------------------------------------------------------------------------------------
+
+Conforme a la sección 7, apartados b) y c), de la GNU AGPL v3, este programa se distribuye con los
+siguientes términos adicionales, que forman parte de su licencia:
+
+1. Atribución (sección 7.b). Toda copia del programa, y toda obra basada en él, debe conservar
+   íntegro este fichero NOTICE y la siguiente atribución de autoría:
+
+       "DLLM — idea original y desarrollo inicial de David Serrano Hernando
+        (https://github.com/dasehe/dllm)"
+
+   Cuando el programa, o una obra basada en él, muestre "Avisos legales apropiados" (Appropriate
+   Legal Notices) en una interfaz de usuario —por ejemplo el panel web o la salida de
+   `dllm --version`—, esos avisos deben incluir dicha atribución.
+
+2. Versiones modificadas (sección 7.c). Las versiones modificadas deben indicarse de forma
+   razonable como distintas de la versión original (por ejemplo, en su nombre, en su documentación
+   o en los avisos legales), sin dar a entender que son la versión original de DLLM ni que cuentan
+   con el respaldo de su autor.
+
+Estos términos no limitan ninguna otra libertad que concede la GNU AGPL: cualquiera puede usar,
+estudiar, modificar, redistribuir y continuar el proyecto, siempre bajo esta misma licencia.
+
+-------------------------------------------------------------------------------------------------
+COMPONENTES DE TERCEROS
+-------------------------------------------------------------------------------------------------
+
+DLLM no incluye código de terceros en su paquete. Durante la instalación descarga y ejecuta, como
+programas independientes, los binarios oficiales de llama.cpp (https://github.com/ggml-org/llama.cpp),
+distribuidos por sus autores bajo licencia MIT.

@@ -1,0 +1,21 @@
+# /etc/systemd/system/dllm-agent.service  ·  sudo systemctl enable --now dllm-agent
+# Ajusta User, rutas y --bin-dir. El secreto va en un fichero con permisos 600, no en la línea de comandos.
+[Unit]
+Description=DLLM agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=dllm
+EnvironmentFile=/etc/dllm/agent.env
+ExecStart=/usr/bin/python3 -m dllm agent --bin-dir /opt/llama.cpp/build/bin --allow-ip 192.168.1.10
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+# /etc/dllm/agent.env  →  DLLM_SECRET=<secreto de `dllm init`>

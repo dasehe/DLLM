@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 David Serrano Hernando y colaboradores de DLLM
+"""llama-server simulado: comprueba que cada endpoint --rpc responde (eco) y sirve una API mínima."""
+import json
+import os
+import socket
+import sys
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if "--version" in sys.argv:
+    vf = os.path.join(HERE, "VERSION")
+    v = open(vf).read().strip() if os.path.exists(vf) else "1"
+    print(f"version: {v} (mock)", file=sys.stderr)
+    sys.exit(0)
+
+args = sys.argv[1:]
+
+
+def opt(name, default=None):
+    return args[args.index(name) + 1] if name in args else default
+
+
+if "--list-devices" in args:
+    # como el real: dispositivos locales (MOCK_LOCAL_DEVICES) y, con --rpc, uno por servidor remoto
+    print("Available devices:")
+    for item in filter(None, os.environ.get("MOCK_LOCAL_DEVICES", "").split(";")):
+        name, desc, total, free = item.split("|")
+        print(f"  {name}: {desc} ({total} MiB, {free} MiB free)")
+    for i, ep in enumerate(e for e in (opt("--rpc") or "").split(",") if e):
+        h, p = ep.rsplit(":", 1)
+        s = socket.create_connection((h, int(p)), timeout=5)  # el real se conecta a cada rpc-server
+        s.sendall(b"PING")
+        s.recv(4)
+        s.close()
+        print(f"  RPC{i}[{ep}]: RPC backend ({os.environ.get('MOCK_RPC_MIB', '16384')} MiB, "
+              f"{os.environ.get('MOCK_RPC_FREE', '15000')} MiB free)")
+    sys.exit(0)
+
+
+port = int(opt("--port"))
+rpc = [e for e in (opt("--rpc") or "").split(",") if e]
+time.sleep(float(os.environ.get("MOCK_LOAD_DELAY", "0.5")))  # simula la carga del modelo
+
+
+TOKENS = {"gen": 0, "prompt": 0}
+
+
+class H(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.0"
+
+    def log_message(self, *a):
+        pass
+
+    def _j(self, code, obj):
+        b = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
+    def do_GET(self):
+        if self.path == "/health":
+            self._j(200, {"status": "ok"})
+        elif self.path == "/metrics" and "--metrics" in args:
+            b = ("# HELP llamacpp:tokens_predicted_total Number of generation tokens processed.\n"
+                 "# TYPE llamacpp:tokens_predicted_total counter\n"
+                 f"llamacpp:tokens_predicted_total {TOKENS['gen']}\n"
+                 f"llamacpp:prompt_tokens_total {TOKENS['prompt']}\n"
+                 "llamacpp:requests_processing 0\nllamacpp:requests_deferred 0\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+        elif self.path == "/v1/models":
+            self._j(200, {"data": [{"id": os.path.basename(opt("-m"))}]})
+        else:
+            self._j(404, {})
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(n) or b"{}")
+        if body.get("_crash"):  # simula el aborto de llama.cpp (p. ej. GGML_ASSERT con una imagen)
+            sys.stderr.write("GGML_ASSERT(n_ubatch >= n_tokens) failed: non-causal attention requires n_ubatch >= n_tokens\n")
+            sys.stderr.flush()
+            os._exit(134)
+        time.sleep(float(body.get("_sleep", 0)))  # petición lenta (pruebas de ocupado/cola)
+        TOKENS["gen"] += 30
+        TOKENS["prompt"] += 10
+        echoes = []
+        for ep in rpc:
+            h, p = ep.rsplit(":", 1)
+            try:
+                s = socket.create_connection((h, int(p)), timeout=3)
+                s.sendall(b"PING")
+                echoes.append(s.recv(4) == b"PING")
+                s.close()
+            except Exception:
+                echoes.append(False)
+        info = {"rpc": rpc, "ts": opt("-ts"), "ctx": opt("-c"), "echo_ok": echoes, "mmproj": opt("--mmproj"),
+                "mmproj_offload": "--no-mmproj-offload" not in args, "received": body,
+                "device": opt("--device"), "argv": args}
+        if body.get("stream"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            for i in range(3):
+                chunk = {"choices": [{"delta": {"content": f"tok{i} "}}]}
+                self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(0.05)
+            self.wfile.write(b"data: [DONE]\n\n")
+        else:
+            self._j(200, {"choices": [{"message": {"role": "assistant", "content": "mock"}}], "mock": info})
+
+
+ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()

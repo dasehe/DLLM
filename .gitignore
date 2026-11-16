@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+# llama.cpp compilado por scripts/build-llamacpp.sh
+llama.cpp/
+# modelos (nunca al repo)
+*.gguf

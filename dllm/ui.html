@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DLLM</title>
+<style>
+:root{--bg:#f4f5f7;--fg:#1c1e21;--mut:#6b7280;--card:#fff;--bd:#e2e5ea;--ac:#2563eb;--acs:#dbe6fd;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--track:#eef0f3}
+@media(prefers-color-scheme:dark){:root{--bg:#111316;--fg:#e6e8eb;--mut:#9aa1ab;--card:#1b1e23;--bd:#2c313a;--ac:#60a5fa;--acs:#1e3a5f;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--track:#262a31}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg)}
+a{color:var(--ac)}code{font-size:12px}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--bd)}
+.top{display:flex;gap:12px;align-items:center;padding:10px 16px;max-width:1240px;margin:0 auto;flex-wrap:wrap}
+.logo{font-weight:700;font-size:16px;letter-spacing:.02em}.logo span{color:var(--ac)}
+nav{display:flex;gap:2px;max-width:1240px;margin:0 auto;padding:0 12px;overflow-x:auto}
+nav button{background:none;color:var(--mut);border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 14px;font-weight:500}
+nav button.on{color:var(--fg);border-bottom-color:var(--ac)}
+main{max-width:1240px;margin:0 auto;padding:16px;display:grid;gap:14px}
+section,.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
+h2{font-size:12px;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+h3{font-size:15px;margin:0}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd);font-size:13px;vertical-align:top}
+th{color:var(--mut);font-weight:500;font-size:12px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--bad)}.dot.up{background:var(--ok)}
+.badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;background:var(--track);color:var(--fg);white-space:nowrap}
+.READY{background:var(--ok);color:#fff}.ERROR{background:var(--bad);color:#fff}.LOADING,.RECOVERING{background:var(--warn);color:#fff}
+.b-use{background:var(--acs);color:var(--ac)}.b-off{background:var(--track);color:var(--mut)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,input,button,textarea{font:inherit;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--card);color:var(--fg)}
+button{cursor:pointer;background:var(--ac);color:#fff;border:0}button.sec{background:var(--track);color:var(--fg)}button:disabled{opacity:.5;cursor:default}
+button.sm{padding:4px 10px;font-size:12px}textarea{width:100%}
+.mut{color:var(--mut)}.err{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}
+.hide{display:none!important}pre{margin:0;white-space:pre-wrap;font-size:12px;max-height:520px;overflow:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi .v{font-size:26px;font-weight:600;line-height:1.2}.kpi .l{color:var(--mut);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.ncard .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px}
+.m{display:grid;grid-template-columns:96px 1fr auto;gap:4px 10px;align-items:center;margin:6px 0;font-size:13px}
+.m .lb{color:var(--mut)}.m .val{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.track{height:8px;border-radius:4px;background:var(--track);overflow:hidden}.fill{height:100%;background:var(--ac);border-radius:4px;transition:width .4s}
+.fill.hot{background:var(--warn)}.fill.crit{background:var(--bad)}
+.facts{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px}.facts b{font-variant-numeric:tabular-nums}
+svg.spark{display:block;width:100%;height:24px;margin:2px 0 6px}
+.bar{display:flex;height:24px;border-radius:6px;overflow:hidden;margin:10px 0;background:var(--track)}.bar div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;white-space:nowrap;overflow:hidden}
+.bar2{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:3px}.bar2 div{height:100%;background:var(--ac)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 16px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}.form label input,.form label select{color:var(--fg)}
+.form .help{font-size:11px;color:var(--mut)}
+fieldset{border:1px solid var(--bd);border-radius:9px;padding:10px 14px 14px;margin:12px 0 0}legend{color:var(--mut);font-size:12px;padding:0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.drawer{border:1px solid var(--ac);border-radius:10px;padding:14px 16px;margin-top:12px;background:var(--card)}
+.tabs{display:flex;gap:6px;margin:4px 0 10px}.tabs button.on{background:var(--ac);color:#fff}
+.chat{display:flex;flex-direction:column;gap:8px;min-height:240px;max-height:58vh;overflow:auto;padding:4px}
+.msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word}
+.msg.u{align-self:flex-end;background:var(--ac);color:#fff}.msg.a{align-self:flex-start;background:var(--track)}
+.scroll{max-height:300px;overflow:auto}
+.switch{display:flex;align-items:center;gap:8px;color:var(--fg)!important;font-size:13px!important;flex-direction:row!important}
+footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-align:center}
+@media(max-width:600px){.m{grid-template-columns:80px 1fr auto}.msg{max-width:92%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><div class="logo">DLLM <span>·</span> Distributed LLM</div>
+    <span id="state" class="badge">…</span><span id="model" class="mut"></span><span id="toks" class="badge hide"></span>
+    <span style="flex:1"></span><button class="sec sm" onclick="setKey()">API key</button></div>
+  <nav id="nav">
+    <button data-t="mon" class="on">Monitor</button><button data-t="nod">Nodos</button><button data-t="mod">Modelos</button>
+    <button data-t="chat">Chat</button><button data-t="ev">Eventos</button>
+  </nav>
+</header>
+<main>
+
+<!-- ============================== MONITOR ============================== -->
+<div id="t-mon" class="tab">
+  <div class="kpis">
+    <div class="card kpi"><div class="l">Estado</div><div class="v" id="k_state">—</div><div class="mut" id="k_model">sin modelo</div></div>
+    <div class="card kpi"><div class="l">Tokens/s (generación)</div><div class="v" id="k_toks">—</div><svg class="spark" id="sp_toks"></svg></div>
+    <div class="card kpi"><div class="l">Peticiones en curso</div><div class="v" id="k_req">—</div><div class="mut" id="k_kv"></div></div>
+    <div class="card kpi"><div class="l">Nodos</div><div class="v" id="k_nodes">—</div><div class="mut" id="k_vram"></div></div>
+  </div>
+  <div class="grid" id="ncards" style="margin-top:14px"></div>
+  <div class="mut" id="nomon" style="display:none">Sin nodos todavía. Instala el agente en otros equipos con el código de unión (<code>dllm join-code</code>).</div>
+</div>
+
+<!-- ============================== NODOS ============================== -->
+<div id="t-nod" class="tab hide">
+  <section><h2>Nodos</h2>
+    <div class="scroll" style="max-height:none"><table><thead><tr><th>Nodo</th><th>Dispositivo</th><th>Aporta</th><th>Reparto</th><th>Red</th><th>llama.cpp</th><th></th></tr></thead><tbody id="nodes"></tbody></table></div>
+    <div class="mut" id="nonodes" style="display:none;padding-top:6px">Sin nodos. Instala el agente en otros equipos de la red, con el código de unión o sin él (aparecerán aquí para reclamarlos).</div>
+    <div id="pairbox" class="hide" style="margin-top:12px"><h3>Equipos esperando unirse</h3>
+      <div class="mut" style="font-size:12px">Instalados sin código de unión. Al reclamar uno aparece un código de verificación: comprueba que es el mismo que muestra el equipo y acéptalo allí.</div>
+      <div id="pairs"></div></div>
+    <div id="nedit" class="drawer hide">
+      <div class="row" style="justify-content:space-between"><h3 id="ne_title"></h3><button class="sec sm" onclick="closeNode()">Cerrar</button></div>
+      <div class="mut" id="ne_hw" style="margin-top:4px"></div>
+      <fieldset><legend>En el orquestador</legend>
+        <div class="form">
+          <label class="switch"><input type="checkbox" id="ne_enabled"> Usar este nodo en los repartos</label>
+          <label>Capas fijas<input id="ne_layers" type="number" min="1" step="1" placeholder="automático"><span class="help">Cuántas capas del modelo lleva este nodo. Vacío = las decide el reparto.</span></label>
+          <label>Ancho de banda de memoria (GB/s)<input id="ne_bw" type="number" min="1" step="1" placeholder="estimado"><span class="help">Para ordenar nodos por velocidad. Ej.: RTX 3060 = 360, RX 7600 XT = 288.</span></label>
+        </div>
+        <div class="row" style="margin-top:10px"><button onclick="saveNodeCfg()">Guardar</button><button class="sec" onclick="saveNodeCfg(true)">Restablecer</button><span id="ne_msg1" class="mut"></span></div>
+      </fieldset>
+      <fieldset id="ne_agent"><legend>En el nodo</legend>
+        <div id="ne_manual" class="warn hide">Este nodo fija sus límites localmente (modo manual). Para cambiarlos, vuelve a ejecutar el asistente en ese equipo.</div>
+        <div id="ne_auto" class="form">
+          <label>Dispositivo<select id="ne_dev"></select><span class="help">Qué GPU presta (o CPU). Automático = la de más memoria.</span></label>
+          <label><span>Porcentaje del equipo: <b id="ne_sharev">50</b> %</span><input id="ne_share" type="range" min="5" max="100" step="5" value="50" oninput="$('ne_sharev').textContent=this.value"></label>
+          <label>Memoria exacta (GiB)<input id="ne_mem" type="number" step="0.5" min="0.25" placeholder="según el %"></label>
+          <label>Hilos de CPU exactos<input id="ne_thr" type="number" step="1" min="1" placeholder="según el %"></label>
+        </div>
+        <div id="ne_autob" class="row" style="margin-top:10px"><button onclick="saveLimits()">Guardar</button><button class="sec" onclick="saveLimits(true)">Usar recomendado</button><span id="ne_msg2" class="mut"></span></div>
+        <div class="mut" style="margin-top:8px;font-size:12px">Los hilos son un límite real de <code>rpc-server</code>; la memoria la respeta el reparto. Si el nodo está en uso, los cambios se aplican al recargar el modelo.</div>
+      </fieldset>
+    </div>
+  </section>
+</div>
+
+<!-- ============================== MODELOS ============================== -->
+<div id="t-mod" class="tab hide">
+  <section><h2>Cargar modelo</h2>
+    <div class="row"><select id="models" onchange="pickModel()" style="min-width:260px;max-width:100%"></select>
+      <label class="mut">Contexto <input id="ctx" type="number" value="4096" step="256" style="width:100px"></label>
+      <label class="mut">Destino <select id="slotsel"><option value="0">Modelo principal</option><option value="new">Otro modelo a la vez (slot nuevo)</option></select></label>
+      <label class="mut" title="Un modelo fijado nunca se expulsa por falta de memoria"><input id="pinned" type="checkbox" checked> Fijar</label>
+      <button class="sec" onclick="plan()">Simular reparto</button><button onclick="load()">Cargar</button><button class="sec" onclick="unload()">Descargar principal</button></div>
+    <div id="plan"></div>
+  </section>
+  <section id="slotsec" class="hide"><h2>Modelos cargados <span class="mut" style="font-size:12px">(varios a la vez; el proxy /v1 elige por el campo «model»)</span></h2>
+    <div class="scroll"><table><thead><tr><th>Slot</th><th>Modelo</th><th>Estado</th><th>Uso</th><th>Contexto</th><th>Política</th><th>Nodos</th><th>Puerto</th><th></th></tr></thead><tbody id="slotlist"></tbody></table></div>
+    <div class="mut" id="ledgernote" style="font-size:12px;margin-top:6px"></div>
+  </section>
+  <section><h2>Modelos instalados</h2>
+    <div class="scroll"><table><thead><tr><th>Modelo</th><th>Tamaño</th><th>Arquitectura</th><th>Cuant.</th><th>Origen</th><th></th></tr></thead><tbody id="mlist"></tbody></table></div>
+    <div id="msettings" class="drawer hide">
+      <div class="row" style="justify-content:space-between"><h3 id="ms_title"></h3><button class="sec sm" onclick="$('msettings').classList.add('hide')">Cerrar</button></div>
+      <div class="mut" style="font-size:12px;margin-top:4px">Vacío = valor por defecto de llama.cpp.</div>
+      <fieldset><legend>Carga · al cargar el modelo</legend>
+        <div class="form">
+          <label>Contexto (tokens)<input id="ms_ctx" type="number" step="256" min="256" placeholder="4096"><span class="help">Memoria de trabajo de la conversación.</span></label>
+          <label>Caché K<select id="ms_cache_type_k"></select><span class="help">q8_0 ≈ mitad de memoria, casi sin pérdida.</span></label>
+          <label>Caché V<select id="ms_cache_type_v"></select><span class="help">Cuantizada requiere flash attention.</span></label>
+          <label>Flash attention<select id="ms_flash_attn"><option value="">por defecto (auto)</option><option>auto</option><option>on</option><option>off</option></select></label>
+          <label>Lote lógico (batch)<input id="ms_batch_size" type="number" min="32" step="32" placeholder="2048"></label>
+          <label>Lote físico (ubatch)<input id="ms_ubatch_size" type="number" min="16" step="16" placeholder="512"></label>
+          <label>Dispositivo<select id="ms_device_policy"><option value="">automático</option><option value="gpu_strict">solo GPU (error si no cabe)</option><option value="cpu_only">solo CPU (RAM del orquestador)</option><option value="gpu_with_cpu_fallback">GPU y, si no cabe, CPU</option></select><span class="help">«Solo CPU» no gasta VRAM: útil para modelos auxiliares fijados.</span></label>
+          <label>Reparto<select id="ms_placement"><option value="">automático</option><option value="split">repartido entre nodos</option><option value="node">en un único nodo</option></select><span class="help">Los modelos pequeños (embeddings, voz) rinden más sin cruzar la red.</span></label>
+          <label>Modo embeddings<select id="ms_embeddings"><option value="">no</option><option value="true">sí (atiende /v1/embeddings)</option></select></label>
+          <label>Peticiones simultáneas<input id="ms_parallel" type="number" min="1" max="64" step="1" placeholder="auto"><span class="help">El contexto se reparte entre ellas.</span></label>
+          <label>RoPE · escalado<select id="ms_rope_scaling"><option value="">del modelo</option><option>none</option><option>linear</option><option>yarn</option></select></label>
+          <label>RoPE · frecuencia base<input id="ms_rope_freq_base" type="number" step="any" min="1" placeholder="del modelo"></label>
+          <label>RoPE · factor de escala<input id="ms_rope_freq_scale" type="number" step="any" min="0.001" placeholder="del modelo"></label>
+          <label>Proyector multimodal<select id="ms_mmproj"></select></label>
+        </div>
+      </fieldset>
+      <fieldset><legend>Generación · en cada petición</legend>
+        <div class="form">
+          <label>Temperatura<input id="ms_temperature" type="number" step="0.05" min="0" max="5" placeholder="0.8"><span class="help">0,2 preciso · 0,8 equilibrado · &gt;1 creativo.</span></label>
+          <label>Top-k<input id="ms_top_k" type="number" step="1" min="0" max="1000" placeholder="40"></label>
+          <label>Top-p<input id="ms_top_p" type="number" step="0.01" min="0" max="1" placeholder="0.95"></label>
+          <label>Min-p<input id="ms_min_p" type="number" step="0.01" min="0" max="1" placeholder="0.05"></label>
+          <label>Typical-p<input id="ms_typical_p" type="number" step="0.01" min="0" max="1" placeholder="1.0"></label>
+          <label>Penalización de repetición<input id="ms_repeat_penalty" type="number" step="0.01" min="0.5" max="2.5" placeholder="1.0"></label>
+          <label>Penalización de presencia<input id="ms_presence_penalty" type="number" step="0.05" min="-2" max="2" placeholder="0"></label>
+          <label>Penalización de frecuencia<input id="ms_frequency_penalty" type="number" step="0.05" min="-2" max="2" placeholder="0"></label>
+          <label>Máx. tokens por respuesta<input id="ms_max_tokens" type="number" step="1" min="1" placeholder="sin límite"></label>
+          <label>Semilla<input id="ms_seed" type="number" step="1" min="-1" placeholder="aleatoria"><span class="help">Fija = respuestas reproducibles.</span></label>
+          <label>Secuencias de parada<input id="ms_stop" type="text" placeholder="separadas por comas"></label>
+        </div>
+        <label class="mut" style="display:block;margin-top:10px;font-size:12px">Fecha y hora para el modelo<select id="ms_datetime"><option value="">por defecto (fecha y hora)</option><option value="datetime">fecha y hora del servidor</option><option value="date">solo la fecha</option><option value="off">no indicarla</option></select><span class="help">Los modelos no saben qué día es: se les indica el del reloj de este servidor en cada conversación.</span></label>
+        <label class="mut" style="display:block;margin-top:10px;font-size:12px">Prompt de sistema<textarea id="ms_system_prompt" rows="3" placeholder="Instrucciones fijas, p. ej. «Responde en español, de forma breve»."></textarea></label>
+      </fieldset>
+      <div class="row" style="margin-top:12px"><button onclick="saveSettings()">Guardar</button><button class="sec" onclick="saveSettings(true)">Restablecer</button><span id="ms_msg" class="mut"></span></div>
+    </div>
+  </section>
+  <section><h2>Añadir modelos</h2>
+    <div class="tabs"><button class="sec on" id="t_hf" onclick="tab('hf')">Hugging Face</button><button class="sec" id="t_ol" onclick="tab('ol')">Ollama</button><button class="sec" id="t_ll" onclick="tab('ll')">Ollama local</button></div>
+    <div id="p_hf">
+      <div class="row"><input id="hfq" placeholder="Buscar, p. ej. qwen2.5 7b instruct" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')hfSearch()"><button onclick="hfSearch()">Buscar</button></div>
+      <div id="hfres" class="scroll" style="margin-top:6px"></div>
+      <details style="margin-top:8px"><summary class="mut">Token de Hugging Face (solo para modelos con acceso restringido) <span id="hftok"></span></summary>
+        <div class="row" style="margin-top:6px"><input id="hftoken" type="password" placeholder="hf_…" style="flex:1"><button class="sec" onclick="hfToken()">Guardar</button><button class="sec" onclick="hfToken(true)">Borrar</button></div>
+        <div class="mut" style="font-size:12px">Se guarda en el orquestador (permisos 600) y solo se envía a huggingface.co.</div></details>
+    </div>
+    <div id="p_ol" class="hide">
+      <div class="row"><input id="olname" placeholder="nombre:etiqueta, p. ej. qwen2.5:7b" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')olPull()"><button onclick="olPull()">Descargar</button></div>
+      <div class="mut" style="font-size:12px;margin-top:4px">Nombres como en <a href="https://ollama.com/library" target="_blank" rel="noopener">ollama.com/library</a>. Se importan también sus parámetros por defecto. Algunos modelos nuevos o multimodales de Ollama usan un formato que llama.cpp no carga.</div>
+    </div>
+    <div id="p_ll" class="hide"><div id="llres" class="mut">Buscando instalación local de Ollama…</div></div>
+    <h2 style="margin-top:16px">Descargas</h2><div id="dl" class="mut">Ninguna.</div>
+  </section>
+</div>
+
+<!-- ============================== CHAT ============================== -->
+<div id="t-chat" class="tab hide">
+  <section><div class="row" style="justify-content:space-between"><h2 style="margin:0">Chat de prueba</h2><button class="sec sm" onclick="newChat()">Nueva conversación</button></div>
+    <div id="chat" class="chat" style="margin-top:10px"><div class="mut">Disponible cuando el estado sea READY. Se aplican los parámetros del modelo.</div></div>
+    <div class="row" style="margin-top:10px"><input id="msg" style="flex:1;min-width:200px" placeholder="Escribe un mensaje" onkeydown="if(event.key==='Enter')send()">
+      <input type="file" id="att" accept="image/*,audio/wav,audio/mpeg,.wav,.mp3" class="hide" onchange="attName()">
+      <button class="sec hide" id="attb" onclick="$('att').click()" title="Adjuntar imagen o audio">📎 Adjuntar</button><button onclick="send()">Enviar</button></div>
+    <div class="mut" id="attn" style="font-size:12px"></div>
+  </section>
+</div>
+
+<!-- ============================== EVENTOS ============================== -->
+<div id="t-ev" class="tab hide"><section><h2>Eventos</h2><pre id="events"></pre></section></div>
+</main>
+<footer class="mut">
+DLLM <span id="ver"></span> — idea original y desarrollo inicial de David Serrano Hernando · © 2026 David Serrano Hernando y colaboradores ·
+software libre bajo <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU AGPL-3.0-or-later</a>, sin garantía ·
+<a href="https://github.com/dasehe/dllm" target="_blank" rel="noopener">código fuente</a>
+</footer>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const gib=b=>{b=b||0;return b>=2**30||b===0?(b/2**30).toFixed(1)+' GiB':(b/2**20).toFixed(b<10*2**20?1:0)+' MB'};
+const na='<span class="mut" title="No disponible en este sistema">—</span>';
+const colors=['#2563eb','#16a34a','#d97706','#9333ea','#0891b2','#db2777'];
+let S=null,T=null,M=[],msel=null,lastDl='',editing=null,cur='mon',hist=[];
+
+/* ---------- utilidades ---------- */
+// enlace «para otros equipos» (…/#key=…): guarda la clave en este navegador y la quita de la barra de direcciones
+(function(){const m=location.hash.match(/key=([\w-]+)/);if(m){try{localStorage.setItem('dllm_key',m[1])}catch(e){}history.replaceState(null,'',location.pathname)}})();
+function key(){try{return localStorage.getItem('dllm_key')||''}catch(e){return ''}}
+async function setKey(){
+  try{const a=await (await fetch('/api/access',{headers:{Authorization:'Bearer '+key()}})).json();
+    if(a.local){if(a.lan_url)prompt('En este equipo el panel no pide clave. Enlace para abrirlo desde otro equipo (cópialo):',a.lan_url);
+      else alert(a.exposed?'El panel no tiene API key.':'El panel solo es accesible desde este equipo y no pide clave.');return}}catch(e){}
+  const k=prompt('API key de este orquestador (vacío = ninguna)',key());if(k!==null){try{localStorage.setItem('dllm_key',k)}catch(e){}}}
+async function api(method,path,body){const h={'Content-Type':'application/json'};if(key())h['Authorization']='Bearer '+key();
+  const r=await fetch(path,{method,headers:h,body:body?JSON.stringify(body):undefined});
+  if(r.status===401){setKey();throw new Error('API key requerida')}
+  const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||j.error||r.status);return j}
+function spark(id,vals,max,color){const el=typeof id==='string'?$(id):id;if(!el)return;const v=vals.filter(x=>x!=null);
+  if(v.length<2){el.innerHTML='';return}const W=300,H=34,mx=max||Math.max(...v,1e-9);
+  const pts=vals.map((x,i)=>x==null?null:[i*W/(vals.length-1),H-2-(Math.min(x,mx)/mx)*(H-4)]).filter(Boolean);
+  el.setAttribute('viewBox',`0 0 ${W} ${H}`);el.setAttribute('preserveAspectRatio','none');
+  const c=color||'var(--ac)';el.innerHTML=`<polyline fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts.map(p=>p.join(',')).join(' ')}"/>`}
+function meter(label,pct,valtxt,cls){const p=pct==null?0:Math.max(0,Math.min(100,pct));
+  const c=cls||(p>=90?'crit':p>=75?'hot':'');
+  return `<div class="m"><span class="lb">${label}</span><div class="track"><div class="fill ${c}" style="width:${p}%"></div></div><span class="val">${valtxt}</span></div>`}
+const fmt=(x,d=0,u='')=>x==null?na:`${(+x).toFixed(d)}${u}`;
+const mbps=b=>b==null?na:(b>=1e6?(b/1e6).toFixed(1)+' MB/s':(b/1e3).toFixed(0)+' KB/s');
+
+/* ---------- pestañas ---------- */
+function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelectorAll('.tab').forEach(d=>d.classList.toggle('hide',d.id!=='t-'+t));
+  try{history.replaceState(null,'','#'+t)}catch(e){}
+  if(t==='mon')tele();if(t==='mod'){models();dl()}}
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
+
+/* ---------- estado general ---------- */
+async function refresh(){try{const s=await api('GET','/api/state');S=s;
+  $('state').textContent=s.state;$('state').className='badge '+s.state;$('ver').textContent='v'+s.version;
+  $('model').textContent=(s.model||'')+(s.error?' — '+s.error:'')+(s.recoveries?` · recuperaciones: ${s.recoveries}`:'');
+  $('attb').classList.toggle('hide',!s.multimodal);
+  $('k_state').textContent=s.state;$('k_model').textContent=s.model||'sin modelo';
+  renderNodes();renderSlots();
+  if(s.plan&&s.state!=='IDLE'&&!$('plan').dataset.manual)renderPlan(s.plan);
+  $('events').textContent=s.events.slice().reverse().map(e=>new Date(e.t*1000).toLocaleTimeString()+'  '+e.msg).join('\n')+(s.state==='ERROR'&&s.llama_log.length?'\n\n--- llama-server ---\n'+s.llama_log.join('\n'):'');
+}catch(e){$('state').textContent='sin conexión';$('state').className='badge ERROR'}}
+
+/* ---------- monitor ---------- */
+async function tele(){if(cur!=='mon')return;try{const t=await api('GET','/api/telemetry');T=t;
+  const l=t.llama||{};$('k_toks').textContent=l.tok_s!=null?l.tok_s.toFixed(1):'—';
+  spark('sp_toks',t.llama_hist.map(x=>x[1]),null,'var(--ok)');
+  $('k_req').textContent=l.requests!=null?l.requests:'—';$('k_kv').textContent=l.kv_usage!=null?`contexto en uso: ${(l.kv_usage*100).toFixed(0)} %`:'';
+  const up=t.nodes.filter(n=>n.up),used=t.nodes.filter(n=>n.used);
+  $('k_nodes').textContent=`${up.length}/${t.nodes.length}`;
+  const vt=up.reduce((a,n)=>a+((n.now.gpu||{}).vram_total||0),0),vu=up.reduce((a,n)=>a+((n.now.gpu||{}).vram_used||0),0);
+  $('k_vram').textContent=(used.length?`${used.length} en uso · `:'')+(vt?`VRAM ${gib(vu)} / ${gib(vt)}`:'');
+  $('toks').classList.toggle('hide',!l.tok_s);$('toks').textContent=l.tok_s!=null?`${l.tok_s.toFixed(1)} tok/s`:'';
+  $('nomon').style.display=t.nodes.length?'none':'block';
+  $('ncards').innerHTML=t.nodes.map((n,i)=>ncard(n,i)).join('');
+  t.nodes.forEach((n,i)=>{const h=n.hist;spark('sg'+i,h.map(x=>x[1]),100);spark('sp'+i,h.map(x=>x[3]),null,'var(--warn)');spark('sr'+i,h.map(x=>x[6]),null,'var(--ok)')});
+}catch(e){}}
+function ncard(n,i){const t=n.now||{},g=t.gpu,off=(n.settings||{}).enabled===false;
+  const badge=!n.up?'<span class="badge b-off">sin conexión</span>':off?'<span class="badge b-off">desactivado</span>':n.used?'<span class="badge b-use">en uso</span>':'<span class="badge">disponible</span>';
+  let h=`<div class="card ncard"><div class="hd"><div><h3><span class="dot ${n.up?'up':''}"></span>${esc(n.name)}</h3><div class="mut" style="font-size:12px">${esc(n.device_desc||(n.backend==='cpu'?'CPU':'—'))}${g&&g.source?` · ${esc(g.source)}`:''}</div></div>${badge}</div>`;
+  if(g){const vp=g.vram_total?100*(g.vram_used||0)/g.vram_total:null;
+    h+=meter('GPU',g.util,fmt(g.util,0,' %'));
+    h+=meter('VRAM',vp,g.vram_used!=null?`${gib(g.vram_used)} / ${gib(g.vram_total)}`:na);
+    h+=`<svg class="spark" id="sg${i}" title="uso de GPU"></svg>`;
+    const pp=g.power!=null&&g.power_limit?100*g.power/g.power_limit:null;
+    h+=meter('Consumo',pp,g.power!=null?`${g.power.toFixed(0)} W${g.power_limit?' / '+g.power_limit.toFixed(0)+' W':''}`:na);
+    h+=`<svg class="spark" id="sp${i}"></svg>`;
+    h+=`<div class="facts"><span>Temp. <b>${fmt(g.temp,0,' °C')}</b></span><span>Ventilador <b>${g.fan!=null?(g.fan>100?g.fan.toFixed(0)+' rpm':g.fan.toFixed(0)+' %'):na}</b></span><span>Reloj <b>${fmt(g.clock_mhz,0,' MHz')}</b></span></div>`}
+  else h+='<div class="mut" style="font-size:12px;margin:4px 0">Presta CPU y RAM (sin GPU).</div>';
+  const rp=t.ram_total?100*(t.ram_used||0)/t.ram_total:null;
+  h+=meter('CPU',t.cpu,fmt(t.cpu,0,' %'));h+=meter('RAM',rp,t.ram_total?`${gib(t.ram_used)} / ${gib(t.ram_total)}`:na);
+  h+=`<div class="m"><span class="lb">Tráfico RPC</span><svg class="spark" id="sr${i}" style="height:22px"></svg><span class="val">${mbps((t.rpc_rx_bps||0)+(t.rpc_tx_bps||0))}</span></div>`;
+  h+=`<div class="facts mut" style="font-size:12px"><span>Aporta ${gib(n.cap_bytes)}</span><span>${n.threads??'?'}/${n.cores??'?'} hilos</span>${(n.settings||{}).layers?`<span>${n.settings.layers} capas fijas</span>`:''}<button class="sec sm" style="margin-left:auto" onclick="show('nod');editNode('${esc(n.id)}')">Configurar</button></div></div>`;
+  return h}
+
+/* ---------- nodos ---------- */
+function devcell(n){const u=n.update||{};let h=n.device_desc?`${esc(n.device_desc)}<br><span class="mut">${esc(n.device)}</span>`:esc(n.backend==='cpu'?'CPU':(n.backend||'-'));
+  if(u.state==='descargando')h+=`<br><span class="warn">actualizando llama.cpp ${esc(u.tag)} · ${u.progress||0} %</span>`;
+  else if(u.state==='error')h+=`<br><span class="err">actualización fallida: ${esc(u.error)}</span>`;return h}
+function contrib(n){if(n.cap_bytes==null)return '-';const tot=n.gpu?n.gpu.total:n.ram_total;
+  return `${gib(n.cap_bytes)} de ${gib(tot)}${n.gpu?' VRAM':''} · ${n.threads??'?'}/${n.cores??'?'} hilos<br><span class="mut">${esc(n.mem_source||'')}${n.limits_mode==='manual'?' · fijado en el nodo':' · auto'}</span>`}
+function repcell(n){const s=n.settings||{};if(s.enabled===false)return '<span class="badge b-off">desactivado</span>';
+  return `${s.layers?s.layers+' capas fijas':'automático'}<br><span class="mut">~${s.bw_gbps||n.bw_gbps||'?'} GB/s${s.bw_gbps?' (fijado)':''}</span>`}
+function renderNodes(){const s=S;if(!s)return;
+  $('nodes').innerHTML=s.nodes.map(n=>`<tr><td><span class="dot ${n.up?'up':''}"></span>${esc(n.name)}<br><span class="mut">${esc(n.host)}</span></td><td>${devcell(n)}</td><td>${contrib(n)}</td><td>${repcell(n)}</td><td>${n.net?n.net.mbps+' Mbps<br><span class="mut">'+n.net.rtt_ms+' ms'+(n.net.tier!=null?' · T'+n.net.tier:'')+'</span>':'<span class="mut">sin medir</span>'}</td><td class="mut">${n.rpc_bin?esc(n.rpc_build||'?'):'sin rpc-server'}</td><td>${n.used?'<span class="badge b-use">en uso</span> ':''}<button class="sec sm" onclick="editNode('${esc(n.id)}')">Configurar</button></td></tr>`).join('');
+  $('nonodes').style.display=s.nodes.length?'none':'block';
+  const cl={};(s.claims||[]).forEach(c=>cl[c.host]=c);
+  const rows=(s.pending||[]).map(p=>({...p,claim:cl[p.host]})).concat((s.claims||[]).filter(c=>!(s.pending||[]).some(p=>p.host===c.host)).map(c=>({host:c.host,name:c.name,claim:c})));
+  $('pairbox').classList.toggle('hide',!rows.length);
+  $('pairs').innerHTML=rows.map(r=>{const c=r.claim;
+    const st=c?(c.state==='unido'?'<span class="ok">✅ unido</span>':c.state.startsWith('esperando')?`Código de verificación <b style="font-size:18px;letter-spacing:2px">${esc(c.sas)}</b> <span class="mut">— acéptalo en el equipo si ve el mismo</span>`:`<span class="warn">${esc(c.state)}${c.detail?': '+esc(c.detail):''}</span>`):'';
+    const btn=(!c||['caducado','rechazado en el nodo','error'].includes(c.state))&&(s.pending||[]).some(p=>p.host===r.host)?`<button class="sm" onclick="claimNode('${esc(r.host)}')">Reclamar</button>`:'';
+    return `<div class="row" style="justify-content:space-between;border-top:1px solid var(--bd);padding:8px 0"><span>${esc(r.name)} <span class="mut">${esc(r.host)}</span></span><span>${st} ${btn}</span></div>`}).join('')}
+async function claimNode(h){try{await api('POST','/api/pair/claim',{host:h});refresh()}catch(e){alert('No se pudo reclamar: '+e.message)}}
+function editNode(id){if(!S)return;const n=S.nodes.find(x=>x.id===id);if(!n)return;editing=id;const s=n.settings||{},l=n.limits||{};
+  $('ne_title').textContent='Configurar '+n.name;
+  $('ne_hw').textContent=`${n.cores??'?'} hilos · ${gib(n.ram_total)} RAM${n.gpu?' · '+n.gpu.name+' '+gib(n.gpu.total):''} · recomendado: ${gib(n.recommended&&n.recommended.mem_bytes)} y ${n.recommended?n.recommended.threads:'?'} hilos · máximo: ${gib(n.ceiling)}`;
+  $('ne_enabled').checked=s.enabled!==false;$('ne_layers').value=s.layers??'';$('ne_bw').value=s.bw_gbps??'';
+  const man=n.limits_mode==='manual';$('ne_manual').classList.toggle('hide',!man);$('ne_auto').classList.toggle('hide',man);$('ne_autob').classList.toggle('hide',man);
+  const devs=(n.devices||[]);$('ne_dev').innerHTML='<option value="">Automático (el de más memoria)</option>'+devs.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} · ${esc(d.desc)} (${gib(d.total)})</option>`).join('')+(devs.some(d=>/^cpu/i.test(d.name))?'':'<option value="CPU">CPU (no prestar GPU)</option>');
+  $('ne_dev').value=n.backend==='cpu'&&n.device==null&&devs.length?'CPU':'';if(n.device&&devs.some(d=>d.name===n.device))$('ne_dev').value=n.device;
+  $('ne_share').value=l.share||50;$('ne_sharev').textContent=l.share||50;$('ne_mem').value=l.mem_gb??'';$('ne_thr').value=l.threads??'';
+  $('ne_msg1').textContent=$('ne_msg2').textContent='';$('nedit').classList.remove('hide');$('nedit').scrollIntoView({behavior:'smooth',block:'nearest'})}
+function closeNode(){editing=null;$('nedit').classList.add('hide')}
+async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,layers:null,bw_gbps:null}:{node:editing,enabled:$('ne_enabled').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null};
+  try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_layers').value='';$('ne_bw').value=''}refresh()}
+  catch(e){$('ne_msg1').className='err';$('ne_msg1').textContent=e.message}}
+async function saveLimits(reset){if(!editing)return;const n=S.nodes.find(x=>x.id===editing)||{};
+  const b=reset?{node:editing,reset:true}:{node:editing,share:+$('ne_share').value,mem_gb:$('ne_mem').value||null,threads:$('ne_thr').value||null};
+  const dv=$('ne_dev').value,curdev=n.device||((n.backend==='cpu'&&(n.devices||[]).length)?'CPU':'');if(!reset&&dv!==curdev)b.device=dv;
+  try{const r=await api('POST','/api/node/limits',b);$('ne_msg2').className='ok';$('ne_msg2').textContent=`Guardado: ${gib(r.cap_bytes)} y ${r.threads} hilos`+(r.in_use?' · se aplica al recargar el modelo':'');refresh()}
+  catch(e){$('ne_msg2').className='err';$('ne_msg2').textContent=e.message}}
+
+/* ---------- reparto y carga ---------- */
+function renderPlan(p){if(!p){$('plan').innerHTML='';return}
+  let h=`<div class="mut" style="margin-top:10px">${esc(p.model)} · necesita ${gib(p.need_bytes)} (KV ${gib(p.kv_bytes)}${p.kv_types&&(p.kv_types[0]!=='f16'||p.kv_types[1]!=='f16')?' en '+p.kv_types.join('/'):''})</div>`;
+  if(!p.ok)h+=`<div class="err">✗ ${esc(p.reason)}</div>`;
+  else{h+='<div class="bar">'+p.assignments.map((a,i)=>`<div style="width:${a.share*100}%;background:${colors[i%6]}" title="${esc(a.name)}">${esc(a.name)} ${(a.share*100).toFixed(0)}%</div>`).join('')+'</div>';
+    h+='<table>'+p.assignments.map(a=>`<tr><td>${esc(a.name)}</td><td>${gib(a.bytes)}</td><td>${a.layers} capas${a.fixed?' (fijas)':''}</td><td>${esc(a.backend)}</td><td>${a.mbps} Mbps · ${a.rtt_ms} ms</td></tr>`).join('')+'</table>';
+    h+=p.est_tok_s?`<div style="margin-top:6px">≈ <b>${p.est_tok_s} tok/s</b> <span class="mut">(estimación gruesa)</span></div>`:`<div class="mut" style="margin-top:6px">${esc(p.policy||'')} · sin estimación de velocidad</div>`}
+  if(p.max_ctx)h+=`<div>Contexto máximo con la memoria de los nodos: <b>${p.max_ctx}</b> tokens${p.ctx_train?` <span class="mut">(el modelo admite hasta ${p.ctx_train})</span>`:''} <button class="sec sm" onclick="$('ctx').value=${p.max_ctx};plan()">Usar</button></div>`;
+  h+=(p.excluded||[]).map(e=>`<div class="mut">✗ ${esc(e.node)}: ${esc(e.reason)}</div>`).join('');
+  h+=(p.warnings||[]).map(w=>`<div class="warn">! ${esc(w)}</div>`).join('');$('plan').innerHTML=h}
+async function plan(){$('plan').dataset.manual='1';try{$('plan').innerHTML='<div class="mut">midiendo red y calculando…</div>';renderPlan(await api('POST','/api/plan',{model:$('models').value,ctx:+$('ctx').value}))}catch(e){$('plan').innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+async function load(){delete $('plan').dataset.manual;try{const sl=$('slotsel').value;await api('POST','/api/load',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':+sl,pinned:$('pinned').checked});refresh()}catch(e){alert(e.message)}}
+async function dropSlot(n){try{await api('POST','/api/unload',{slot:n});refresh()}catch(e){alert(e.message)}}
+function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0);const multi=(S&&S.slots||[]).length>1||sl.some(x=>x.slot>0);
+  $('slotsec').classList.toggle('hide',!(S&&S.slots&&S.slots.some(x=>x.model)));
+  const nm=id=>{const n=(S.nodes||[]).find(x=>x.id===id);return n?n.name:id};
+  $('slotlist').innerHTML=sl.filter(x=>x.model).map(x=>`<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${esc(x.model)}</td><td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.error?`<br><span class="err">${esc(x.error)}</span>`:''}</td><td>${x.activity==='BUSY'?`ocupado (${x.active_requests})`:'libre'}</td><td>${x.ctx||''}</td><td>${esc(x.policy||'auto')}</td><td>${x.nodes.length?x.nodes.map(nm).map(esc).join(', '):'<span class="mut">orquestador (CPU)</span>'}</td><td class="mut">${x.llama_port||''}</td><td><button class="sec sm" onclick="dropSlot(${x.slot})">Descargar</button></td></tr>`).join('');
+  const L=S.ledger||{};const parts=Object.entries(L).map(([id,v])=>{const r=Object.values(v.reserved||{}).reduce((a,b)=>a+b,0),q=Object.values(v.ram_reserved||{}).reduce((a,b)=>a+b,0);return r||q?`${esc(id==='@host'?'orquestador':nm(id))}: ${r?'VRAM '+gib(r)+' de '+gib(v.cap):''}${r&&q?' · ':''}${q?'RAM '+gib(q):''}`:''}).filter(Boolean);
+  $('ledgernote').textContent='';$('ledgernote').innerHTML=parts.length?'Memoria reservada · '+parts.join(' · '):''}
+async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
+
+/* ---------- modelos ---------- */
+async function models(){try{M=await api('GET','/api/models');const c=$('models').value;
+  $('models').innerHTML=M.length?M.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${gib(x.size)})</option>`).join(''):'<option value="">(sin modelos: añade uno abajo)</option>';
+  if(c&&M.some(x=>x.name===c))$('models').value=c;else pickModel();
+  $('mlist').innerHTML=M.length?M.map((x,i)=>`<tr><td>${esc(x.name)}${x.error?`<br><span class="err">${esc(x.error)}</span>`:''}</td><td>${gib(x.size)}${x.parts>1?` <span class="mut">(${x.parts} partes)</span>`:''}</td><td>${esc(x.arch||'-')}${x.n_layers?` · ${x.n_layers} capas`:''}${x.ctx_train?`<br><span class="mut">ctx máx. ${x.ctx_train}</span>`:''}</td><td>${esc(x.quant||'-')}</td><td>${esc(x.source)}${x.mmproj?'<br><span class="mut">👁 multimodal</span>':''}</td><td><button class="sec sm" onclick="editSettings(${i})">Parámetros${Object.keys(x.settings||{}).length?' ●':''}</button> <button class="sec sm" onclick="delModel(${i})">Eliminar</button></td></tr>`).join(''):'<tr><td colspan="6" class="mut">Sin modelos todavía.</td></tr>';
+}catch(e){}}
+function pickModel(){const m=M.find(x=>x.name===$('models').value);if(m&&m.settings&&m.settings.ctx)$('ctx').value=m.settings.ctx}
+const SK=['ctx','cache_type_k','cache_type_v','flash_attn','batch_size','ubatch_size','parallel','rope_scaling','rope_freq_base','rope_freq_scale',
+  'temperature','top_k','top_p','min_p','typical_p','repeat_penalty','presence_penalty','frequency_penalty','max_tokens','seed','stop','system_prompt','datetime','device_policy','placement'];
+const TXT=new Set(['cache_type_k','cache_type_v','flash_attn','rope_scaling','stop','system_prompt','datetime','device_policy','placement']);
+const KVT=['f16','q8_0','q5_1','q5_0','q4_1','q4_0','iq4_nl','bf16','f32'];
+['ms_cache_type_k','ms_cache_type_v'].forEach(id=>$(id).innerHTML='<option value="">por defecto (f16)</option>'+KVT.map(t=>`<option>${t}</option>`).join(''));
+function editSettings(i){const m=M[i];msel=m.name;$('ms_title').textContent='Parámetros de '+m.name;const s=m.settings||{};
+  const c=m.mmproj_candidates||[];$('ms_mmproj').innerHTML=`<option value="__auto">Automático${c.length?' ('+esc((m.mmproj||'').split('/').pop()||'ninguno')+')':' (sin proyector)'}</option><option value="">Ninguno: solo texto</option>`+c.map(x=>`<option value="${esc(x)}">${esc(x.split('/').pop())}</option>`).join('');
+  $('ms_mmproj').value=('mmproj' in s)?s.mmproj:'__auto';
+  SK.forEach(k=>{$('ms_'+k).value=k==='stop'?(s.stop||[]).join(', '):(s[k]??'')});$('ms_embeddings').value=s.embeddings?'true':'';$('ms_msg').textContent='';$('msettings').classList.remove('hide');$('msettings').scrollIntoView({behavior:'smooth',block:'nearest'})}
+async function saveSettings(reset){const st={};if(!reset){SK.forEach(k=>{const v=$('ms_'+k).value;if(v!=='')st[k]=TXT.has(k)?v:+v});
+    if($('ms_embeddings').value==='true')st.embeddings=true;
+    if($('ms_mmproj').value!=='__auto')st.mmproj=$('ms_mmproj').value}
+  try{await api('POST','/api/models/settings',{model:msel,settings:st});$('ms_msg').className='ok';$('ms_msg').textContent=reset?'Restablecido.':'Guardado. Generación: desde la próxima petición · Carga: al volver a cargar el modelo.';await models();if(reset)SK.forEach(k=>$('ms_'+k).value='')}
+  catch(e){$('ms_msg').className='err';$('ms_msg').textContent=e.message}}
+async function delModel(i){const m=M[i];if(!confirm(`¿Eliminar ${m.name} (${gib(m.size)}) del disco?`))return;try{await api('POST','/api/models/delete',{model:m.name});models()}catch(e){alert(e.message)}}
+function tab(t){['hf','ol','ll'].forEach(x=>{$('p_'+x).classList.toggle('hide',x!==t);$('t_'+x).classList.toggle('on',x===t)});if(t==='ll')olLocal()}
+async function hfSearch(){const q=$('hfq').value.trim();if(!q)return;$('hfres').innerHTML='<span class="mut">buscando…</span>';
+  try{const r=await api('GET','/api/hf/search?q='+encodeURIComponent(q));
+    $('hfres').innerHTML=r.length?'<table>'+r.map(x=>`<tr><td><a href="https://huggingface.co/${esc(x.id)}" target="_blank" rel="noopener">${esc(x.id)}</a>${x.gated?' <span class="warn">acceso restringido</span>':''}</td><td class="mut">⬇ ${x.downloads.toLocaleString()} · ♥ ${x.likes}</td><td><button class="sec sm" onclick="hfFiles('${esc(x.id)}')">Ver ficheros</button></td></tr><tr><td colspan="3" id="f_${esc(x.id).replace(/[^\w]/g,'_')}"></td></tr>`).join('')+'</table>':'<span class="mut">Sin resultados con ficheros GGUF.</span>'}
+  catch(e){$('hfres').innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+async function hfFiles(repo){const el=$('f_'+repo.replace(/[^\w]/g,'_'));el.innerHTML='<span class="mut">cargando…</span>';
+  try{const f=await api('GET','/api/hf/files?repo='+encodeURIComponent(repo));
+    el.innerHTML=f.length?'<div class="card" style="padding:8px 12px">'+f.map(x=>`<div class="row" style="justify-content:space-between;margin:3px 0"><span>${esc(x.file)}${x.parts>1?` <span class="mut">(${x.parts} partes)</span>`:''}${x.mmproj?' <span class="mut">(proyector multimodal: se descarga solo con el modelo)</span>':''}</span><span><b>${esc(x.quant||'')}</b> ${gib(x.size)} <button class="sm" ${x.mmproj?'disabled':''} onclick='dlHf(${JSON.stringify(repo)},${JSON.stringify(x.file)})'>Descargar</button></span></div>`).join('')+'<div class="mut" style="font-size:12px">Consejo: Q4_K_M o Q5_K_M equilibran calidad y tamaño.</div></div>':'<span class="mut">Sin ficheros .gguf.</span>'}
+  catch(e){el.innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+async function startDl(b){try{await api('POST','/api/downloads',b);dl()}catch(e){alert(e.message)}}
+function dlHf(repo,file){startDl({source:'hf',repo,file})}
+function olPull(){const n=$('olname').value.trim();if(n)startDl({source:'ollama',name:n})}
+async function olLocal(){try{const r=await api('GET','/api/ollama/local');
+  $('llres').innerHTML=r.models.length?'<table>'+r.models.map(x=>`<tr><td>${esc(x.name)}</td><td>${gib(x.size)}</td><td><button class="sm" onclick='startDl({source:"ollama-local",name:${JSON.stringify(x.name)}})'>Importar</button></td></tr>`).join('')+'</table><div class="mut" style="font-size:12px">Si está en el mismo disco se enlaza sin ocupar espacio extra.</div>':`No hay modelos de Ollama en ${esc(r.dir)} (en este equipo).`}catch(e){$('llres').textContent=e.message}}
+async function hfToken(clear){try{const r=await api('POST','/api/hf/token',{token:clear?'':$('hftoken').value});$('hftoken').value='';$('hftok').textContent=r.set?'(configurado)':''}catch(e){alert(e.message)}}
+const secs=t=>t==null?'':t>3600?Math.round(t/3600)+' h':t>60?Math.round(t/60)+' min':t+' s';
+async function dl(){if(cur!=='mod')return;try{const j=await api('GET','/api/downloads');const sig=JSON.stringify(j.map(x=>[x.id,x.status]));
+  $('dl').innerHTML=j.length?j.map(x=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(x.label)} <span class="${x.status==='error'?'err':'mut'}">${esc(x.status)}${x.error?': '+esc(x.error):''}</span></span><span class="mut">${gib(x.done)} / ${gib(x.total)}${x.status==='descargando'?` · ${(x.speed/2**20).toFixed(1)} MB/s · quedan ${secs(x.eta)}`:''} ${['en cola','descargando'].includes(x.status)?`<button class="sec sm" onclick="api('POST','/api/downloads/cancel',{id:'${x.id}'}).then(dl)">Cancelar</button>`:''}</span></div><div class="bar2"><div style="width:${x.pct||0}%"></div></div></div>`).join(''):'Ninguna.';
+  if(sig!==lastDl){lastDl=sig;models()}}catch(e){}}
+async function initTok(){try{const r=await api('GET','/api/hf/token');$('hftok').textContent=r.set?'(configurado)':''}catch(e){}}
+
+/* ---------- chat (conversación con historial) ---------- */
+function newChat(){hist=[];$('chat').innerHTML='<div class="mut">Nueva conversación.</div>'}
+function bubble(role,text){const d=document.createElement('div');d.className='msg '+(role==='user'?'u':'a');d.textContent=text;$('chat').appendChild(d);$('chat').scrollTop=1e9;return d}
+function attName(){const f=$('att').files[0];$('attn').textContent=f?`Adjunto: ${f.name} (${(f.size/2**20).toFixed(1)} MB) · se enviará con el próximo mensaje`:''}
+const b64=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f)});
+async function send(){const t=$('msg').value.trim();const f=$('att').files[0];if(!t&&!f)return;$('msg').value='';
+  if(!hist.length)$('chat').innerHTML='';
+  let content=t;
+  if(f){const url=await b64(f);content=[{type:'text',text:t||'Describe esto.'}];
+    if(f.type.startsWith('image/'))content.push({type:'image_url',image_url:{url}});
+    else content.push({type:'input_audio',input_audio:{data:url.split(',')[1],format:/mpeg|mp3/.test(f.type+f.name)?'mp3':'wav'}});
+    $('att').value='';attName()}
+  bubble('user',(t||'')+(f?`  📎 ${f.name}`:''));hist.push({role:'user',content});
+  const out=bubble('assistant','…');let acc='';
+  const h={'Content-Type':'application/json'};if(key())h['Authorization']='Bearer '+key();
+  try{const r=await fetch('/v1/chat/completions',{method:'POST',headers:h,body:JSON.stringify({messages:hist,stream:true})});
+    if(!r.ok){out.textContent='Error: '+(await r.text());hist.pop();return}
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n');buf=parts.pop();
+      for(const p of parts){if(!p.startsWith('data: ')||p.includes('[DONE]'))continue;
+        try{const d=JSON.parse(p.slice(6)).choices[0].delta||{};acc+=d.content||'';out.textContent=acc||'…';$('chat').scrollTop=1e9}catch(e){}}}
+    hist.push({role:'assistant',content:acc})}
+  catch(e){out.textContent='Error: '+e.message;hist.pop()}}
+
+/* ---------- arranque ---------- */
+const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','ev'].includes(start)?start:'mon');
+refresh();models();initTok();setInterval(refresh,2000);setInterval(tele,2000);setInterval(dl,1500);
+// presencia: `dllm open` sabe así si el panel sigue abierto (y ofrece reabrirlo si se cierra)
+const CID=Math.random().toString(36).slice(2,12);
+const ping=()=>fetch('/api/ui/ping?id='+CID,{method:'POST',headers:key()?{Authorization:'Bearer '+key()}:{}}).catch(()=>{});
+ping();setInterval(ping,10000);addEventListener('pagehide',()=>{try{navigator.sendBeacon('/api/ui/bye?id='+CID)}catch(e){}});
+</script>
+</body>
+</html>

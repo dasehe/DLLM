@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]  # 24.04: último con Python 3.9 disponible
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Tests (solo biblioteca estándar, sin dependencias)
+        run: python -m unittest discover -s tests -v
+        timeout-minutes: 15
+
+  package:
+    name: Construir paquete
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/build_package.py --out dist
+      - name: El .pyz arranca
+        run: python dist/dllm-package-*/dllm.pyz --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dllm-package
+          path: dist/*.zip
+          retention-days: 14

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Instalar DLLM</title>
+<style>
+:root{--bg:#fff;--fg:#1c1e21;--mut:#6b7280;--card:#f6f7f9;--bd:#e2e5ea;--ac:#2563eb;--ok:#16a34a;--bad:#dc2626;--warn:#d97706}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8eb;--mut:#9aa1ab;--card:#1d2026;--bd:#2c313a;--ac:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:720px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 4px}.mut{color:var(--mut)}
+.steps{display:flex;gap:6px;margin:18px 0}.steps div{flex:1;height:5px;border-radius:3px;background:var(--bd)}.steps .on{background:var(--ac)}
+.cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{border:2px solid var(--bd);background:var(--card);border-radius:10px;padding:14px;cursor:pointer}.card:hover{border-color:var(--ac)}.card.sel{border-color:var(--ac)}
+.card b{display:block;margin-bottom:4px}label{display:block;margin:12px 0 4px;font-weight:500}
+input,select,textarea{width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:76px;font:12px monospace}
+button{font:inherit;padding:9px 18px;border-radius:7px;border:0;background:var(--ac);color:#fff;cursor:pointer}button.sec{background:var(--bd);color:var(--fg)}button:disabled{opacity:.5}
+.row{display:flex;gap:10px;margin-top:20px;justify-content:space-between}.box{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;margin:10px 0}
+.err{color:var(--bad)}.ok{color:var(--ok)}.warn{color:var(--warn)}code,pre{font:12px monospace}pre{white-space:pre-wrap;word-break:break-all;margin:6px 0}
+.hide{display:none}.st{display:flex;gap:10px;padding:5px 0}.st span:first-child{width:18px}
+details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.up{background:var(--ok)}
+</style>
+</head>
+<body>
+<main>
+<h1>Instalar DLLM</h1>
+<div class="mut" id="sub">Detectando tu equipo…</div>
+<div class="steps"><div id="s1" class="on"></div><div id="s2"></div><div id="s3"></div><div id="s4"></div></div>
+
+<section id="p1">
+  <h3>1 · ¿Qué quieres hacer con este equipo?</h3>
+  <div class="cards">
+    <div class="card" data-role="orchestrator" onclick="pick('orchestrator')"><b>Orquestador</b><span class="mut">Reparte el modelo entre nodos y ofrece la API y el panel. Solo uno por clúster.</span></div>
+    <div class="card" data-role="node" onclick="pick('node')"><b>Nodo</b><span class="mut">Presta su CPU/GPU a un orquestador. Necesitarás su código de unión.</span></div>
+    <div class="card" data-role="both" onclick="pick('both')"><b>Ambos</b><span class="mut">Orquestador que además aporta su propia CPU/GPU.</span></div>
+  </div>
+  <div id="uninst" class="box hide"><b>DLLM ya está instalado en este equipo</b> <span class="mut" id="uninst_info"></span>
+    <div class="mut">Para reinstalar o cambiar de papel, elige arriba. Para quitarlo:</div>
+    <label style="font-weight:400"><input type="checkbox" id="un_purge" style="width:auto" checked> Borrar también llama.cpp y la configuración</label>
+    <label style="font-weight:400"><input type="checkbox" id="un_models" style="width:auto"> Borrar también los modelos descargados (solo si están en la carpeta de DLLM)</label>
+    <div class="row" style="margin-top:8px"><span class="err" id="un_err"></span><button class="sec" onclick="uninstall()">Desinstalar</button></div>
+    <div id="un_log" class="mut"></div></div>
+  <div class="row"><span></span><button id="n1" disabled onclick="go(2)">Siguiente</button></div>
+</section>
+
+<section id="p2" class="hide">
+  <h3>2 · Configuración</h3>
+  <div class="box" id="hwbox"></div>
+  <div id="f_node" class="hide"><label>Código de unión del orquestador <span class="mut">(opcional)</span></label>
+    <textarea id="join" placeholder="DLLM1-…   (vacío: el orquestador reclamará este equipo desde su panel)"></textarea><div class="mut">Lo muestra el orquestador al terminar su instalación (o con <code>dllm join-code</code>). Sin código, este equipo aparecerá en su panel (Nodos → Equipos esperando unirse) y aquí confirmarás un código de verificación.</div></div>
+  <label>Carpeta de DLLM</label>
+    <div style="display:flex;gap:8px"><input id="idir" style="flex:1" onchange="freeSpace()"><button type="button" class="sec" onclick="pickDir()">Examinar…</button></div>
+    <div class="mut" style="font-size:13px;margin-top:4px">Aquí se instalan llama.cpp (<code>llama.cpp</code>) y, en el orquestador, los modelos (<code>models</code>). La configuración y el secreto del clúster se guardan aparte, protegidos, en tu carpeta de usuario (<code>.dllm</code>).</div>
+    <div class="mut" id="mfree" style="font-size:13px;margin-top:4px"></div>
+    <div id="fb" class="box hide">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button type="button" class="sec" onclick="fbGo(FB.parent)" id="fb_up">↑ Subir</button>
+        <button type="button" class="sec" onclick="fbGo(FB.home)">Inicio</button><span id="fb_roots"></span></div>
+      <div id="fb_path" style="font:12px monospace;margin:8px 0;word-break:break-all"></div>
+      <div id="fb_list" style="max-height:240px;overflow:auto;border:1px solid var(--bd);border-radius:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><input id="fb_new" placeholder="Nueva carpeta" style="flex:1"><button type="button" class="sec" onclick="fbMk()">Crear</button></div>
+      <div class="err" id="fb_err"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button type="button" class="sec" onclick="$('fb').classList.add('hide')">Cancelar</button><button type="button" onclick="fbPick()">Usar esta carpeta</button></div>
+    </div>
+  <div id="f_orch" class="hide">
+    <label><input type="checkbox" id="expose" style="width:auto"> Permitir usar la API desde otros equipos de la red (se creará una API key)</label></div>
+  <div id="f_share" class="hide"><label>¿Cuánto comparte este equipo?</label>
+    <div class="box" style="margin-top:0">
+      <label style="font-weight:400;margin:0"><input type="radio" name="lm" value="auto" checked style="width:auto" onchange="lmode()">
+        <b>Automático</b> — lo gestiona el orquestador y se puede cambiar desde su panel web <span class="mut" id="recv"></span></label>
+      <label style="font-weight:400;margin:8px 0 0"><input type="radio" name="lm" value="manual" style="width:auto" onchange="lmode()">
+        <b>Limitar desde este equipo</b> — el orquestador no podrá cambiarlo</label>
+      <div id="f_manual" class="hide">
+        <label>Porcentaje a compartir: <b id="sharev">50</b> %</label>
+        <input type="range" id="share" min="5" max="100" step="5" value="50" oninput="calc()">
+        <div class="mut" id="sharecalc"></div>
+        <label>Memoria exacta en GiB (opcional, prioridad sobre el %)</label><input id="mem" type="number" step="0.5" min="0.25" oninput="calc()">
+        <label>Hilos de CPU exactos (opcional, prioridad sobre el %)</label><input id="threads" type="number" min="1" step="1" oninput="calc()">
+      </div>
+    </div>
+    <div class="mut">Los hilos se aplican de verdad a <code>rpc-server</code>. La memoria la respeta el orquestador: nunca asigna a este equipo más de lo indicado. El uso de una GPU no se puede limitar en %, solo su memoria.</div>
+  </div>
+  <label><input type="checkbox" id="autostart" style="width:auto" checked> Arrancar automáticamente al iniciar sesión</label>
+  <label><input type="checkbox" id="fw" style="width:auto" checked> Abrir en el cortafuegos solo los puertos necesarios, limitados a tu red <span class="mut">(Windows pedirá permiso de administrador una vez)</span></label>
+  <details><summary>Opciones avanzadas</summary>
+    <label>Nombre del equipo</label><input id="name">
+    <label>Backend de llama.cpp</label><select id="backend"></select>
+    <label>Usar llama.cpp ya instalado (carpeta con <code>llama-server</code>/<code>rpc-server</code>; vacío = descargar)</label><input id="bindir">
+    <div id="f_adv_orch" class="hide"><label>Dirección del orquestador para los nodos (vacío = IP de la LAN; usa la de WireGuard/VPN si la hay)</label><input id="adv" placeholder="p. ej. 10.8.0.1"></div>
+    <div id="f_adv_node" class="hide"><label><input type="checkbox" id="restrict" style="width:auto" checked> Aceptar conexiones solo del orquestador (recomendado)</label></div>
+  </details>
+  <div class="err" id="e2"></div>
+  <div class="row"><button class="sec" onclick="go(1)">Atrás</button><button onclick="install()">Instalar</button></div>
+</section>
+
+<section id="p3" class="hide">
+  <h3>3 · Instalando</h3><div id="log"></div>
+  <div class="err" id="e3"></div>
+  <div class="row"><button class="sec hide" id="back3" onclick="go(2)">Volver y corregir</button><span></span></div>
+</section>
+
+<section id="p4" class="hide">
+  <h3>4 · Listo</h3>
+  <div id="done"></div>
+  <div class="row"><span></span><button class="sec" onclick="quit()">Cerrar asistente</button></div>
+</section>
+</main>
+<footer class="mut" style="max-width:1000px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-align:center">
+DLLM <span id="ver"></span> — idea original y desarrollo inicial de David Serrano Hernando · © 2026 David Serrano Hernando y colaboradores ·
+software libre bajo <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU AGPL-3.0-or-later</a>, sin garantía ·
+<a href="https://github.com/dasehe/dllm" target="_blank" rel="noopener">código fuente</a>
+</footer>
+<script>
+const T='__TOKEN__';let D=null,role=null,since=0,poll=null;
+const $=id=>document.getElementById(id);
+const gib=b=>((b||0)/2**30).toFixed(1)+' GiB';
+async function api(m,p,b){const r=await fetch(p+(p.includes('?')?'&':'?')+'t='+T,{method:m,headers:{'Content-Type':'application/json','X-Setup-Token':T},body:b?JSON.stringify(b):undefined});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+function go(n){['p1','p2','p3','p4'].forEach((p,i)=>$(p).classList.toggle('hide',i!==n-1));
+  [1,2,3,4].forEach(i=>$('s'+i).classList.toggle('on',i<=n))}
+function pick(r){role=r;document.querySelectorAll('.card').forEach(c=>c.classList.toggle('sel',c.dataset.role===r));$('n1').disabled=false;
+  $('f_node').classList.toggle('hide',r!=='node');$('f_adv_node').classList.toggle('hide',r!=='node');$('f_adv_orch').classList.toggle('hide',r==='node');$('f_orch').classList.toggle('hide',r==='node');$('f_share').classList.toggle('hide',r==='orchestrator')}
+function lm(){return document.querySelector('input[name=lm]:checked').value}
+function lmode(){$('f_manual').classList.toggle('hide',lm()!=='manual');calc()}
+function calc(){if(!D)return;const p=D.platform,sh=+$('share').value;$('sharev').textContent=sh;
+  const mem=$('mem').value?(+$('mem').value)*2**30:p.ram_total*sh/100,thr=$('threads').value?+$('threads').value:Math.max(1,Math.round(p.cores*sh/100));
+  $('sharecalc').textContent=`Aportará ≈ ${gib(Math.min(mem,p.ram_total-2**30))} de ${gib(p.ram_total)} de RAM y ${Math.min(thr,p.cores)} de ${p.cores} hilos (con GPU NVIDIA, el % se aplica a su VRAM).`}
+let FB={};
+const gb=b=>b==null?'':(b/2**30).toFixed(0)+' GB libres';
+async function freeSpace(){try{const r=await api('GET','/api/browse?path='+encodeURIComponent($('idir').value));
+  const same=r.path.replace(/[\\/]+$/,'')===$('idir').value.replace(/[\\/]+$/,'');
+  $('mfree').textContent=(same?'':'(se creará al instalar) · ')+'Disco: '+gb(r.free)+'. Un modelo de 7B ocupa ~5 GB, uno de 32B ~20 GB.'}catch(e){$('mfree').textContent=''}}
+async function pickDir(){$('mfree').textContent='Abriendo el selector de carpetas…';
+  try{const r=await api('POST','/api/pickdir',{initial:$('idir').value});
+    if(r.native){if(r.path){$('idir').value=r.path}freeSpace();return}}catch(e){}
+  $('mfree').textContent='';fbGo($('idir').value)}  // sin diálogo del sistema: explorador dentro de la página
+async function fbGo(p){$('fb_err').textContent='';try{FB=await api('GET','/api/browse?path='+encodeURIComponent(p||''));$('fb').classList.remove('hide');
+  $('fb_path').textContent=FB.path+'  ·  '+gb(FB.free);$('fb_up').disabled=!FB.parent;
+  const ea=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sep=FB.path.includes('\\')?'\\':'/',base=/[\\/]$/.test(FB.path)?FB.path:FB.path+sep;
+  $('fb_roots').innerHTML=FB.roots.map(r=>`<button type="button" class="sec" data-p="${ea(r)}" onclick="fbGo(this.dataset.p)">${ea(r)}</button>`).join(' ');
+  $('fb_list').innerHTML=FB.dirs.length?FB.dirs.map(d=>`<div data-p="${ea(base+d)}" onclick="fbGo(this.dataset.p)" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bd)">📁 ${ea(d)}</div>`).join(''):'<div class="mut" style="padding:8px 10px">Sin subcarpetas.</div>';
+  if(FB.error)$('fb_err').textContent=FB.error}catch(e){$('fb_err').textContent=e.message}}
+async function fbMk(){try{FB=await api('POST','/api/mkdir',{path:FB.path,name:$('fb_new').value});$('fb_new').value='';fbGo(FB.path)}catch(e){$('fb_err').textContent=e.message}}
+function fbPick(){$('idir').value=FB.path;$('fb').classList.add('hide');freeSpace()}
+async function init(){
+  try{D=await api('GET','/api/detect')}catch(e){$('sub').textContent='Error: '+e.message;return}
+  const p=D.platform,gpu=(p.nvidia.map(g=>g.name).concat(p.other_gpu)).join(', ')||'sin GPU detectada';
+  $('ver').textContent='v'+D.version;$('sub').textContent=`${D.hostname} · ${p.os}/${p.arch} · versión ${D.version}`;
+  $('hwbox').innerHTML=`<b>Tu equipo</b><br>${gib(p.ram_total)} de RAM · ${p.cores} núcleos · ${gpu}<br><span class="mut">Backend sugerido: <b>${D.suggested_backend}</b>${D.existing?` · <span class="warn">ya hay una configuración (${D.existing.role}); se sustituirá</span>`:''}</span>`;
+  if(D.existing){$('uninst').classList.remove('hide');$('uninst_info').textContent=`(rol ${D.existing.role}${D.existing.install_dir?' · '+D.existing.install_dir:''})`;
+    if(D.existing.install_dir)D.default_install_dir=D.existing.install_dir;
+    else if(D.existing.role!=='node'&&D.existing.models_dir)D.default_install_dir=D.keep_models=D.existing.models_dir}  // de ≤0.3.5: misma carpeta, los modelos se quedan donde están
+  $('idir').value=D.default_install_dir;$('name').value=D.hostname;freeSpace();
+  $('recv').textContent=`(recomendado ahora: ~${D.recommended.mem_gb} GiB y ${D.recommended.threads} de ${p.cores} hilos)`;calc();
+  $('backend').innerHTML=['auto'].concat(D.backends).map(b=>`<option value="${b}" ${b==='auto'?'selected':''}>${b==='auto'?'auto: '+D.suggested_backend+' (recomendado; si falla prueba el siguiente)':b+' — '+((D.backend_notes||{})[b]||'')}</option>`).join('');
+}
+async function install(){
+  $('e2').textContent='';
+  const o={role,name:$('name').value,backend:$('backend').value,autostart:$('autostart').checked,
+    bin_dir:$('bindir').value||null,install_dir:$('idir').value,firewall:$('fw').checked};
+  if(D.keep_models&&$('idir').value===D.keep_models)o.models_dir=D.keep_models;
+  if(role!=='orchestrator'){o.limits_mode=lm();if(lm()==='manual'){o.share=+$('share').value;o.mem_gb=$('mem').value||null;o.threads=$('threads').value||null}}
+  if(role==='node'){o.join_code=$('join').value;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null}
+  try{await api('POST','/api/install',o)}catch(e){$('e2').textContent=e.message;return}
+  since=0;$('log').innerHTML='';$('e3').textContent='';$('back3').classList.add('hide');go(3);poll=setInterval(tick,700);tick()
+}
+const icon={run:'⏳',ok:'✅',warn:'⚠️',err:'❌'};
+async function tick(){
+  let r;try{r=await api('GET','/api/progress?since='+since)}catch(e){return}
+  r.events.forEach(ev=>{since=ev.i+1;const id='st'+ev.step+'_'+ev.label.replace(/\W/g,'');let el=$(id);
+    if(!el){el=document.createElement('div');el.className='st';el.id=id;el.innerHTML='<span></span><span></span>';$('log').appendChild(el)}
+    el.children[0].textContent=icon[ev.status];el.children[1].innerHTML=`<b>${ev.label}</b> <span class="mut">${ev.detail||''}</span>`});
+  if(r.done){clearInterval(poll);
+    if(r.error){$('e3').textContent='No se pudo completar: '+r.error;$('back3').classList.remove('hide')}
+    else finish(r.result)}
+}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function finish(r){
+  let h='';
+  if(r.role!=='node'){
+    h+=`<div class="box"><b>Panel y API</b><br><a href="${r.ui_url}" target="_blank">${r.ui_url}</a><div class="mut">API OpenAI-compatible en ${r.ui_url}/v1</div>${r.api_key?`<div>API key: <code>${esc(r.api_key)}</code></div><div class="mut">En este equipo el panel no pide clave. Desde otro equipo abre este enlace una vez y el navegador la recordará:</div><pre id="lanurl">${esc(r.lan_url||'')}</pre><button class="sec" onclick="navigator.clipboard.writeText($('lanurl').textContent)">Copiar enlace</button>`:''}</div>`;
+    h+=`<div class="box"><b>Código de unión para los nodos</b><div class="warn">Es una contraseña del clúster: no lo compartas fuera de tu red.</div><pre id="code">${esc(r.join_code)}</pre><button class="sec" onclick="navigator.clipboard.writeText($('code').textContent)">Copiar código</button></div>`;
+    h+=`<div class="box"><b>Nodos conectados</b><div id="nodes" class="mut">buscando…</div></div>`;
+    setInterval(nodes,2500);nodes()
+  }else if(r.pairing){h+=`<div class="box" id="pairing"><b>Esperando a que un orquestador reclame este equipo…</b><div class="mut">En su panel: Nodos → Equipos esperando unirse → Reclamar.</div></div>`;setInterval(pairTick,2000);pairTick()}
+  else h+=`<div class="box">✅ Este nodo se anunciará solo al orquestador. Debería aparecer en su panel en unos segundos.</div>`;
+  if(!r.autostart)h+=`<div class="box warn">Sin arranque automático. Para arrancar: <pre>${esc(r.manual_start)}</pre>${r.service_note?esc(r.service_note):''}</div>`;
+  if(r.shortcuts&&r.shortcuts.length)h+=`<div class="box">📌 Para volver al panel cuando quieras, usa el acceso directo <b>DLLM</b> (escritorio y menú Inicio): arranca DLLM si está parado.</div>`;
+  if(r.install_dir)h+=`<div class="box"><b>Carpeta de DLLM</b><br><code>${esc(r.install_dir)}</code>${r.models_dir?`<div class="mut">Modelos: <code>${esc(r.models_dir)}</code></div>`:''}</div>`;
+  if(r.firewall&&r.firewall.length)h+=`<div class="box"><b>Si tienes cortafuegos activo</b>, abre solo lo necesario:<pre>${r.firewall.map(esc).join('\n')}</pre></div>`;
+  $('done').innerHTML=h;go(4)}
+let PAIR=null;
+async function pairTick(){const el=$('pairing');if(!el)return;let v;try{v=await api('GET','/api/pairing')}catch(e){return}
+  if(v.state==='completada'){el.innerHTML='✅ <b>Equipo unido al clúster.</b> Ya aparece en el panel del orquestador; puedes cerrar el asistente.';return}
+  if(v.state==='pendiente'){if(PAIR===v.id)return;PAIR=v.id;
+    el.innerHTML=`<b>El orquestador «${esc(v.orch)}» (${esc(v.ip)}) quiere usar este equipo.</b><div class="mut">Comprueba que su panel muestra el mismo código de verificación:</div><div style="font-size:30px;letter-spacing:4px;margin:10px 0"><b>${esc(v.sas)}</b></div><div class="row"><button class="sec" onclick="pairDecide(false)">No coincide · Rechazar</button><button onclick="pairDecide(true)">Coincide · Aceptar</button></div>`;return}
+  if(v.state==='aceptada'){el.innerHTML='Aceptado: terminando de unir…';return}
+  if(['rechazada','caducada'].includes(v.state)||v.state==='esperando'){if(PAIR!==null&&v.state!=='esperando')el.innerHTML=`<b>Solicitud ${esc(v.state)}.</b> <span class="mut">Esperando otra…</span>`;PAIR=v.state==='esperando'?null:PAIR}}
+async function pairDecide(ok){try{await api('POST','/api/pairing',{id:PAIR,accept:ok})}catch(e){alert(e.message)}pairTick()}
+async function nodes(){try{const r=await api('GET','/api/nodes');const el=$('nodes');if(!el)return;
+  el.innerHTML=r.nodes.length?r.nodes.map(n=>`<div><span class="dot ${n.up?'up':''}"></span>${esc(n.name)} <span class="mut">${esc(n.host)} · ${n.backend||'-'} · ${gib(n.cap_bytes)}</span></div>`).join(''):(r.error?'El orquestador aún está arrancando…':'Todavía ninguno. Instala un nodo con el código de arriba.')}catch(e){}}
+async function uninstall(){
+  if(!confirm('¿Desinstalar DLLM de este equipo?'))return;
+  $('un_err').textContent='';$('un_log').textContent='Desinstalando… (Windows puede pedir permiso de administrador para el cortafuegos)';
+  try{const r=await api('POST','/api/uninstall',{purge:$('un_purge').checked,models:$('un_models').checked});
+    $('un_log').innerHTML=r.done.map(x=>'✅ '+esc(x)).join('<br>')+'<br><b>DLLM se ha desinstalado.</b> Puedes cerrar el asistente o volver a instalarlo eligiendo un papel.';D.existing=null}
+  catch(e){$('un_log').textContent='';$('un_err').textContent=e.message}}
+async function quit(){try{await api('POST','/api/quit')}catch(e){}document.body.innerHTML='<main><h1>Asistente cerrado</h1><p class="mut">Ya puedes cerrar esta pestaña. El panel de DLLM sigue funcionando.</p></main>'}
+init();
+const CID=Math.random().toString(36).slice(2,12);  // presencia: si cierras la pestaña sin terminar, la consola reaparece
+const ping=()=>fetch('/api/ui/ping?id='+CID+'&t='+T,{method:'POST',headers:{'X-Setup-Token':T}}).catch(()=>{});
+ping();setInterval(ping,10000);addEventListener('pagehide',()=>{try{navigator.sendBeacon('/api/ui/bye?id='+CID+'&t='+T)}catch(e){}});
+</script>
+</body>
+</html>
