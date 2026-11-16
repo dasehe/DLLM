@@ -26,12 +26,24 @@ from .util import FastHTTPServer, log, pipe, tune
 MAX_BODY = 64 << 20
 
 
+KEY_LINES = re.compile(r"assert|error|abort|fail|out of memory|oom|exception|signal|device|lost|vk|vulkan", re.I)
+
+
+def exit_record(slot, code, tail, why=None):
+    """Motivo de la muerte de un rpc-server: código, explicación y las líneas más relevantes de su salida."""
+    lines = [l for l in tail if l.strip()]
+    key = [l for l in lines if KEY_LINES.search(l)]
+    return {"t": time.time(), "slot": slot, "code": code, "why": why,
+            "lines": [l[:300] for l in (key or lines)[-6:]]}
+
+
 class Rpc:
     """Un rpc-server del agente (uno por slot de modelo)."""
 
     def __init__(self, slot):
         self.slot, self.proc, self.port, self.want = slot, None, None, False
         self.tail = collections.deque(maxlen=40)
+        self.last_exit = None  # cómo murió la última vez (ver exit_record)
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
@@ -252,7 +264,11 @@ class Agent:
             for r in list(self.rpcs.values()):
                 if r.want and not r.alive():
                     self.restarts += 1
-                    log(f"rpc-server (slot {r.slot}) caído (reinicio #{self.restarts}); relanzando")
+                    from .installer import explain_exit
+                    code = r.proc.returncode if r.proc else None
+                    r.last_exit = exit_record(r.slot, code, list(r.tail), explain_exit(code))
+                    log(f"rpc-server (slot {r.slot}) caído, código {code} (reinicio #{self.restarts}): "
+                        + " | ".join(r.last_exit["lines"][-3:]))
                     try:
                         with self.lock:
                             if r.want:
@@ -361,12 +377,16 @@ class Agent:
         return s
 
     # ------------------------------------------------------------ info
+    def last_rpc_exit(self):
+        exits = [r.last_exit for r in self.rpcs.values() if r.last_exit]
+        return max(exits, key=lambda e: e["t"]) if exits else None
+
     def info(self):
         s = self.probe.snapshot(self.limits)
         s.update({"limits_mode": self.mode, "limits": self.limits})
         s.update({"name": self.name, "version": __version__, "rpc_bin": bool(self.rpc_bin),
                   "rpc_build": self.build, "rpc_running": self.rpc_running(), "rpc_port": self.a.rpc_port,
-                  "rpc_restarts": self.restarts, "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
+                  "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
                   "devices": self.devices, "device": self.device and self.device["name"],
                   "device_desc": self.device and self.device["desc"], "device_error": self.device_error,
                   "auto_update": self.auto_update, "llama_backend": self.llama_backend, "update": self.update,

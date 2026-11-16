@@ -32,5 +32,15 @@ class AgentPortBusy(unittest.TestCase):
         self.assertIn(str(port), r.stderr)
 
 
+class ExitRecord(unittest.TestCase):
+    def test_keeps_relevant_lines(self):
+        from dllm import agent
+        tail = ["ggml_vulkan: Using AMD", "ggml_vulkan: Device memory allocation failed", "otra cosa"] + ["x"] * 3
+        r = agent.exit_record(0, -1073740791, tail, "porque sí")
+        self.assertEqual((r["slot"], r["code"], r["why"]), (0, -1073740791, "porque sí"))
+        self.assertIn("ggml_vulkan: Device memory allocation failed", r["lines"])
+        self.assertEqual(agent.exit_record(0, 1, [])["lines"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

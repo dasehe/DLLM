@@ -20,6 +20,13 @@ Solución: en *Modelos → Parámetros* sube **Lote lógico (batch)** y **Lote f
 nunca puede superar al lógico). Un lote mayor gasta más VRAM de cómputo: baja el contexto si hace falta. No reenvíes la
 imagen hasta recargar el modelo con el cambio.
 
+Si en cambio aparece `ggml-rpc.cpp … Remote RPC server crashed or returned malformed response` o `recv returned 0
+(peer closed?)`, el que ha muerto es el **`rpc-server` del nodo** (por eso `llama-server` sale con un código como
+`3221226505`, un aborto): no es el lote. Desde 0.6.0 *Eventos* añade debajo «rpc-server de <nodo> terminó (código N)»
+con sus últimas líneas (fallo del driver Vulkan/CUDA, memoria agotada de la GPU…), y `/api/state` las incluye en
+`last_crash.rpc`; el agente las guarda también en su log y en `rpc_last_exit` de `/info`. Con eso se distingue un
+fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prueba un contexto menor).
+
 ## Instalación
 
 | Síntoma | Causa probable | Solución |

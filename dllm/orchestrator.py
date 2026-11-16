@@ -962,7 +962,19 @@ class Cluster:
         lines = [l[:300] for l in (key or tail)[-6:]]
         for l in lines:
             self.event(f"  llama-server: {l}")
-        self.last_crash = {"t": time.time(), "code": rc, "lines": lines}
+        self.last_crash = {"t": time.time(), "code": rc, "lines": lines, "rpc": []}
+        # si en un nodo murió un rpc-server hace un momento, esa es la causa de fondo (llama-server solo se entera)
+        for n in self.reg.all():
+            try:
+                info = call_agent(self.reg.secret, n, "GET", "/info", timeout=2.5)
+            except Exception:
+                continue
+            ex = info.get("rpc_last_exit")
+            if ex and time.time() - ex.get("t", 0) < 120:
+                self.event(f"  rpc-server de {n.name} terminó (código {ex.get('code')}){': ' + ex['why'] if ex.get('why') else ''}")
+                for l in ex.get("lines", []):
+                    self.event(f"    rpc-server: {l}")
+                self.last_crash["rpc"].append({"node": n.name, **{k: ex.get(k) for k in ("code", "why", "lines")}})
         return "llama-server terminó" + (f" (código {rc})" if rc is not None else "")
 
     def _start_worker(self, desired, recovering):

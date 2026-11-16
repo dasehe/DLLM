@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+### Añadido
+- **Causa real cuando muere un `rpc-server`**: el agente guarda el código y las líneas relevantes antes de relanzarlo
+  (log y `rpc_last_exit` en `/info`) y el orquestador las muestra en *Eventos* y en `last_crash.rpc` al caer
+  `llama-server`. Antes solo se veía «Remote RPC server crashed» sin saber por qué.
+
 ### Cambiado
 - **Desinstalador a fondo**: cierra todos los procesos de DLLM (agente, orquestador, `llama-server`, `rpc-server`;
   repite hasta que no quede ninguno y avisa de los que no se dejan), borra carpetas con reintentos y ficheros de solo
