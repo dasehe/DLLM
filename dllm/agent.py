@@ -515,10 +515,17 @@ def run(a):
     if ag.pairing:
         log("sin emparejar: esperando a que un orquestador lo reclame (confírmalo con `dllm pair`)")
     atexit.register(ag.stop_rpc)  # que no quede rpc-server huérfano al salir
+    # primero el puerto HTTP: si lo ocupa otro proceso (p. ej. un agente de una instalación anterior que sigue vivo)
+    # no se anuncia nada, o el orquestador reclamaría a ese otro proceso y vería «ya está emparejado»
+    try:
+        srv = FastHTTPServer((ag.listen, a.port), make_handler(ag))
+    except OSError as e:
+        sys.exit(f"no se puede abrir el puerto {a.port} del agente ({e}): lo usa otro proceso, probablemente un agente "
+                 "de una instalación anterior que sigue en marcha. Ciérralo (Windows: Administrador de tareas → "
+                 "pythonw.exe / python.exe; Linux: `ss -ltnp | grep " + str(a.port) + "`) y vuelve a iniciar DLLM")
+    srv.daemon_threads = True
     for fn in (ag.serve_proxy, ag.watchdog, ag.beacon_loop, ag.device_refresh_loop, ag.sampler.loop):
         threading.Thread(target=fn, daemon=True).start()
-    srv = FastHTTPServer((ag.listen, a.port), make_handler(ag))
-    srv.daemon_threads = True
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

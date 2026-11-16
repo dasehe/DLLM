@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Corregido
+- **El agente abre su puerto HTTP antes de anunciarse**: si lo ocupa otro proceso (p. ej. un agente de una instalación
+  anterior que sigue en marcha) sale con un mensaje claro, en vez de anunciarse como «esperando unirse» mientras el
+  otro proceso contesta «este nodo ya está emparejado» al reclamarlo.
 - **Instalador en Windows con Control inteligente de aplicaciones**: `[WinError 4551]` (y 1260) al lanzar llama.cpp se
   reconoce como bloqueo de directiva y el asistente se detiene con la explicación, en vez de probar otro backend (CPU
   también se bloquea y dejaba un orquestador inservible).
