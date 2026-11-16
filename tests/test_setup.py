@@ -303,6 +303,13 @@ class TestWindowsBlocked(unittest.TestCase):
             with self.assertRaises(installer.PolicyBlocked):
                 installer.verify_bins("d", ("llama-server",))
 
+    def test_backend_warning_nvidia_sin_cuda(self):
+        info = {"os": "windows", "nvidia": [{"name": "RTX 3060"}], "cuda": "11.8"}
+        self.assertIn("CUDA 11.8", installer.backend_warning("vulkan", info))
+        self.assertIn("no informa", installer.backend_warning("vulkan", dict(info, cuda=None)))
+        self.assertIsNone(installer.backend_warning("cuda", dict(info, cuda="12.8")))
+        self.assertIsNone(installer.backend_warning("vulkan", dict(info, nvidia=[])))
+
     def test_sac_state_off_windows(self):
         if os.name != "nt":
             self.assertIsNone(hw.smart_app_control())

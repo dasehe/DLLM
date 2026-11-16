@@ -165,6 +165,9 @@ class Setup:
             auto_backend = backend == "auto"
             if auto_backend:
                 backend = installer.suggest_backends(info)[0]
+            warn = installer.backend_warning(backend, info)
+            if warn:
+                self.emit(1, "warn", warn, label="Backend")
             if role == "node" and n["join"]:
                 j = n["join"]
                 o_["beacon_port"] = int(j["beacon"])

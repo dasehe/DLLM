@@ -5,6 +5,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Corregido
+- **El asistente explica por qué no usa CUDA** cuando detecta una GPU NVIDIA (p. ej. driver que solo admite CUDA < 12.4
+  o `nvidia-smi` sin versión de CUDA, típico en una VM con el driver antiguo) en lugar de elegir Vulkan en silencio.
 - **El agente abre su puerto HTTP antes de anunciarse**: si lo ocupa otro proceso (p. ej. un agente de una instalación
   anterior que sigue en marcha) sale con un mensaje claro, en vez de anunciarse como «esperando unirse» mientras el
   otro proceso contesta «este nodo ya está emparejado» al reclamarlo.

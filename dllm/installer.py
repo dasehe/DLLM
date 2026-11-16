@@ -114,6 +114,22 @@ def suggest_backends(info):
     return sug, opts
 
 
+def backend_warning(backend, info):
+    """Aviso si hay una GPU NVIDIA pero no se va a usar CUDA (con el motivo), o None."""
+    if not info.get("nvidia") or backend == "cuda" or info["os"] == "macos":
+        return None
+    cuda = info.get("cuda")
+    if not cuda:
+        why = "nvidia-smi no informa de la versión de CUDA"
+    elif _ver(cuda) < MIN_CUDA:
+        why = f"el driver solo admite CUDA {cuda} y hace falta ≥ {MIN_CUDA[0]}.{MIN_CUDA[1]}"
+    else:
+        why = "se eligió otro backend"
+    return (f"hay una GPU NVIDIA ({info['nvidia'][0]['name']}) pero se usará {backend}, no CUDA: {why}. "
+            "Actualiza el driver de NVIDIA (en una VM, el del sistema invitado) y repite el asistente con "
+            "--backend cuda")
+
+
 def fallback_backends(backend, info):
     """Orden de reintento si el backend elegido no arranca: el elegido, luego Vulkan (si hay GPU) y CPU."""
     _, opts = suggest_backends(info)
