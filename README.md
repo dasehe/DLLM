@@ -12,7 +12,9 @@ consumo, CPU, RAM, tráfico, tokens/s) para NVIDIA, AMD, Intel y Apple, y permit
 memoria, dispositivo) y cada modelo (contexto, caché K/V, flash attention, temperatura…), como en LM Studio. Desde el
 panel se **descargan modelos de Hugging Face y Ollama** (también los
 **multimodales** con visión y audio, sin configurar nada aparte) y se ajustan sus parámetros (temperatura, prompt de
-sistema…). Cada equipo decide **cuánto
+sistema…). Puedes mantener **varios modelos cargados a la vez** (un solo endpoint `/v1` que enruta por el campo `model`, con
+modelos fijos o cargados bajo demanda) y el reparto tiene en cuenta la **topología de red** (menos saltos entre
+equipos). Cada equipo decide **cuánto
 comparte** (memoria e hilos), fijándolo él mismo o dejando que lo gestione el orquestador desde el panel, y cuanta más
 memoria sume el clúster, **más contexto** puede usar el modelo.
 
@@ -27,8 +29,11 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
    └──────────────────┘     LAN ≥ 1 Gbps       └──────────────┘
 ```
 
-> **Estado: demo funcional (v0.5.1).** Probado con binarios simulados en Linux, macOS y Windows. Aún **no validado con llama.cpp real
-> ni con GPU**: si lo pruebas, abre un *issue* con tu resultado. Ver [limitaciones](docs/ARQUITECTURA.md#límites).
+> **Estado: demo funcional (v0.6.0).** Probado en un clúster real de 2 equipos Windows (AMD Vulkan + NVIDIA) con
+> llama.cpp real y un modelo de 31B repartido. El resto (Linux, macOS, CUDA en Linux, varios modelos a la vez,
+> `--on-demand`, políticas de dispositivo) solo se ha probado con binarios simulados. **Problema conocido:** enviar una
+> imagen a un modelo multimodal grande repartido entre nodos puede reiniciar el modelo (en investigación). Si lo
+> pruebas, abre un *issue*. Ver [limitaciones](docs/ARQUITECTURA.md#límites).
 
 ![Monitor del panel (datos simulados)](docs/img/monitor.png)
 
@@ -48,6 +53,8 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
 | Windows | Doble clic en `Install-DLLM.bat` |
 | macOS | Doble clic en `Install-DLLM.command` (si se bloquea: clic derecho → Abrir) |
 | Linux | `./install.sh` (navegador si hay escritorio; terminal por SSH) |
+
+**Linux por comandos desde GitHub:** ver [Instalación](docs/INSTALACION.md#desde-el-repositorio-ubuntu--debian).
 
 El asistente elige el backend más rápido para cada equipo (**CUDA** en NVIDIA, también en Linux; Vulkan en AMD/Intel;
 Metal en Mac; CPU) y, si falla, prueba el siguiente. Después abre el panel con el acceso directo **DLLM**: en el propio
@@ -89,7 +96,7 @@ Panel, CLI, API, métricas para Prometheus/Zabbix: **[docs/USO.md](docs/USO.md)*
 | [Seguridad](docs/SEGURIDAD.md) | Modelo de amenazas, autenticación, recomendaciones de despliegue |
 | [Solución de problemas](docs/SOLUCION-PROBLEMAS.md) | Errores frecuentes y cómo diagnosticarlos |
 | [Desarrollo](docs/DESARROLLO.md) | Estructura del código, tests, compilar el paquete, publicar versiones |
-| [Hoja de ruta](docs/ROADMAP.md) | Qué viene en 0.5.0, visión multimodal y pendientes |
+| [Hoja de ruta](docs/ROADMAP.md) | Visión multimodal y pendientes |
 | [CHANGELOG](CHANGELOG.md) | Cambios por versión |
 | [CONTRIBUTING](CONTRIBUTING.md) · [NOTICE](NOTICE) · [AUTHORS](AUTHORS.md) | Cómo contribuir, licencia y autoría |
 

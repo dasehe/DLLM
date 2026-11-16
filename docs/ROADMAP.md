@@ -1,8 +1,8 @@
 # Hoja de ruta y pendientes
 
-Estado: 0.5.1 empaquetada (zip); la anterior publicada en GitHub es la 0.3.3. Lo de aquí es intención, no compromiso.
+Estado: 0.6.0 (primera versión de DLLM, empaquetada en zip; aún sin release publicada en GitHub). Lo de aquí es intención, no compromiso.
 
-## 0.5.0 (en curso)
+## 0.5.0 (hecho; incluido en 0.6.0)
 - **Fase 1** (hecha): sonda de enlace por el canal autenticado, tiers de red y reparto con penalización por saltos.
 - **Fase 2** (hecha, probada con simulaciones): slots de modelo aislados (un `llama-server` por slot en el orquestador, un `rpc-server` y un túnel HMAC
   por slot en cada nodo) y libro de memoria por nodo (VRAM Ledger).
@@ -45,4 +45,4 @@ HMAC. Cada motor entra como un driver nuevo:
 - Probar en entornos reales: Windows (acceso directo, consola oculta, cortafuegos con UAC), CUDA en Linux, macOS,
   anuncio por broadcast entre equipos.
 - Decidir si el panel puede abrirse sin clave también desde la LAN (hoy contradice la regla de seguridad).
-- Recuperar la CI de GitHub Actions (facturación) y publicar las releases 0.3.4 – 0.5.0.
+- Recuperar la CI de GitHub Actions (facturación) y publicar la release 0.6.0.

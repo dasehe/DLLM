@@ -42,6 +42,24 @@ SHA256SUMS             sumas de comprobación
 > El repositorio es privado: para descargar la release hay que iniciar sesión en GitHub con una cuenta con acceso.
 > También puedes generar el paquete tú mismo: `python scripts/build_package.py` (ver [DESARROLLO](DESARROLLO.md)).
 
+### Desde el repositorio (Ubuntu / Debian)
+
+Mientras no haya release publicada, o si prefieres compilar el paquete tú mismo (el repositorio es privado: `git`
+pedirá usuario y un token con permiso de lectura, o usa SSH):
+
+```bash
+sudo apt update && sudo apt install -y git python3
+git clone https://github.com/dasehe/dllm.git && cd dllm
+python3 scripts/build_package.py --out dist      # genera dist/dllm-package-<versión>/ y el .zip
+cd dist/dllm-package-*/
+./install.sh                                     # asistente (añade --tui si estás por SSH)
+python3 ~/.dllm/dllm.pyz doctor                  # diagnóstico tras instalar
+```
+
+En el orquestador elige *Orquestador* (o *Ambos*); en el resto, *Nodo* con el código `DLLM1-…`. El asistente de Linux
+solo muestra los comandos del cortafuegos: ejecútalos con `sudo`. Para GPU NVIDIA hace falta el driver propietario
+(CUDA ≥ 12.4) o, si no, el driver Vulkan (`sudo apt install -y mesa-vulkan-drivers vulkan-tools`).
+
 ## 3. Instalar el orquestador
 
 Abre el asistente (tabla del README) y:

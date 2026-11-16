@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+### Documentación
+- README: estado real (clúster de 2 equipos Windows probado con llama.cpp real), problema conocido con imágenes en
+  modelos grandes repartidos, varios modelos y topología; instalación en Ubuntu desde GitHub (`docs/INSTALACION.md`).
+- `LEEME-INSTALAR.md`: Linux con NVIDIA usa el paquete CUDA oficial (antes decía Vulkan). Hoja de ruta al día.
+
 ## [0.6.0] - 2026-11-15
 
 ### Cambiado (incompatible)

@@ -45,8 +45,8 @@ dllm uninstall [--purge] # desinstalar (con --purge borra también configuració
 - **Desinstalar:** `Uninstall-DLLM.bat` (Windows), `Uninstall-DLLM.command` (macOS) o `./uninstall.sh` (Linux), o
   la opción *Desinstalar* del asistente.
 - Todos los equipos usan la **misma versión de llama.cpp**: la fija el orquestador en el código de unión.
-- Linux con GPU NVIDIA: los binarios oficiales usan Vulkan (hace falta el driver Vulkan). Para CUDA nativo, compila
-  con `scripts/build-llamacpp.sh cuda` y usa `--bin-dir`.
+- Linux con GPU NVIDIA: se usa el paquete oficial CUDA (driver con CUDA ≥ 12.4); si no es posible, el asistente prueba
+  Vulkan y luego CPU. Para una compilación propia: `scripts/build-llamacpp.sh cuda` y `--bin-dir`.
 - El tráfico entre nodos va **autenticado pero sin cifrar**: úsalo en una red de confianza o una VPN.
 
 ## Más información
