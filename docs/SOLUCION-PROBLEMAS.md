@@ -8,12 +8,12 @@ dllm status        # (en el orquestador) nodos, estado, plan y por qué se exclu
 ```
 
 Registros: Linux `journalctl --user -u dllm -f` · macOS `~/.dllm/dllm.log` · Windows: ejecuta `dllm run` en una
-consola para verlo en directo (la tarea programada corre sin ventana). En el panel, **Eventos** muestra las últimas
+consola para verlo en directo (la tarea programada corre sin ventana). En el panel, **Registros** muestra las últimas
 líneas de `llama-server` cuando una carga falla.
 
 ## El modelo se reinicia (RECOVERING) al enviar una imagen
 
-Mira *Eventos*: tras «llama-server terminó (código N)» aparecen las líneas del fallo. Si ves
+Mira *Registros*: tras «llama-server terminó (código N)» aparecen las líneas del fallo. Si ves
 `GGML_ASSERT … non-causal attention requires n_ubatch >= n_tokens`, el lote físico es menor que los tokens de la imagen
 (Gemma 3/4 procesan la imagen con atención no causal en un único lote; Gemma 4 admite hasta 1120 tokens por imagen).
 Solución: en *Modelos → Parámetros* sube **Lote lógico (batch)** y **Lote físico (ubatch)** (p. ej. 2048; el físico
@@ -22,7 +22,7 @@ imagen hasta recargar el modelo con el cambio.
 
 Si en cambio aparece `ggml-rpc.cpp … Remote RPC server crashed or returned malformed response` o `recv returned 0
 (peer closed?)`, el que ha muerto es el **`rpc-server` del nodo** (por eso `llama-server` sale con un código como
-`3221226505`, un aborto): no es el lote. Desde 0.6.0 *Eventos* añade debajo «rpc-server de <nodo> terminó (código N)»
+`3221226505`, un aborto): no es el lote. Desde 0.6.0 *Registros* añade debajo «rpc-server de <nodo> terminó (código N)»
 con sus últimas líneas (fallo del driver Vulkan/CUDA, memoria agotada de la GPU…), y `/api/state` las incluye en
 `last_crash.rpc`; el agente las guarda también en su log y en `rpc_last_exit` de `/info`. Con eso se distingue un
 fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prueba un contexto menor).

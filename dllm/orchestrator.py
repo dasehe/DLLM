@@ -21,11 +21,13 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import engine
+from . import engine, eventlog
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
+CPU_BW_GBPS = 20  # ancho de banda de memoria supuesto al usar la RAM de un nodo con GPU (estimación gruesa)
 IDLE, LOADING, READY, RECOVERING, ERROR = "IDLE", "LOADING", "READY", "RECOVERING", "ERROR"
+UNLOADING = "UNLOADING"  # descargando / cancelando la carga
 
 
 class Busy(Exception):
@@ -280,6 +282,10 @@ class Cluster:
         self.logbuf = collections.deque(maxlen=200)
         self.last_crash = None
         self.events = parent.events if parent else collections.deque(maxlen=100)
+        self.elog = parent.elog if parent else eventlog.EventLog(getattr(cfg, "events_file", None))
+        self.metrics_req = eventlog.SlotMetrics()   # peticiones de este modelo (latencias, errores)
+        self.targets = None   # [{"node","device"}]: nodos y dispositivo elegidos a mano para este modelo (None = automático)
+        self._node_up = {}    # nodo → estaba en línea (para registrar altas y caídas)
         self.llama_build = parent.llama_build if parent else (hw.build_id(cfg.llama_bin) if cfg.llama_bin else None)
         self.models = parent.models if parent else models.Manager(cfg.models_dir)
         self.presence = parent.presence if parent else presence.Presence()  # pestañas del panel (`dllm open`)
@@ -290,10 +296,13 @@ class Cluster:
         self.mmproj = None
 
     # ---------------------------------------------------------- utilidades
-    def event(self, msg):
+    def event(self, msg, level=None, node=None, kind=None, detail=None):
+        """Registra un evento (panel, `/api/events` y events.jsonl). nivel: info/warn/error (si no se da, se deduce)."""
         msg = f"[slot {self.slot}] {msg}" if self.slot else msg
         log(msg)
-        self.events.append({"t": time.time(), "msg": msg})
+        ev = self.elog.add(msg, level, self.slot, node, kind, detail)
+        self.events.append({"t": ev["t"], "msg": msg, "level": ev["level"], "slot": self.slot, "node": node,
+                            "kind": kind})
 
     def _set(self, state, error=""):
         with self.lock:
@@ -431,18 +440,88 @@ class Cluster:
                 "llama": lh[-1] if lh else {}, "llama_hist": [[round(x["t"], 1), x.get("tok_s"), x.get("requests")]
                                                              for x in lh], "nodes": nodes}
 
+    def resources(self, extra=None, skip=()):
+        """Recursos del clúster: VRAM, RAM y núcleos por nodo y en total, con lo ya reservado por los modelos cargados.
+        `extra` = {"vram": {nodo: bytes}, "ram": {nodo|@host: bytes}} (la reserva de un plan simulado): añade los
+        valores «tras cargar». Sirve para ver cuánto consumiría un modelo sin cargarlo."""
+        ex = extra or {}
+        exv, exr = ex.get("vram") or {}, ex.get("ram") or {}
+        nodes, tot = [], {k: 0 for k in ("vram_cap", "vram_reserved", "vram_after", "ram_total", "ram_free",
+                                         "ram_reserved", "ram_after", "cores", "threads")}
+        local = False
+        for n in self.reg.all():
+            i, up = n.info, self.reg.is_up(n)
+            gpu = i.get("backend", "cpu") != "cpu"
+            cap = int(i.get("cap_bytes") or 0)
+            ram_total = int(i.get("ram_total") or (0 if gpu else cap))
+            vres = self.ledger.reserved(n.id, "vram", skip)
+            rres = self.ledger.reserved(n.id, "ram", skip)
+            row = {"id": n.id, "name": n.name, "up": up, "gpu": gpu, "backend": i.get("backend"),
+                   "device_desc": i.get("device_desc"), "cpu_device": bool(i.get("cpu_device")),
+                   "vram_cap": cap if gpu else 0, "vram_reserved": vres if gpu else 0,
+                   "vram_after": (vres if gpu else 0) + int(exv.get(n.id, 0)),
+                   "ram_total": ram_total, "ram_free": int(i.get("ram_free") or 0), "ram_reserved": rres,
+                   "ram_after": rres + int(exr.get(n.id, 0)),
+                   "cores": i.get("cores") or 0, "threads": i.get("threads") or 0,
+                   "net": {k: (n.net or {}).get(k) for k in ("mbps", "rtt_ms", "tier")}}
+            if not gpu:  # nodo solo-CPU: su aporte es RAM
+                row["ram_cap"] = cap
+            if is_local_host(n.host):
+                local = True
+            nodes.append(row)
+            if up:
+                for k in ("vram_cap", "vram_reserved", "vram_after", "ram_total", "ram_free", "ram_reserved",
+                          "ram_after", "cores", "threads"):
+                    tot[k] += row[k]
+        total_h, avail_h = hw.mem_info()
+        host = {"name": "orquestador", "ram_total": total_h, "ram_free": avail_h,
+                "ram_reserved": self.ledger.reserved(HOST, "ram", skip),
+                "ram_after": self.ledger.reserved(HOST, "ram", skip) + int(exr.get(HOST, 0)),
+                "cores": os.cpu_count() or 0, "shared_with_node": local}
+        if not local:  # el orquestador también aporta su RAM y sus núcleos (modelos en CPU)
+            for k in ("ram_total", "ram_free", "ram_reserved", "ram_after", "cores"):
+                tot[k] += host[k]
+        return {"nodes": nodes, "host": host, "totals": tot}
+
     def host_free_ram(self, skip):
         """RAM utilizable en el equipo del orquestador: la libre de verdad − margen − reservas de otros slots."""
         total, avail = hw.mem_info()
         return self.ledger.available_ram(HOST, total, avail, skip)
 
-    def make_plan(self, mpath, ctx, force_bench=True, ignore=()):
-        """Plan de reparto. `ignore`: slots cuya memoria se da por liberada (¿cabría si los expulsara?)."""
+    @staticmethod
+    def parse_targets(targets):
+        """[{node, device}] → {nodo: 'gpu'|'cpu'}; None/[] = automático. Valida el formato."""
+        if not targets:
+            return {}
+        if not isinstance(targets, list) or len(targets) > 32:
+            raise ValueError("targets debe ser una lista de {node, device}")
+        out = {}
+        for t in targets:
+            if not isinstance(t, dict) or not isinstance(t.get("node"), str) or not t["node"]:
+                raise ValueError("cada destino necesita «node»")
+            dev = str(t.get("device") or "gpu").lower()
+            if dev not in ("gpu", "cpu"):
+                raise ValueError(f"dispositivo no válido para {t['node']}: use gpu o cpu")
+            out[t["node"]] = dev
+        return out
+
+    def make_plan(self, mpath, ctx, force_bench=True, ignore=(), targets=None, own=True):
+        """Plan de reparto. `ignore`: slots cuya memoria se da por liberada (¿cabría si los expulsara?).
+        `targets`: [{node, device}] para elegir a mano dónde corre (None = el elegido para este slot; [] = automático).
+        «@host» es la RAM del propio orquestador y no se combina con nodos."""
         m = gguf.read_model(mpath)
         ms = self.models.settings(self.models_name(mpath))
-        skip = {self.slot} | set(ignore)
+        skip = ({self.slot} if own else set()) | set(ignore)  # own=False: un slot nuevo, no sustituye a este
         kt, vt = ms.get("cache_type_k"), ms.get("cache_type_v")
         policy = ms.get("device_policy", "auto")
+        tmap = self.parse_targets(self.targets if targets is None else targets)
+        if HOST in tmap:
+            if len(tmap) > 1:
+                p = scheduler.plan(m, [], ctx, self.cfg.min_mbps, kt, vt)
+                p["reason"] = ("el orquestador (@host) no se puede combinar con nodos; para repartir entre GPU y la RAM "
+                               "del orquestador usa la política «gpu_with_cpu_fallback»")
+                return m, p
+            policy = "cpu_only"
         if policy == "cpu_only":  # sin nodos remotos: todo en RAM del orquestador
             p = scheduler.host_plan(m, ctx, self.host_free_ram(skip), kt, vt, "cpu_only")
             p["reserve"] = {"vram": {}, "ram": {HOST: p["host_ram"]}} if p["ok"] else {}
@@ -451,14 +530,25 @@ class Cluster:
         nodes, excluded, ok_nodes, excluded_note = self.reg.all(), [], [], []
         up = [n for n in nodes if self.reg.is_up(n)]
         excluded += [{"node": n.name, "reason": "sin respuesta"} for n in nodes if n not in up]
+        if tmap:
+            known = {n.name for n in nodes}
+            excluded += [{"node": nm, "reason": "no existe"} for nm in tmap if nm not in known]
+            excluded += [{"node": n.name, "reason": "no seleccionado"} for n in up if n.name not in tmap]
+            up = [n for n in up if n.name in tmap]
         off = [n for n in up if self.node_settings(n.name).get("enabled") is False]
         excluded += [{"node": n.name, "reason": "desactivado en el panel"} for n in off]
         up = [n for n in up if n not in off]
         self.bench_all(up, force_bench)
         for n in up:
             i = n.info
-            gpu = i.get("backend", "cpu") != "cpu"
-            if not i.get("rpc_bin"):
+            gpu_native = i.get("backend", "cpu") != "cpu"
+            dev = tmap.get(n.name)           # None: automático; 'gpu' o 'cpu': elegido a mano
+            gpu = gpu_native and dev != "cpu"
+            if dev == "gpu" and not gpu_native:
+                excluded.append({"node": n.name, "reason": "se pidió GPU y el nodo no tiene"})
+            elif dev == "cpu" and gpu_native and not i.get("cpu_device"):
+                excluded.append({"node": n.name, "reason": "se pidió CPU y su agente no la ofrece (actualízalo)"})
+            elif not i.get("rpc_bin"):
                 excluded.append({"node": n.name, "reason": "rpc-server no instalado"})
             elif self.llama_build and i.get("rpc_build") and not same_build(i["rpc_build"], self.llama_build):
                 up_ = i.get("update") or {}
@@ -481,13 +571,17 @@ class Cluster:
                 excluded.append({"node": n.name, "reason": "queda muy poca RAM libre en el nodo (margen de seguridad)"})
             else:
                 ns = self.node_settings(n.name)
-                cap0 = i.get("cap_bytes", 0)
+                cpu_on_gpu = gpu_native and not gpu  # GPU del nodo libre: el modelo usa su RAM
+                cap0 = int(i.get("ram_total") or 0) if cpu_on_gpu else i.get("cap_bytes", 0)
                 cap = self.ledger.available_pool(n.id, cap0, "vram" if gpu else "ram", skip)
-                if cap < cap0:
-                    excluded_note.append(f"{n.name}: {(cap0 - cap) / hw.GiB:.1f} GiB reservados por otros modelos")
-                ok_nodes.append({"id": n.id, "name": n.name, "backend": i.get("backend", "cpu"), "gpu": gpu,
-                                 "cap_bytes": cap,
-                                 "bw_gbps": ns.get("bw_gbps") or i.get("bw_gbps", 10),
+                if cpu_on_gpu and i.get("ram_free") is not None:
+                    cap = min(cap, max(0, int(i["ram_free"]) - self.ledger.ram_margin))
+                held = self.ledger.reserved(n.id, "vram" if gpu else "ram", skip)
+                if held:
+                    excluded_note.append(f"{n.name}: {held / hw.GiB:.1f} GiB reservados por otros modelos")
+                ok_nodes.append({"id": n.id, "name": n.name, "backend": "cpu" if cpu_on_gpu else i.get("backend", "cpu"),
+                                 "gpu": gpu, "device": "gpu" if gpu else "cpu", "cap_bytes": cap,
+                                 "bw_gbps": ns.get("bw_gbps") or (CPU_BW_GBPS if cpu_on_gpu else i.get("bw_gbps", 10)),
                                  "layers": ns.get("layers"),
                                  "mbps": n.net["mbps"] if n.net else None,
                                  "rtt_ms": n.net["rtt_ms"] if n.net else None,
@@ -509,6 +603,7 @@ class Cluster:
             by = {n["id"]: n for n in ok_nodes}
             vr, rr = {}, {}
             for a in p["assignments"]:
+                a["device"] = by[a["node_id"]]["device"]
                 if by[a["node_id"]].get("gpu"):
                     vr[a["node_id"]] = a["bytes"] + scheduler.OVERHEAD_NODE
                     rr[a["node_id"]] = scheduler.IO_RAM
@@ -546,8 +641,9 @@ class Cluster:
         return full
 
     # ---------------------------------------------------------- carga / descarga
-    def request_load(self, name, ctx, pinned=None):
+    def request_load(self, name, ctx, pinned=None, targets=None):
         path = self.resolve_model(name)
+        self.parse_targets(targets)  # valida antes de tocar nada
         for k, c in list(self.slots.items()):
             if k != self.slot and c.model == name and c.state in (LOADING, READY, RECOVERING):
                 raise Busy(f"{name} ya está cargado en el slot {k}")
@@ -559,6 +655,7 @@ class Cluster:
             self.gen += 1
             gen = self.gen
             self.desired = (name, ctx)
+            self.targets = targets or None
         threading.Thread(target=self._load_worker, args=(path, name, ctx, gen, False), daemon=True).start()
 
     # ---------------------------------------------------------- slots (varios modelos a la vez)
@@ -574,15 +671,16 @@ class Cluster:
             threading.Thread(target=fn, daemon=True).start()
         return c
 
-    def load_model(self, name, ctx, slot=0, pinned=True):
-        """Carga `name` en un slot: 0 (principal), un número existente o «new» (slot nuevo)."""
+    def load_model(self, name, ctx, slot=0, pinned=True, targets=None):
+        """Carga `name` en un slot: 0 (principal), un número existente o «new» (slot nuevo).
+        targets: [{node, device}] para elegir nodos y GPU/CPU a mano (vacío = automático)."""
         if slot in (None, 0, "0"):
-            self.slots[0].request_load(name, ctx, pinned)
+            self.slots[0].request_load(name, ctx, pinned, targets)
             return 0
         if slot == "new":
             c = self.new_slot(pinned)
             try:
-                c.request_load(name, ctx, pinned)
+                c.request_load(name, ctx, pinned, targets)
             except Exception:
                 self.drop_slot(c.slot)
                 raise
@@ -590,7 +688,7 @@ class Cluster:
         c = self.slots.get(int(slot))
         if c is None:
             raise ValueError(f"el slot {slot} no existe")
-        c.request_load(name, ctx, pinned)
+        c.request_load(name, ctx, pinned, targets)
         return c.slot
 
     def drop_slot(self, slot):
@@ -598,10 +696,18 @@ class Cluster:
         c = self.slots.get(int(slot))
         if c is None:
             raise ValueError(f"el slot {slot} no existe")
-        c.unload()
+        t = c.unload()
         if c.slot:
-            c.dead = True
-            self.slots.pop(c.slot, None)
+            def done():
+                if t:
+                    t.join(60)
+                c.dead = True
+                with self.lock:
+                    self.slots.pop(c.slot, None)
+            if t:  # cancelando una carga: el slot desaparece cuando termine la limpieza
+                threading.Thread(target=done, daemon=True).start()
+            else:
+                done()
 
     # ---------------------------------------------------------- enrutado L7 por modelo y capacidad
     @staticmethod
@@ -745,6 +851,13 @@ class Cluster:
                                  "dllm": {"state": "bajo demanda"}})
         return {"object": "list", "data": data}
 
+    @staticmethod
+    def _live(c):
+        """Último muestreo de /metrics de llama-server (tokens/s, uso de caché K/V, tokens totales)."""
+        h = c.llama_hist[-1] if c.llama_hist else {}
+        return {"tok_s": h.get("tok_s"), "prompt_tok_s": h.get("prompt_tok_s"), "kv_usage": h.get("kv_usage"),
+                "tokens_total": h.get("tokens_total"), "prompt_tokens_total": h.get("prompt_total")}
+
     def slots_view(self):
         out = []
         for k in sorted(self.slots):
@@ -754,18 +867,41 @@ class Cluster:
                         "nodes": list(c.used), "est_tok_s": (c.plan or {}).get("est_tok_s"),
                         "active_requests": c.inflight, "activity": "BUSY" if c.inflight else "IDLE",
                         "policy": (c.plan or {}).get("policy"),
-                        "reserved": dict(self.ledger.res.get(k, {}))})
+                        "reserved": dict(self.ledger.res.get(k, {})),
+                        "targets": c.targets, "recoveries": c.recoveries,
+                        "assignments": [{k2: a.get(k2) for k2 in ("name", "layers", "bytes", "device", "backend")}
+                                        for a in (c.plan or {}).get("assignments", [])],
+                        "metrics": {**c.metrics_req.summary(), **self._live(c)}})
         return out
 
     def unload(self):
+        """Descarga el modelo. Si hay una carga en curso la CANCELA sin esperar (devuelve un hilo que termina la
+        limpieza); si no, descarga y devuelve None."""
         with self.lock:
             self.gen += 1
             self.desired = None
-        with self.work:
-            self._teardown()
-            self.model, self.plan = None, None
-            self._set(IDLE)
-        self.event("modelo descargado")
+            busy = self.state in (LOADING, RECOVERING)
+        if busy:
+            p = self.proc
+            if p and p.poll() is None:
+                try:
+                    p.terminate()  # que la espera de la carga se entere ya
+                except OSError:
+                    pass
+            self._set(UNLOADING)
+
+        def finish():
+            with self.work:
+                self._teardown()
+                self.model, self.plan = None, None
+                self._set(IDLE)
+            self.event("carga cancelada" if busy else "modelo descargado", kind="unload")
+        if busy:
+            t = threading.Thread(target=finish, daemon=True)
+            t.start()
+            return t
+        finish()
+        return None
 
     def _load_worker(self, path, name, ctx, gen, recovering):
         with self.work:
@@ -792,7 +928,8 @@ class Cluster:
                 used = [self.reg.get(a["node_id"]) for a in plan["assignments"]]
                 for n in used:
                     self.event(f"arrancando rpc-server en {n.name}" + (f" (slot {self.slot})" if self.slot else ""))
-                    call_agent(self.reg.secret, n, "POST", "/rpc/start", {"slot": self.slot}, timeout=40)
+                    dev = next((a.get("device") for a in plan["assignments"] if a["node_id"] == n.id), None)
+                    call_agent(self.reg.secret, n, "POST", "/rpc/start", {"slot": self.slot, "device": dev}, timeout=40)
                     self._chk(gen)
                 self.used = [n.id for n in used]
                 self.tunnels = [Tunnel(n.host, n.rpc_port, self.reg.secret, self.slot).start() for n in used]
@@ -932,6 +1069,8 @@ class Cluster:
                     self.sync_builds()
                 except Exception as e:
                     log("sync_builds:", e)
+            if not self.slot:
+                self._track_nodes()
             with self.lock:
                 st, desired = self.state, self.desired
             if st == READY and desired:
@@ -953,6 +1092,20 @@ class Cluster:
             elif st == ERROR and desired and self._nodesig() != self.last_nodeset:
                 self.event("cambió el conjunto de nodos: reintentando carga")
                 self._start_worker(desired, False)
+
+    def _track_nodes(self):
+        """Registra altas, caídas y vueltas de los nodos."""
+        for n in self.reg.all():
+            up, prev = self.reg.is_up(n), self._node_up.get(n.id)
+            self._node_up[n.id] = up
+            if prev is None:
+                if up:
+                    self.event(f"nodo {n.name} detectado ({n.host})", node=n.name, kind="node")
+            elif prev and not up:
+                self.event(f"nodo {n.name} caído: {n.last_error or 'sin respuesta'}", level="warn", node=n.name,
+                           kind="node")
+            elif up and not prev:
+                self.event(f"nodo {n.name} de nuevo en línea", node=n.name, kind="node")
 
     def _crash_report(self):
         """Motivo de la caída de llama-server: código de salida y líneas relevantes de su log, que se borra al relanzar."""
@@ -1124,7 +1277,7 @@ class Cluster:
                 "ctx": self.ctx, "plan": self.plan, "recoveries": self.recoveries, "nodes": nodes,
                 "slots": self.slots_view(),
                 "ledger": self.ledger.view({n.id: n.info.get("cap_bytes") or 0 for n in self.reg.all()}),
-                "events": list(self.events)[-40:], "llama_log": list(self.logbuf)[-15:], "last_crash": self.last_crash,
+                "events": list(self.events)[-40:], "event_counts": self.elog.counts(), "llama_log": list(self.logbuf)[-15:], "last_crash": self.last_crash,
                 "llama_build": self.llama_build, "min_mbps": self.cfg.min_mbps, **self.pending_view()}
 
     def metrics(self):
@@ -1140,6 +1293,31 @@ class Cluster:
         L += ["# TYPE dllm_recoveries_total counter", f"dllm_recoveries_total {self.recoveries}",
               "# TYPE dllm_requests_total counter", f"dllm_requests_total {self.requests}",
               "# TYPE dllm_request_errors_total counter", f"dllm_request_errors_total {self.req_errors}"]
+        # por modelo (slot) y por nodo
+        L += ["# TYPE dllm_slot_requests_total counter", "# TYPE dllm_slot_errors_total counter",
+              "# TYPE dllm_slot_latency_p95_ms gauge", "# TYPE dllm_slot_tokens_per_second gauge",
+              "# TYPE dllm_slot_active_requests gauge", "# TYPE dllm_slot_recoveries_total counter"]
+        for k, c in sorted(self.slots.items()):
+            lab = f'slot="{k}",model="{(c.model or "").replace(chr(34), "")}"'
+            sm = c.metrics_req.summary()
+            L.append(f"dllm_slot_requests_total{{{lab}}} {sm['requests']}")
+            L.append(f"dllm_slot_errors_total{{{lab}}} {sm['errors']}")
+            L.append(f"dllm_slot_active_requests{{{lab}}} {c.inflight}")
+            L.append(f"dllm_slot_recoveries_total{{{lab}}} {c.recoveries}")
+            if sm["p95_ms"] is not None:
+                L.append(f"dllm_slot_latency_p95_ms{{{lab}}} {sm['p95_ms']}")
+            tk = self._live(c)["tok_s"]
+            if tk is not None:
+                L.append(f"dllm_slot_tokens_per_second{{{lab}}} {tk}")
+        L += ["# TYPE dllm_node_rpc_restarts_total counter", "# TYPE dllm_node_ram_free_bytes gauge",
+              "# TYPE dllm_node_vram_reserved_bytes gauge", "# TYPE dllm_events_total counter"]
+        for n in self.reg.all():
+            lab = f'node="{n.name}"'
+            L.append(f"dllm_node_rpc_restarts_total{{{lab}}} {n.info.get('rpc_restarts') or 0}")
+            L.append(f"dllm_node_ram_free_bytes{{{lab}}} {n.info.get('ram_free') or 0}")
+            L.append(f"dllm_node_vram_reserved_bytes{{{lab}}} {self.ledger.reserved(n.id, 'vram')}")
+        for lv, cnt in self.elog.counts().items():
+            L.append(f'dllm_events_total{{level="{lv}"}} {cnt}')
         return "\n".join(L) + "\n"
 
     def shutdown(self):
@@ -1254,15 +1432,31 @@ def make_handler(cfg, cl):
                     return self._send(200, cl.snapshot())
                 if path == "/api/models":
                     return self._send(200, cl.list_models())
+                if path == "/api/events":
+                    sl = q.get("slot")
+                    return self._send(200, {"events": cl.elog.query(
+                        q.get("level"), int(sl) if sl not in (None, "") else None, q.get("node") or None,
+                        q.get("q"), float(q["since"]) if q.get("since") else None, int(q.get("limit") or 300)),
+                        "counts": cl.elog.counts()})
                 if path == "/metrics":
                     return self._send(200, raw=cl.metrics().encode(), ctype="text/plain; version=0.0.4")
+                if path == "/api/resources":
+                    return self._send(200, cl.resources())
                 if path == "/api/plan" and self.command == "POST":
-                    _, p = cl.make_plan(cl.resolve_model(req["model"]), int(req.get("ctx", 4096)),
-                                        force_bench=False)
+                    # simula sin cargar: el reparto, y los recursos del clúster antes y después
+                    slot = req.get("slot", 0)
+                    owner = cl.slots.get(int(slot)) if str(slot).isdigit() else None
+                    # «new»: modelo nuevo, no sustituye a ninguno (se ve con la memoria que ya ocupan los demás)
+                    _, p = (owner or cl).make_plan(cl.resolve_model(req["model"]), int(req.get("ctx", 4096)),
+                                                   force_bench=False, targets=req.get("targets") or [],
+                                                   own=owner is not None)
+                    p["resources"] = cl.resources(p.get("reserve") if p.get("ok") else None,
+                                                  skip={owner.slot} if owner is not None else ())
                     return self._send(200, p)
                 if path == "/api/load" and self.command == "POST":
                     ctx = req.get("ctx") or mm.settings(req["model"]).get("ctx") or 4096
-                    slot = cl.load_model(req["model"], int(ctx), req.get("slot", 0), req.get("pinned", True))
+                    slot = cl.load_model(req["model"], int(ctx), req.get("slot", 0), req.get("pinned", True),
+                                         req.get("targets") or None)
                     return self._send(202, {"accepted": True, "slot": slot})
                 # ---- gestión de modelos
                 if path == "/api/hf/search":
@@ -1329,17 +1523,25 @@ def make_handler(cfg, cl):
                 c = cl.route(extract_model(body, self.headers.get("Content-Type", "")), engine.capability_of(path))
             except RouteError as e:
                 cl.req_errors += 1
+                cl.event(f"petición rechazada ({e.status}): {e}", level="warn", kind="route")
                 return self._send(e.status, oai_error(e.status, str(e)),
                                   headers={"Retry-After": e.retry_after} if e.retry_after else None)
             with c.lock:
                 c.inflight += 1
             c.last_used = time.time()
+            t0, self._st = time.time(), (0, "")
             try:
                 self._forward(c, path, body)
             finally:
                 with c.lock:
                     c.inflight -= 1
                 c.last_used = time.time()
+                status, err = self._st
+                if status:
+                    c.metrics_req.record(status, time.time() - t0, err)
+                    if status >= 500:
+                        cl.event(f"petición {path} → {status}: {err or 'error del modelo'}", level="error",
+                                 node=None, kind="request", detail={"slot": c.slot, "model": c.model, "path": path})
 
         def _forward(self, c, path, body):
             if body and path in ("/v1/chat/completions", "/v1/completions"):
@@ -1357,9 +1559,11 @@ def make_handler(cfg, cl):
             except OSError as e:
                 cl.req_errors += 1
                 up.close()
+                self._st = (502, f"llama-server no responde: {e}")
                 return self._send(502, oai_error(502, f"llama-server no responde: {e}"))
             try:
                 ctype = r.getheader("Content-Type", "application/json")
+                self._st = (r.status, "" if r.status < 500 else f"HTTP {r.status} de llama-server")
                 if r.getheader("Content-Length") is not None:
                     return self._send(r.status, raw=r.read(), ctype=ctype)
                 # streaming (SSE): reenvío troceado
@@ -1398,6 +1602,7 @@ def run(cfg):
     if not cfg.llama_bin:
         log("AVISO: llama-server no encontrado; podrás ver nodos pero no cargar modelos")
 
+    cfg.events_file = str(config.home() / "events.jsonl")  # registro persistente (rota por tamaño)
     reg = Registry(secret, cfg.node_timeout, cfg.probe_interval)
     for n in cfg.node or []:
         h, _, p = n.partition(":")

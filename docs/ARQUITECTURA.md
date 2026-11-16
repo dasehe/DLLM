@@ -272,3 +272,20 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 - La integración con Hugging Face y Ollama está probada contra servidores simulados que reproducen sus APIs; no se ha
   probado aún contra los servicios reales.
 - Validado solo con binarios simulados; pendiente de prueba con llama.cpp real y GPU.
+
+
+## Destinos por modelo, recursos y registros (0.6.0)
+
+- **Destinos** (`targets`): `[{node, device}]` por modelo. `gpu` usa el dispositivo elegido del agente; `cpu` lanza el
+  `rpc-server` **de ese modelo** con `-d CPU` (la RAM del nodo), así dos modelos pueden convivir en el mismo nodo, uno en
+  su GPU y otro en su CPU, cada uno con su `rpc-server`, su túnel y su reserva en el libro de memoria (VRAM o RAM según
+  el dispositivo). El planificador trata un nodo con GPU usado como CPU como un nodo solo-CPU (RAM libre, ancho de banda
+  de memoria supuesto de 20 GB/s: la estimación de tok/s es muy gruesa). `@host` es la RAM del orquestador y no se
+  combina con nodos. Los destinos se conservan al recuperar un modelo tras una caída.
+- **Recursos** (`/api/resources`): se calculan con lo que cada agente informa (VRAM aportada, RAM, núcleos) y el libro de
+  memoria; el plan simulado añade su reserva para mostrar el «después» sin cargar nada.
+- **Registros** (`dllm/eventlog.py`): cada evento tiene nivel, modelo, nodo y tipo; un evento repetido en menos de 5 s se
+  cuenta (`count`) en lugar de duplicarse. Persistencia JSONL con rotación. Métricas por modelo (`SlotMetrics`):
+  peticiones, errores por código, media, p50 y p95 de las últimas 300.
+- **Cancelar**: descargar un modelo mientras carga lo cancela sin esperar (estado `UNLOADING`) y un modelo secundario
+  desaparece cuando termina la limpieza; en estado de error se elimina igual.

@@ -12,7 +12,7 @@ consumo, CPU, RAM, tráfico, tokens/s) para NVIDIA, AMD, Intel y Apple, y permit
 memoria, dispositivo) y cada modelo (contexto, caché K/V, flash attention, temperatura…), como en LM Studio. Desde el
 panel se **descargan modelos de Hugging Face y Ollama** (también los
 **multimodales** con visión y audio, sin configurar nada aparte) y se ajustan sus parámetros (temperatura, prompt de
-sistema…). Puedes mantener **varios modelos cargados a la vez** (un solo endpoint `/v1` que enruta por el campo `model`, con
+sistema…). Puedes mantener **varios modelos cargados a la vez**, elegir **en qué nodos y en qué dispositivo (GPU o CPU)** corre cada uno y ver los recursos del clúster antes de cargar (simulación), con **registros** por nivel, modelo y nodo y métricas por modelo (un solo endpoint `/v1` que enruta por el campo `model`, con
 modelos fijos o cargados bajo demanda) y el reparto tiene en cuenta la **topología de red** (menos saltos entre
 equipos). Cada equipo decide **cuánto
 comparte** (memoria e hilos), fijándolo él mismo o dejando que lo gestione el orquestador desde el panel, y cuanta más

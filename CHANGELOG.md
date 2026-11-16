@@ -9,6 +9,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   (log y `rpc_last_exit` en `/info`) y el orquestador las muestra en *Eventos* y en `last_crash.rpc` al caer
   `llama-server`. Antes solo se veía «Remote RPC server crashed» sin saber por qué.
 
+### Añadido
+- **Panel de Modelos rehecho**: *Recursos del clúster* (VRAM, RAM y núcleos totales, reservados y libres, por nodo),
+  *Cargar o simular* con **elección de nodos y GPU/CPU por modelo** (la simulación muestra en los recursos lo que
+  consumiría, sin cargar) y *Modelos en memoria* con dónde corre cada uno, uso y rendimiento. Nuevo `targets` en
+  `/api/plan` y `/api/load`, `GET /api/resources`, y el agente lanza el `rpc-server` de un modelo en la CPU del nodo
+  (`device` en `/rpc/start`) para dejar la GPU a otros.
+- **Pestaña Registros** (antes Eventos): nivel, modelo y nodo, filtros y búsqueda, último fallo con la causa (también del
+  `rpc-server`); `GET /api/events`; guardado en `events.jsonl`. Se registran altas/caídas de nodos, peticiones 5xx o
+  rechazadas y cancelaciones.
+- **Métricas por modelo y nodo** (peticiones, errores, latencia media/p95, tok/s, recuperaciones, reinicios de rpc-server)
+  en el panel y en `/metrics`.
+
+### Corregido
+- **Un modelo en error o cargando no se podía quitar**: ahora hay *Cancelar* (sin esperar a que termine la carga) y
+  *Eliminar* en cualquier estado.
+
 ### Mejorado
 - «No cabe» indica cuánta memoria queda libre en **cada nodo** y por qué se excluyó alguno (antes solo el total, que con
   otro modelo ya cargado salía como «0.0 GiB»).

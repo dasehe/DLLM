@@ -27,9 +27,33 @@ equipos** que da el asistente o el botón **API key** del panel en el orquestado
 |---|---|
 | **Monitor** | Estado del clúster y de cada nodo en tiempo real (ver abajo) |
 | **Nodos** | Lista de nodos y **Configurar** cada uno (ver [Configurar cada nodo](#configurar-cada-nodo)); **Equipos esperando unirse** para reclamar los instalados sin código ([INSTALACION](INSTALACION.md#unir-un-nodo-sin-código-reclamarlo-desde-el-orquestador)) |
-| **Modelos** | Cargar/descargar, simular el reparto, parámetros de cada modelo, añadir desde Hugging Face u Ollama |
+| **Modelos** | Recursos del clúster, cargar o **simular** un modelo eligiendo nodos y GPU/CPU, modelos en memoria, parámetros de cada modelo, añadir desde Hugging Face u Ollama (ver [Modelos](#pestaña-modelos)) |
 | **Chat** | Conversación de prueba (con historial) contra el modelo cargado; adjunta imagen/audio si es multimodal |
-| **Eventos** | Registro: cargas, dispositivos usados, caídas, recuperaciones y, si falla, las últimas líneas de `llama-server` |
+| **Registros** | Qué ha pasado, dónde y por qué: eventos con nivel, modelo y nodo, filtros y búsqueda, último fallo con la causa (ver [Registros](#registros)) |
+
+### Pestaña Modelos
+
+De arriba abajo:
+
+1. **Recursos del clúster**: VRAM, RAM y núcleos de CPU totales, lo **reservado** por los modelos cargados y lo libre,
+   en total y por nodo (el orquestador figura aparte si no es también un nodo).
+2. **Cargar o simular un modelo**. *Destino*: **sustituir el modelo principal** o **añadir otro modelo a la vez**.
+   *Dónde ejecutar*: **Automático** (el planificador elige) o **Elegir nodos y dispositivo**: marca los nodos y, en cada
+   uno, **GPU** o **CPU (RAM)**. Así un modelo pequeño puede usar la RAM de un nodo concreto y dejar la GPU libre para
+   los grandes. Un nodo con GPU puede usar su CPU; «Orquestador (RAM local)» va solo (no se combina con nodos).
+   **Simular** no carga nada: calcula el reparto y dibuja en *Recursos* en naranja lo que añadiría el modelo.
+3. **Modelos en memoria**: una fila por modelo (qué es el «slot»: una ranura de memoria; el 0 es el principal).
+   Muestra estado, **dónde corre** (nodo, GPU/CPU, GiB), uso y rendimiento (peticiones, errores, media, p95, tok/s).
+   Se puede **Cancelar** una carga en curso, **Descargar** el principal o **Eliminar** cualquier otro, también si está
+   en error. Si falla, enlaza con su registro.
+
+### Registros
+
+Cada evento lleva hora, **nivel** (info, aviso, error), modelo, nodo y texto; se filtra por nivel, modelo, nodo y
+texto. Registra cargas y su duración, altas y caídas de nodos, recuperaciones, peticiones con error 5xx o rechazadas
+(429/503) y descargas. Arriba, **Último fallo**: código y líneas de `llama-server` y, si murió un `rpc-server`, el del
+nodo con su código y líneas. Se guardan en `events.jsonl` (carpeta de configuración, rota a 2 MiB × 3) y sobreviven a
+reinicios.
 
 ### Monitor
 
@@ -233,9 +257,11 @@ Si no hay modelo listo la API responde `503` con el estado actual.
 |---|---|---|
 | `GET /api/state` | — | Estado completo (nodos, plan, eventos) |
 | `GET /api/models` | — | `.gguf` disponibles |
-| `POST /api/plan` | `{"model": "...", "ctx": 4096}` | Plan sin cargar |
-| `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true}` | `202` con el `slot` usado (la carga sigue en segundo plano) |
-| `POST /api/unload` | `{"slot": N}` (opcional; sin `slot` descarga el principal) | `200` |
+| `GET /api/resources` | — | VRAM, RAM y núcleos por nodo y totales, con lo reservado por los modelos cargados |
+| `GET /api/events` | `?level=info\|warn\|error&slot=N&node=NOMBRE&q=texto&since=T&limit=300` | Eventos filtrados y `counts` por nivel |
+| `POST /api/plan` | `{"model": "...", "ctx": 4096, "slot": 0\|"new", "targets": [{"node": "DSH", "device": "cpu"}]}` | Plan sin cargar, con `resources` (clúster tras cargarlo). `targets` vacío = automático; `device`: `gpu` o `cpu`; `@host` = RAM del orquestador |
+| `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true, "targets": […]}` | `202` con el `slot` usado (la carga sigue en segundo plano) |
+| `POST /api/unload` | `{"slot": N}` (opcional; sin `slot` descarga el principal) | `200`; en cualquier estado, y **cancela** una carga en curso sin esperar |
 | `GET /api/hf/search?q=…` · `GET /api/hf/files?repo=…` | — | Búsqueda de modelos GGUF y ficheros de un repo |
 | `POST /api/downloads` | `{"source":"hf","repo":…,"file":…}` · `{"source":"ollama","name":"qwen2.5:7b"}` · `{"source":"ollama-local","name":…}` | `202` con la descarga |
 | `GET /api/downloads` · `POST /api/downloads/cancel` | — · `{"id": "d1"}` | Descargas y progreso · cancelar |
@@ -258,7 +284,10 @@ viene del propio equipo (127.0.0.1).
 ## Métricas (Prometheus / Zabbix)
 
 `GET /metrics` expone: `dllm_state{state}`, `dllm_node_up{node}`, `dllm_node_cap_bytes{node}`,
-`dllm_node_net_mbps{node}`, `dllm_recoveries_total`, `dllm_requests_total`, `dllm_request_errors_total`.
+`dllm_node_net_mbps{node}`, `dllm_recoveries_total`, `dllm_requests_total`, `dllm_request_errors_total` y, por modelo,
+`dllm_slot_requests_total{slot,model}`, `dllm_slot_errors_total`, `dllm_slot_latency_p95_ms`,
+`dllm_slot_tokens_per_second`, `dllm_slot_active_requests`, `dllm_slot_recoveries_total`; por nodo,
+`dllm_node_rpc_restarts_total`, `dllm_node_ram_free_bytes`, `dllm_node_vram_reserved_bytes`, y `dllm_events_total{level}`.
 
 - **Prometheus**: `scrape_configs: [{job_name: dllm, static_configs: [{targets: ['IP:8080']}], authorization: {credentials: API_KEY}}]`
 - **Zabbix**: ítem *HTTP agent* a `http://IP:8080/metrics` con cabecera `Authorization: Bearer API_KEY` y ítems

@@ -44,6 +44,7 @@ class Rpc:
         self.slot, self.proc, self.port, self.want = slot, None, None, False
         self.tail = collections.deque(maxlen=40)
         self.last_exit = None  # cómo murió la última vez (ver exit_record)
+        self.device_pref = None  # 'cpu': usar la CPU del nodo para este modelo
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
@@ -191,7 +192,9 @@ class Agent:
         r.port = hw.free_port()  # puerto nuevo cada vez: evita choques con sockets en TIME_WAIT
         cmd = [self.rpc_bin, "-H", "127.0.0.1", "-p", str(r.port)]
         cmd += ["-t", str(self.probe.snapshot(self.limits)["threads"])]  # límite real de CPU
-        if self.device:
+        if r.device_pref == "cpu":
+            cmd += ["-d", next(d["name"] for d in self.devices if devices.is_cpu(d))]  # RAM del nodo, GPU libre
+        elif self.device:
             cmd += ["-d", self.device["name"]]  # solo la GPU elegida (por defecto rpc-server las expone todas)
         elif self.a.backend == "cpu" and any(devices.is_cpu(d) for d in self.devices):
             cmd += ["-d", next(d["name"] for d in self.devices if devices.is_cpu(d))]
@@ -223,7 +226,13 @@ class Agent:
             r.want = False
             self._kill_one(r)
 
-    def start_rpc(self, slot=0):
+    def start_rpc(self, slot=0, device=None):
+        """device: 'cpu' fuerza el dispositivo CPU de rpc-server para este modelo (la RAM del nodo, dejando la GPU libre
+        para otros); None o 'gpu' usa el dispositivo elegido del agente."""
+        if device not in (None, "", "gpu", "cpu"):
+            raise ValueError("dispositivo no válido (gpu o cpu)")
+        if device == "cpu" and not any(devices.is_cpu(d) for d in self.devices):
+            raise RuntimeError("este nodo no expone un dispositivo CPU en rpc-server")
         if not self.rpc_bin:
             raise RuntimeError("rpc-server no encontrado (usa --bin-dir o --rpc-bin)")
         if not (isinstance(slot, int) and 0 <= slot < auth.MAX_SLOTS):
@@ -231,7 +240,7 @@ class Agent:
         with self.lock:
             r = self.rpcs.setdefault(slot, Rpc(slot))
             self._kill_one(r)
-            r.want = True
+            r.want, r.device_pref = True, (device or None)
             self._spawn(r)
         deadline = time.time() + 20
         while time.time() < deadline:
@@ -386,7 +395,7 @@ class Agent:
         s.update({"limits_mode": self.mode, "limits": self.limits})
         s.update({"name": self.name, "version": __version__, "rpc_bin": bool(self.rpc_bin),
                   "rpc_build": self.build, "rpc_running": self.rpc_running(), "rpc_port": self.a.rpc_port,
-                  "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
+                  "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "cpu_device": any(devices.is_cpu(d) for d in self.devices), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
                   "devices": self.devices, "device": self.device and self.device["name"],
                   "device_desc": self.device and self.device["desc"], "device_error": self.device_error,
                   "auto_update": self.auto_update, "llama_backend": self.llama_backend, "update": self.update,
@@ -479,8 +488,9 @@ def make_handler(agent):
                     self._send(200, agent.info())
                 elif p.path == "/rpc/start" and self.command == "POST":
                     try:
-                        slot = int((json.loads(body or b"{}")).get("slot", 0))
-                        agent.start_rpc(slot)
+                        req = json.loads(body or b"{}")
+                        slot = int(req.get("slot", 0))
+                        agent.start_rpc(slot, req.get("device"))
                     except (ValueError, TypeError, AttributeError) as e:
                         return self._send(400, {"error": str(e)})
                     self._send(200, {"ok": True, "rpc_port": agent.a.rpc_port, "slot": slot})

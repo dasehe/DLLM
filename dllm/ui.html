@@ -53,6 +53,10 @@ fieldset{border:1px solid var(--bd);border-radius:9px;padding:10px 14px 14px;mar
 .msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word}
 .msg.u{align-self:flex-end;background:var(--ac);color:#fff}.msg.a{align-self:flex-start;background:var(--track)}
 .scroll{max-height:300px;overflow:auto}
+.rb{position:relative;height:8px;background:var(--track);border-radius:4px;overflow:hidden;margin-top:3px}.rb .rr{position:absolute;left:0;top:0;height:100%;background:var(--ac)}.rb .ra{position:absolute;top:0;height:100%;background:var(--warn);opacity:.9}
+.UNLOADING{background:var(--warn);color:#fff}.lv-error{background:var(--bad);color:#fff}.lv-warn{background:var(--warn);color:#fff}.lv-info{background:var(--track)}
+.wn{display:grid;grid-template-columns:minmax(150px,auto) 130px 1fr;gap:6px 12px;align-items:center;margin-top:8px;font-size:13px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .switch{display:flex;align-items:center;gap:8px;color:var(--fg)!important;font-size:13px!important;flex-direction:row!important}
 footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-align:center}
 @media(max-width:600px){.m{grid-template-columns:80px 1fr auto}.msg{max-width:92%}}
@@ -65,7 +69,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <span style="flex:1"></span><button class="sec sm" onclick="setKey()">API key</button></div>
   <nav id="nav">
     <button data-t="mon" class="on">Monitor</button><button data-t="nod">Nodos</button><button data-t="mod">Modelos</button>
-    <button data-t="chat">Chat</button><button data-t="ev">Eventos</button>
+    <button data-t="chat">Chat</button><button data-t="ev">Registros</button>
   </nav>
 </header>
 <main>
@@ -118,16 +122,24 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
 
 <!-- ============================== MODELOS ============================== -->
 <div id="t-mod" class="tab hide">
-  <section><h2>Cargar modelo</h2>
+  <section><h2>Recursos del clúster <span class="mut" style="font-size:12px;text-transform:none;letter-spacing:0">· lo que tienes, lo reservado por los modelos cargados y, al simular, lo que quedaría</span></h2>
+    <div id="res_tot" class="kpis"></div>
+    <div class="scroll" style="max-height:none;margin-top:10px"><table><thead><tr><th>Nodo</th><th>VRAM (GPU)</th><th>RAM</th><th>Núcleos</th><th>Red</th></tr></thead><tbody id="res_nodes"></tbody></table></div>
+    <div class="legend"><span><i style="background:var(--ac)"></i>reservado ahora</span><span><i style="background:var(--warn)"></i>lo que añadiría el modelo simulado</span></div>
+    <div class="mut" id="res_note" style="font-size:12px;margin-top:4px"></div>
+  </section>
+  <section><h2>Cargar o simular un modelo</h2>
     <div class="row"><select id="models" onchange="pickModel()" style="min-width:260px;max-width:100%"></select>
       <label class="mut">Contexto <input id="ctx" type="number" value="4096" step="256" style="width:100px"></label>
-      <label class="mut">Destino <select id="slotsel"><option value="0">Modelo principal</option><option value="new">Otro modelo a la vez (slot nuevo)</option></select></label>
-      <label class="mut" title="Un modelo fijado nunca se expulsa por falta de memoria"><input id="pinned" type="checkbox" checked> Fijar</label>
-      <button class="sec" onclick="plan()">Simular reparto</button><button onclick="load()">Cargar</button><button class="sec" onclick="unload()">Descargar principal</button></div>
+      <label class="mut">Destino <select id="slotsel"><option value="0">Sustituir el modelo principal</option><option value="new">Añadir otro modelo (a la vez)</option></select></label>
+      <label class="mut" title="Un modelo fijado nunca se expulsa por falta de memoria"><input id="pinned" type="checkbox" checked> Fijar</label></div>
+    <div class="row" style="margin-top:8px"><label class="mut">Dónde ejecutar <select id="wh" onchange="whChange()"><option value="auto">Automático (el planificador elige)</option><option value="manual">Elegir nodos y dispositivo (GPU o CPU)</option></select></label></div>
+    <div id="wh_box" class="hide"></div>
+    <div class="row" style="margin-top:10px"><button class="sec" onclick="plan()">Simular (no carga nada)</button><button onclick="load()">Cargar</button></div>
     <div id="plan"></div>
   </section>
-  <section id="slotsec" class="hide"><h2>Modelos cargados <span class="mut" style="font-size:12px">(varios a la vez; el proxy /v1 elige por el campo «model»)</span></h2>
-    <div class="scroll"><table><thead><tr><th>Slot</th><th>Modelo</th><th>Estado</th><th>Uso</th><th>Contexto</th><th>Política</th><th>Nodos</th><th>Puerto</th><th></th></tr></thead><tbody id="slotlist"></tbody></table></div>
+  <section id="slotsec"><h2>Modelos en memoria <span class="mut" style="font-size:12px;text-transform:none;letter-spacing:0">· cada fila ocupa memoria; el proxy /v1 elige uno por el campo «model»</span></h2>
+    <div class="scroll" style="max-height:none"><table><thead><tr><th>Nº</th><th>Modelo</th><th>Estado</th><th>Dónde corre</th><th>Uso</th><th>Rendimiento</th><th></th></tr></thead><tbody id="slotlist"></tbody></table></div>
     <div class="mut" id="ledgernote" style="font-size:12px;margin-top:6px"></div>
   </section>
   <section><h2>Modelos instalados</h2>
@@ -203,7 +215,20 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
 </div>
 
 <!-- ============================== EVENTOS ============================== -->
-<div id="t-ev" class="tab hide"><section><h2>Eventos</h2><pre id="events"></pre></section></div>
+<div id="t-ev" class="tab hide">
+  <section id="crashbox" class="hide"><h2>Último fallo</h2><div id="crash"></div></section>
+  <section><h2>Registros</h2>
+    <div class="row">
+      <label class="mut">Nivel <select id="ev_l" onchange="evLoad()"><option value="info">todo</option><option value="warn">avisos y errores</option><option value="error">solo errores</option></select></label>
+      <label class="mut">Modelo <select id="ev_s" onchange="evLoad()"></select></label>
+      <label class="mut">Nodo <select id="ev_n" onchange="evLoad()"></select></label>
+      <input id="ev_q" placeholder="buscar texto" oninput="evLoad()" style="min-width:180px">
+      <span class="mut" id="ev_c"></span></div>
+    <div class="scroll" style="max-height:60vh;margin-top:8px"><table><thead><tr><th>Hora</th><th>Nivel</th><th>Modelo</th><th>Nodo</th><th>Qué pasó</th></tr></thead><tbody id="ev_t"></tbody></table></div>
+    <div class="mut" style="font-size:12px;margin-top:6px">Se guardan también en <code>events.jsonl</code> (carpeta de configuración) y sobreviven a reinicios. Los de una ejecución anterior se marcan con «·».</div>
+  </section>
+  <section id="llamalogbox" class="hide"><h2>Salida de llama-server (último fallo)</h2><pre id="events"></pre></section>
+</div>
 </main>
 <footer class="mut">
 DLLM <span id="ver"></span> — idea original y desarrollo inicial de David Serrano Hernando · © 2026 David Serrano Hernando y colaboradores ·
@@ -246,7 +271,7 @@ const mbps=b=>b==null?na:(b>=1e6?(b/1e6).toFixed(1)+' MB/s':(b/1e3).toFixed(0)+'
 function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   document.querySelectorAll('.tab').forEach(d=>d.classList.toggle('hide',d.id!=='t-'+t));
   try{history.replaceState(null,'','#'+t)}catch(e){}
-  if(t==='mon')tele();if(t==='mod'){models();dl()}}
+  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad()}
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 /* ---------- estado general ---------- */
@@ -257,7 +282,7 @@ async function refresh(){try{const s=await api('GET','/api/state');S=s;
   $('k_state').textContent=s.state;$('k_model').textContent=s.model||'sin modelo';
   renderNodes();renderSlots();
   if(s.plan&&s.state!=='IDLE'&&!$('plan').dataset.manual)renderPlan(s.plan);
-  $('events').textContent=s.events.slice().reverse().map(e=>new Date(e.t*1000).toLocaleTimeString()+'  '+e.msg).join('\n')+(s.state==='ERROR'&&s.llama_log.length?'\n\n--- llama-server ---\n'+s.llama_log.join('\n'):'');
+  if(cur==='mod')loadRes();if(cur==='ev')evLoad();
 }catch(e){$('state').textContent='sin conexión';$('state').className='badge ERROR'}}
 
 /* ---------- monitor ---------- */
@@ -331,25 +356,78 @@ async function saveLimits(reset){if(!editing)return;const n=S.nodes.find(x=>x.id
   catch(e){$('ne_msg2').className='err';$('ne_msg2').textContent=e.message}}
 
 /* ---------- reparto y carga ---------- */
+const dev=d=>d==='cpu'?'CPU':d==='gpu'?'GPU':'';
 function renderPlan(p){if(!p){$('plan').innerHTML='';return}
   let h=`<div class="mut" style="margin-top:10px">${esc(p.model)} · necesita ${gib(p.need_bytes)} (KV ${gib(p.kv_bytes)}${p.kv_types&&(p.kv_types[0]!=='f16'||p.kv_types[1]!=='f16')?' en '+p.kv_types.join('/'):''})</div>`;
   if(!p.ok)h+=`<div class="err">✗ ${esc(p.reason)}</div>`;
   else{h+='<div class="bar">'+p.assignments.map((a,i)=>`<div style="width:${a.share*100}%;background:${colors[i%6]}" title="${esc(a.name)}">${esc(a.name)} ${(a.share*100).toFixed(0)}%</div>`).join('')+'</div>';
-    h+='<table>'+p.assignments.map(a=>`<tr><td>${esc(a.name)}</td><td>${gib(a.bytes)}</td><td>${a.layers} capas${a.fixed?' (fijas)':''}</td><td>${esc(a.backend)}</td><td>${a.mbps} Mbps · ${a.rtt_ms} ms</td></tr>`).join('')+'</table>';
+    h+='<table>'+p.assignments.map(a=>`<tr><td>${esc(a.name)}</td><td><span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${dev(a.device)||esc(a.backend)}</span></td><td>${gib(a.bytes)}</td><td>${a.layers} capas${a.fixed?' (fijas)':''}</td><td>${a.mbps==null?'local':a.mbps+' Mbps · '+a.rtt_ms+' ms'}</td></tr>`).join('')+'</table>';
     h+=p.est_tok_s?`<div style="margin-top:6px">≈ <b>${p.est_tok_s} tok/s</b> <span class="mut">(estimación gruesa)</span></div>`:`<div class="mut" style="margin-top:6px">${esc(p.policy||'')} · sin estimación de velocidad</div>`}
   if(p.max_ctx)h+=`<div>Contexto máximo con la memoria de los nodos: <b>${p.max_ctx}</b> tokens${p.ctx_train?` <span class="mut">(el modelo admite hasta ${p.ctx_train})</span>`:''} <button class="sec sm" onclick="$('ctx').value=${p.max_ctx};plan()">Usar</button></div>`;
   h+=(p.excluded||[]).map(e=>`<div class="mut">✗ ${esc(e.node)}: ${esc(e.reason)}</div>`).join('');
   h+=(p.warnings||[]).map(w=>`<div class="warn">! ${esc(w)}</div>`).join('');$('plan').innerHTML=h}
-async function plan(){$('plan').dataset.manual='1';try{$('plan').innerHTML='<div class="mut">midiendo red y calculando…</div>';renderPlan(await api('POST','/api/plan',{model:$('models').value,ctx:+$('ctx').value}))}catch(e){$('plan').innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
-async function load(){delete $('plan').dataset.manual;try{const sl=$('slotsel').value;await api('POST','/api/load',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':+sl,pinned:$('pinned').checked});refresh()}catch(e){alert(e.message)}}
-async function dropSlot(n){try{await api('POST','/api/unload',{slot:n});refresh()}catch(e){alert(e.message)}}
-function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0);const multi=(S&&S.slots||[]).length>1||sl.some(x=>x.slot>0);
-  $('slotsec').classList.toggle('hide',!(S&&S.slots&&S.slots.some(x=>x.model)));
+
+/* ---------- recursos del clúster y dónde ejecutar ---------- */
+let R=null,PROJ=null,WSEL={};
+async function loadRes(){try{R=await api('GET','/api/resources');renderRes();renderWhere()}catch(e){}}
+function rbar(res,after,total){const p=x=>total?Math.min(100,x/total*100):0;return `<div class="rb"><div class="rr" style="width:${p(res)}%"></div><div class="ra" style="left:${p(res)}%;width:${Math.max(0,p(after)-p(res))}%"></div></div>`}
+function rcell(res,after,total,what){if(!total)return '<span class="mut">—</span>';const ex=after>res;return `${gib(Math.max(0,total-after))} libres <span class="mut">de ${gib(total)}${res?` · reservado ${gib(res)}`:''}${ex?` · <b class="warn">+${gib(after-res)} con este modelo</b>`:''}</span>${rbar(res,after,total)}`}
+function renderRes(){if(!R)return;const X=PROJ||R,t=X.totals,K=R.totals;
+  const k=(l,v,sub)=>`<div class="kpi card"><div class="v">${v}</div><div class="l">${l}</div><div class="l">${sub}</div></div>`;
+  $('res_tot').innerHTML=k('VRAM libre del clúster',gib(Math.max(0,K.vram_cap-t.vram_after)),`de ${gib(K.vram_cap)} · reservado ${gib(K.vram_reserved)}${t.vram_after>K.vram_reserved?` · +${gib(t.vram_after-K.vram_reserved)} simulado`:''}`)
+   +k('RAM libre del clúster',gib(Math.max(0,K.ram_total-t.ram_after)),`de ${gib(K.ram_total)} · reservado ${gib(K.ram_reserved)}${t.ram_after>K.ram_reserved?` · +${gib(t.ram_after-K.ram_reserved)} simulado`:''}`)
+   +k('Núcleos de CPU',K.cores,`${K.threads} hilos aportados`);
+  const rows=X.nodes.map(n=>{const o=R.nodes.find(x=>x.id===n.id)||n;return `<tr><td><span class="dot ${o.up?'up':''}"></span><b>${esc(o.name)}</b><br><span class="mut">${esc(o.device_desc||(o.gpu?'GPU':'solo CPU'))}</span></td>
+    <td>${o.gpu?rcell(n.vram_reserved,n.vram_after,o.vram_cap):'<span class="mut">sin GPU</span>'}</td>
+    <td>${rcell(n.ram_reserved,n.ram_after,o.ram_cap||o.ram_total)}</td><td>${o.cores||'—'}${o.threads?` <span class="mut">(${o.threads} aportados)</span>`:''}</td>
+    <td class="mut">${o.net&&o.net.mbps!=null?o.net.mbps+' Mbps · '+o.net.rtt_ms+' ms':'—'}</td></tr>`}).join('');
+  const h=X.host;$('res_nodes').innerHTML=rows+(R.host.shared_with_node?'':`<tr><td><b>Orquestador</b><br><span class="mut">RAM local (modelos solo CPU)</span></td><td><span class="mut">—</span></td><td>${rcell(h.ram_reserved,h.ram_after,R.host.ram_total)}</td><td>${R.host.cores}</td><td class="mut">local</td></tr>`);
+  $('res_note').textContent=PROJ?'Simulación: las barras naranjas muestran lo que añadiría el modelo. Pulsa «Cargar» para aplicarlo.':''}
+function whChange(){$('wh_box').classList.toggle('hide',$('wh').value!=='manual');renderWhere()}
+function renderWhere(){if($('wh').value!=='manual'||!R)return;
+  const row=(key,label,info,opts)=>{const on=key in WSEL,d=WSEL[key]||opts[0][0];return `<label><input type="checkbox" ${on?'checked':''} onchange="wsel('${esc(key)}',this.checked,'${opts[0][0]}')"> <b>${esc(label)}</b></label>
+    <select ${on?'':'disabled'} onchange="WSEL['${esc(key)}']=this.value;PROJ=null;renderRes()">${opts.map(o=>`<option value="${o[0]}" ${o[0]===d?'selected':''}>${o[1]}</option>`).join('')}</select><span class="mut">${info}</span>`};
+  let h='<div class="mut" style="margin-top:8px;font-size:12px">Marca los nodos donde puede ejecutarse y si debe usar su <b>GPU</b> o su <b>CPU (RAM)</b>. Útil para dejar la GPU libre para modelos grandes y poner uno pequeño en la RAM de un nodo concreto.</div><div class="wn">';
+  h+=R.nodes.filter(n=>n.up).map(n=>{const o=[];if(n.gpu)o.push(['gpu','GPU']);if(!n.gpu||n.cpu_device)o.push(['cpu','CPU (RAM)']);
+    const info=(n.gpu?`VRAM libre ${gib(Math.max(0,n.vram_cap-n.vram_reserved))} · `:'')+`RAM libre ${gib(Math.max(0,(n.ram_cap||n.ram_total)-n.ram_reserved))} · ${n.cores} núcleos`;return row(n.name,n.name,info,o)}).join('');
+  h+=row('@host','Orquestador (RAM local)',`RAM libre ${gib(Math.max(0,R.host.ram_total-R.host.ram_reserved))} · ${R.host.cores} núcleos · no se combina con nodos`,[['cpu','CPU (RAM)']]);
+  $('wh_box').innerHTML=h+'</div>'}
+function wsel(k,on,d){if(on){if(k==='@host')WSEL={'@host':'cpu'};else{delete WSEL['@host'];WSEL[k]=d}}else delete WSEL[k];PROJ=null;renderWhere();renderRes()}
+function targets(){if($('wh').value!=='manual')return [];const t=Object.entries(WSEL).map(([node,device])=>({node,device}));if(!t.length)throw new Error('Marca al menos un nodo (o elige «Automático»).');return t}
+async function plan(){$('plan').dataset.manual='1';try{const tg=targets(),sl=$('slotsel').value;$('plan').innerHTML='<div class="mut">midiendo red y calculando…</div>';
+  const p=await api('POST','/api/plan',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':0,targets:tg});PROJ=p.ok?p.resources:null;renderPlan(p);renderRes()}catch(e){PROJ=null;$('plan').innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+async function load(){delete $('plan').dataset.manual;PROJ=null;try{const tg=targets(),sl=$('slotsel').value;await api('POST','/api/load',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':+sl,pinned:$('pinned').checked,targets:tg});refresh();loadRes()}catch(e){alert(e.message)}}
+
+/* ---------- modelos en memoria ---------- */
+async function dropSlot(n,txt){if(txt&&!confirm(txt))return;try{await api('POST','/api/unload',{slot:n});refresh();loadRes()}catch(e){alert(e.message)}}
+const where=(x,nm)=>x.assignments&&x.assignments.length?x.assignments.map(a=>`${esc(a.name)} <span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${dev(a.device)||esc(a.backend||'')}</span> ${gib(a.bytes)}`).join('<br>'):(x.policy==='cpu_only'?'orquestador <span class="badge b-off">CPU</span>':'<span class="mut">—</span>');
+function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||x.state!=='IDLE');
   const nm=id=>{const n=(S.nodes||[]).find(x=>x.id===id);return n?n.name:id};
-  $('slotlist').innerHTML=sl.filter(x=>x.model).map(x=>`<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${esc(x.model)}</td><td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.error?`<br><span class="err">${esc(x.error)}</span>`:''}</td><td>${x.activity==='BUSY'?`ocupado (${x.active_requests})`:'libre'}</td><td>${x.ctx||''}</td><td>${esc(x.policy||'auto')}</td><td>${x.nodes.length?x.nodes.map(nm).map(esc).join(', '):'<span class="mut">orquestador (CPU)</span>'}</td><td class="mut">${x.llama_port||''}</td><td><button class="sec sm" onclick="dropSlot(${x.slot})">Descargar</button></td></tr>`).join('');
+  $('slotlist').innerHTML=sl.length?sl.map(x=>{const m=x.metrics||{},busy=x.state==='LOADING'||x.state==='RECOVERING',gone=x.state==='UNLOADING';
+    const act=gone?'<span class="mut">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:x.slot===0?`<button class="sec sm" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`;
+    const perf=m.requests?`${m.requests} peticiones${m.errors?` · <span class="err">${m.errors} con error</span>`:''}<br><span class="mut">media ${m.avg_ms==null?'—':Math.round(m.avg_ms)+' ms'} · p95 ${m.p95_ms==null?'—':Math.round(m.p95_ms)+' ms'}${m.tok_s?` · ${m.tok_s} tok/s`:''}</span>`:'<span class="mut">sin peticiones</span>';
+    return `<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${x.model?esc(x.model):'<span class="mut">(vacío)</span>'}<br><span class="mut">ctx ${x.ctx||'—'} · ${esc(x.policy||'auto')}${x.llama_port?' · puerto '+x.llama_port:''}</span></td>
+    <td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.recoveries?` <span class="mut">recuperado ${x.recoveries}×</span>`:''}${x.error?`<br><span class="err">${esc(x.error)}</span><br><a href="#ev" onclick="evFocus(${x.slot});return false">Ver registro</a>`:''}</td>
+    <td>${where(x)}</td><td>${x.activity==='BUSY'?`ocupado (${x.active_requests})`:'libre'}</td><td>${perf}</td><td>${act}</td></tr>`}).join(''):'<tr><td colspan="7" class="mut">Ningún modelo en memoria. Elige uno arriba y pulsa «Cargar».</td></tr>';
   const L=S.ledger||{};const parts=Object.entries(L).map(([id,v])=>{const r=Object.values(v.reserved||{}).reduce((a,b)=>a+b,0),q=Object.values(v.ram_reserved||{}).reduce((a,b)=>a+b,0);return r||q?`${esc(id==='@host'?'orquestador':nm(id))}: ${r?'VRAM '+gib(r)+' de '+gib(v.cap):''}${r&&q?' · ':''}${q?'RAM '+gib(q):''}`:''}).filter(Boolean);
-  $('ledgernote').textContent='';$('ledgernote').innerHTML=parts.length?'Memoria reservada · '+parts.join(' · '):''}
+  $('ledgernote').innerHTML=parts.length?'Memoria reservada · '+parts.join(' · '):''}
 async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
+
+/* ---------- registros ---------- */
+let evSlot='';
+function evFocus(slot){evSlot=String(slot);show('ev')}
+async function evLoad(){if(cur!=='ev')return;
+  const sOpts='<option value="">todos</option>'+((S&&S.slots)||[]).map(x=>`<option value="${x.slot}">${x.slot} · ${esc(x.model||'vacío')}</option>`).join('');
+  if($('ev_s').dataset.k!==sOpts){$('ev_s').innerHTML=sOpts;$('ev_s').dataset.k=sOpts}
+  const nOpts='<option value="">todos</option>'+((S&&S.nodes)||[]).map(n=>`<option>${esc(n.name)}</option>`).join('');
+  if($('ev_n').dataset.k!==nOpts){$('ev_n').innerHTML=nOpts;$('ev_n').dataset.k=nOpts}
+  if(evSlot!==''){$('ev_s').value=evSlot;evSlot=''}
+  const q=new URLSearchParams({level:$('ev_l').value,limit:400});if($('ev_s').value!=='')q.set('slot',$('ev_s').value);if($('ev_n').value)q.set('node',$('ev_n').value);if($('ev_q').value)q.set('q',$('ev_q').value);
+  try{const r=await api('GET','/api/events?'+q);const c=r.counts||{};$('ev_c').textContent=`${c.error||0} errores · ${c.warn||0} avisos · ${c.info||0} informativos`;
+    $('ev_t').innerHTML=r.events.slice().reverse().map(e=>`<tr title="${esc(e.detail?JSON.stringify(e.detail):'')}"><td class="mut" style="white-space:nowrap">${e.old?'· ':''}${new Date(e.t*1000).toLocaleString()}</td><td><span class="badge lv-${esc(e.level)}">${esc(e.level)}</span></td><td>${e.slot||'—'}</td><td>${esc(e.node||'—')}</td><td>${esc(e.msg)}${e.count>1?` <span class="mut">(×${e.count})</span>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="mut">Sin eventos con ese filtro.</td></tr>'}catch(e){}
+  const lc=S&&S.last_crash;$('crashbox').classList.toggle('hide',!lc);
+  if(lc)$('crash').innerHTML=`<div>${new Date(lc.t*1000).toLocaleString()} · <b>llama-server</b> terminó${lc.code!=null?' (código '+lc.code+')':''}</div>`+(lc.lines||[]).map(l=>`<div class="mut"><code>${esc(l)}</code></div>`).join('')+(lc.rpc||[]).map(r=>`<div style="margin-top:6px"><b>rpc-server de ${esc(r.node)}</b> terminó (código ${r.code})${r.why?': '+esc(r.why):''}</div>`+(r.lines||[]).map(l=>`<div class="mut"><code>${esc(l)}</code></div>`).join('')).join('');
+  const ll=S&&S.state==='ERROR'&&S.llama_log&&S.llama_log.length;$('llamalogbox').classList.toggle('hide',!ll);if(ll)$('events').textContent=S.llama_log.join('\n')}
 
 /* ---------- modelos ---------- */
 async function models(){try{M=await api('GET','/api/models');const c=$('models').value;
