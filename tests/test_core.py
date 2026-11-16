@@ -65,6 +65,7 @@ class TestScheduler(unittest.TestCase):
         p = scheduler.plan(self.model, [node("a", 2, 100), node("b", 2, 50)])
         self.assertFalse(p["ok"])
         self.assertIn("no cabe", p["reason"])
+        self.assertIn("libre por nodo: a ", p["reason"])  # dice cuánto queda en cada nodo, no solo el total
 
     def test_slow_network_excluded(self):
         p = scheduler.plan(self.model, [node("lan", 8, 50), node("wifi", 8, 100, mbps=150)])

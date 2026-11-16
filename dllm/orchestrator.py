@@ -959,7 +959,9 @@ class Cluster:
         rc = self.proc.poll() if self.proc else None
         tail = [l for l in list(self.logbuf)[-60:] if l.strip()]
         key = [l for l in tail if re.search(r"assert|error|abort|fail|out of memory|oom|exception|signal", l, re.I)]
-        lines = [l[:300] for l in (key or tail)[-6:]]
+        # las líneas que parecen error y, siempre, las últimas de la salida (el motivo real suele ser lo último)
+        pick = key[-4:] + [l for l in tail[-4:] if l not in key[-4:]]
+        lines = [l[:300] for l in pick]
         for l in lines:
             self.event(f"  llama-server: {l}")
         self.last_crash = {"t": time.time(), "code": rc, "lines": lines, "rpc": []}

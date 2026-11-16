@@ -253,6 +253,10 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
     if remaining > 0:
         res["reason"] = (f"no cabe: necesito {need / GiB:.1f} GiB (modelo {model['size'] / GiB:.1f} + "
                          f"KV {kv / GiB:.1f} + margen) y los nodos elegibles aportan {total_usable / GiB:.1f} GiB"
+                         + ("; libre por nodo: " + ", ".join(
+                             f"{n['name']} {max(0, usable(n)) / GiB:.1f} GiB" for n in elig) if elig else "")
+                         + ("; excluidos: " + ", ".join(f"{e['node']} ({e['reason']})" for e in res["excluded"])
+                            if res["excluded"] else "")
                          + (f"; con esta memoria cabe un contexto de hasta {res['max_ctx']} tokens"
                             if res["max_ctx"] else "")
                          + ("; el modelo va fijado a un único nodo (placement=node) y ninguno tiene sitio"

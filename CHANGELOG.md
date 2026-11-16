@@ -9,6 +9,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   (log y `rpc_last_exit` en `/info`) y el orquestador las muestra en *Eventos* y en `last_crash.rpc` al caer
   `llama-server`. Antes solo se veía «Remote RPC server crashed» sin saber por qué.
 
+### Mejorado
+- «No cabe» indica cuánta memoria queda libre en **cada nodo** y por qué se excluyó alguno (antes solo el total, que con
+  otro modelo ya cargado salía como «0.0 GiB»).
+- El informe de caída de `llama-server` incluye siempre sus últimas líneas, además de las que parecen un error (con
+  Gemma 4 31B solo salía un aviso inofensivo del arranque y se perdía el motivo real).
+
 ### Cambiado
 - **Desinstalador a fondo**: cierra todos los procesos de DLLM (agente, orquestador, `llama-server`, `rpc-server`;
   repite hasta que no quede ninguno y avisa de los que no se dejan), borra carpetas con reintentos y ficheros de solo
