@@ -289,3 +289,16 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
   peticiones, errores por código, media, p50 y p95 de las últimas 300.
 - **Cancelar**: descargar un modelo mientras carga lo cancela sin esperar (estado `UNLOADING`) y un modelo secundario
   desaparece cuando termina la limpieza; en estado de error se elimina igual.
+
+## Administración de nodos (0.6.0)
+
+- **Descubrimiento** (`dllm/discovery.py`): además del beacon UDP, el orquestador puede alcanzar un agente por IP. Un
+  agente DLLM responde sin autenticación solo en `/pair/*` y solo si no está emparejado; con `GET /pair/status` se
+  clasifica `libre` (200) / `emparejado` (404 «ya está emparejado») sin enviar ningún secreto. `add_node` prueba antes
+  un `/info` firmado con el secreto del clúster (nodo ya nuestro) y, si no, inicia el emparejamiento. La búsqueda solo
+  admite rangos privados de hasta 1024 direcciones y corre en segundo plano (`jobs.scan`).
+- **Medición** (`jobs.bench`): `probe_link` de cada nodo en secuencia y después en paralelo; `joint_mbps` y
+  `joint_ratio` quedan en `node.net`. Un cociente < 0,6 indica que el enlace del orquestador es el cuello de botella.
+- **Modo forzado**: `allow_slow` por nodo (en `nodes.json`) hace que `scheduler.plan` no excluya el nodo por debajo de
+  `min_mbps` y añada un aviso. Activarlo exige `confirm: true` en la API.
+- **Baja**: `Registry.remove` elimina el nodo y, si seguía anunciándose, ignora sus beacons 10 min (`banned`).

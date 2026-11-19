@@ -18,7 +18,8 @@ El **mismo paquete** sirve para todos los equipos; el asistente pregunta qué pa
 | Memoria | La suma de RAM/VRAM libre de los nodos ≥ tamaño del modelo + ~10 % | Margen de 2 GiB por nodo |
 
 El scheduler excluye los nodos con menos de **800 Mbps** medidos (Wi-Fi suele quedar fuera). Se puede cambiar con
-`--min-mbps`, a costa de mucha más lentitud.
+`--min-mbps`, a costa de mucha más lentitud. Para pruebas, en **Nodos** puedes permitir un nodo lento concreto
+(*Usar igualmente*, pide confirmación) sin tocar el mínimo del resto.
 
 ## 2. Descargar el paquete
 
@@ -110,6 +111,8 @@ Si instalas el nodo sin código de unión, queda **esperando** y se anuncia en l
    de 6 cifras.
 2. En el nodo (la página final del asistente, o `dllm pair` / el acceso *Open-DLLM* en ese equipo) aparece la
    solicitud con el **mismo código**. Si coincide, pulsa **Aceptar**.
+   Si el nodo **no aparece** (el broadcast no cruza VLAN/VPN): en el instalador del nodo indica la **IP del orquestador**
+   (`--orch-ip`), o en el panel usa **Nodos → Añadir por IP** / **Buscar en la red**.
 3. El orquestador le envía el secreto del clúster cifrado y el nodo se une sin reiniciar. Desde ese momento solo
    acepta conexiones de ese orquestador.
 

@@ -208,9 +208,10 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
     for n in nodes:
         if n.get("mbps") is None:
             res["excluded"].append({"node": n["name"], "reason": "red no medida"})
-        elif n["mbps"] < min_mbps:
+        elif n["mbps"] < min_mbps and not n.get("allow_slow"):
             res["excluded"].append({"node": n["name"],
-                                    "reason": f"red {n['mbps']:.0f} Mbps < mínimo {min_mbps:.0f} Mbps"})
+                                    "reason": f"red {n['mbps']:.0f} Mbps < mínimo {min_mbps:.0f} Mbps "
+                                              "(en Nodos puedes usarlo igualmente, modo forzado)"})
         elif n["cap_bytes"] - OVERHEAD_NODE < 256 << 20:
             res["excluded"].append({"node": n["name"], "reason": "memoria libre insuficiente"})
         else:
@@ -290,6 +291,10 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
     res["ok"] = True
 
     used_ids = {n["id"] for n, _ in picks}
+    forced_slow = [n["name"] for n, _ in picks if n["mbps"] < min_mbps]
+    if forced_slow:
+        res["warnings"].append(f"modo forzado: {', '.join(forced_slow)} tiene una red por debajo de {min_mbps:.0f} Mbps; "
+                               "vale para pruebas, la velocidad será baja")
     res["unused"] = [{"node": n["name"], "tier": node_tier(n)} for n in elig if n["id"] not in used_ids]
     top = max(node_tier(n) for n, _ in picks)
     res["max_tier"] = top

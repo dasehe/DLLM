@@ -285,6 +285,8 @@ def build_parser():
     s.add_argument("--bin-dir", help="usar llama.cpp ya instalado en esta carpeta")
     s.add_argument("--name")
     s.add_argument("--expose", action="store_true", help="orquestador accesible desde la red (crea API key)")
+    s.add_argument("--orch-ip", help="(nodo sin código) IP[:puerto de descubrimiento] del orquestador ya activo; "
+                                     "el nodo se anuncia a esa IP en vez de por broadcast")
     s.add_argument("--advertise-host", help="IP del orquestador que irá en el código de unión (p. ej. la de WireGuard)")
     s.add_argument("--no-service", action="store_true", help="no instalar el arranque automático")
     s.add_argument("--agent-port", type=int, help="puerto HTTP del agente (def. 8765)")

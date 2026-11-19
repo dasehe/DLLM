@@ -5,6 +5,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Añadido
+- **Administración de nodos desde el panel** (Nodos): *Añadir por IP* (si ya habla con el secreto del clúster se
+  registra; si está libre inicia el emparejamiento), *Buscar en la red* (explora un rango privado, por defecto el /24 del
+  orquestador, y clasifica los agentes: libre, ya en el clúster o emparejado), *Medir la red* (cada nodo por separado y
+  después **todos a la vez** para ver cuánto cae el enlace compartido) y *Eliminar* nodos (p. ej. con una IP vieja; se
+  ignoran sus anuncios 10 min; no se puede si un modelo lo usa). Cada nodo muestra **qué modelos tiene cargados**
+  (GPU/CPU, GiB). API: `POST /api/nodes/add`, `GET|POST /api/nodes/scan`, `GET|POST /api/nodes/bench`,
+  `POST /api/nodes/forget`; `/api/pair/claim` acepta `port`.
+- **Modo forzado para redes lentas**: un nodo por debajo del mínimo (800 Mbps) se puede usar igualmente, pidiendo
+  confirmación (`allow_slow` + `confirm` en `/api/node/settings`); el plan lo avisa. Pensado para pruebas.
+- **Instalación de nodos con la IP del orquestador** (`--orch-ip`, campo en el asistente): el nodo sin código se
+  anuncia directamente a ese orquestador en vez de por broadcast.
+- **Modo avanzado** en la cabecera: la interfaz muestra lo esencial y el interruptor despliega los parámetros técnicos
+  (reparto, caché, muestreo, versiones…). Aspecto renovado (tarjetas, iconos, chips de modelos).
 - **Causa real cuando muere un `rpc-server`**: el agente guarda el código y las líneas relevantes antes de relanzarlo
   (log y `rpc_last_exit` en `/info`) y el orquestador las muestra en *Eventos* y en `last_crash.rpc` al caer
   `llama-server`. Antes solo se veía «Remote RPC server crashed» sin saber por qué.

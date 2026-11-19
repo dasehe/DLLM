@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, auth, config, devices, hw, installer, legal_notice, limits, presence
+from . import __version__, auth, config, devices, discovery, hw, installer, legal_notice, limits, presence
 from .util import FastHTTPServer
 
 ROLES = ("orchestrator", "node", "both")
@@ -109,6 +109,11 @@ class Setup:
         n["autostart"] = bool(o.get("autostart", True))
         n["restrict_ip"] = bool(o.get("restrict_ip", True))
         n["advertise"] = o.get("advertise_host") or None
+        n["orch_ip"] = None
+        if role == "node" and (o.get("orch_ip") or "").strip():
+            # IP del orquestador ya activo: el nodo se anuncia directamente a él (sin depender del broadcast)
+            host, _, port = o["orch_ip"].strip().partition(":")
+            n["orch_ip"] = f"{discovery.valid_host(host)}:{discovery.valid_port(port, n['beacon_port'])}"
         n["mem_gb"] = _num(o.get("mem_gb"), "la memoria")
         n["share"] = _num(o.get("share"), "el porcentaje")
         if n["share"] is not None and not 1 <= n["share"] <= 100:
@@ -176,6 +181,8 @@ class Setup:
                     a_["allow_ip"] = [j["orch"], "127.0.0.1"]
             elif role == "node":  # sin código: tras emparejarse solo aceptará al orquestador que lo reclame
                 a_["restrict_ip"] = n["restrict_ip"]
+                if n["orch_ip"]:  # se anuncia solo a ese orquestador (unicast) en lugar de por broadcast
+                    a_["announce_to"] = [n["orch_ip"]]
             elif role == "both":
                 # el orquestador ya registra el agente local por 127.0.0.1; sin broadcast evitamos un nodo duplicado
                 a_["allow_ip"] = ["127.0.0.1"]
@@ -565,7 +572,7 @@ def run_tui(a):
          "bin_dir": a.bin_dir, "name": a.name, "expose": a.expose, "autostart": not a.no_service,
          "agent_port": a.agent_port, "rpc_port": a.rpc_port, "api_port": a.api_port,
          "beacon_port": a.beacon_port, "mem_gb": a.mem_gb, "bw_gbps": a.bw_gbps,
-         "advertise_host": a.advertise_host, "share": a.share, "threads": a.threads,
+         "advertise_host": a.advertise_host, "orch_ip": a.orch_ip, "share": a.share, "threads": a.threads,
          "limits_mode": a.limits_mode}
     o["role"] = o["role"] or _choose_role(bool(d["existing"]))
     if o["role"] == "uninstall":
@@ -580,6 +587,10 @@ def run_tui(a):
                   "         Déjalo vacío para que el orquestador reclame este equipo desde su panel.")
             o["join_code"] = _ask("Código (opcional)", "",
                                   validate=lambda s: (config.decode_join(s), s)[1] if s.strip() else s)
+        if not o["join_code"] and not o["orch_ip"]:
+            print("\n         Si el orquestador ya está activo y no lo encuentra por la red, indica su IP (o IP:puerto).")
+            o["orch_ip"] = _ask("IP del orquestador (opcional)", "",
+                                validate=lambda s: (discovery.valid_host(s.partition(':')[0]), s)[1] if s.strip() else s)
     if not o["install_dir"] and not a.yes:
         print("\nCarpeta de DLLM: aquí se guardan llama.cpp" + ("" if o["role"] == "node" else " y los modelos (models)"))
         o["install_dir"] = _ask("Carpeta", d["default_install_dir"])

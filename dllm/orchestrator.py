@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import engine, eventlog
+from . import discovery, engine, eventlog
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -171,6 +171,7 @@ class Registry:
         self.secret, self.node_timeout, self.interval = secret, node_timeout, probe_interval
         self.nodes, self.lock = {}, threading.RLock()
         self.pending = {}  # ip → anuncio de un nodo sin emparejar (ver pairing.py)
+        self.banned = {}   # host → instante hasta el que se ignoran sus anuncios (nodo eliminado a mano)
 
     def add(self, host, http_port, static=False):
         with self.lock:
@@ -183,6 +184,16 @@ class Registry:
     def all(self):
         with self.lock:
             return list(self.nodes.values())
+
+    def remove(self, nid, ban_s=0):
+        """Olvida un nodo. Con `ban_s` ignora sus anuncios ese tiempo (si sigue vivo, no reaparece al instante)."""
+        with self.lock:
+            n = self.nodes.pop(nid, None)
+            if n:
+                self.pending.pop(n.host, None)
+                if ban_s:
+                    self.banned[n.host] = time.time() + ban_s
+            return n
 
     def get(self, nid):
         with self.lock:
@@ -204,6 +215,8 @@ class Registry:
             return
         while True:
             data, addr = s.recvfrom(4096)
+            if self.banned.get(addr[0], 0) > time.time():
+                continue
             pb = pairing.parse_beacon(data)
             if pb:
                 with self.lock:
@@ -290,6 +303,7 @@ class Cluster:
         self.models = parent.models if parent else models.Manager(cfg.models_dir)
         self.presence = parent.presence if parent else presence.Presence()  # pestañas del panel (`dllm open`)
         self.claims = parent.claims if parent else {}  # host → emparejamiento en curso
+        self.jobs = parent.jobs if parent else {"scan": {}, "bench": {}}  # búsqueda de red y medición en curso
         self._local_devs = None   # dispositivos locales de llama-server (no cambian: se cachean)
         self.llama_hist = collections.deque(maxlen=150)  # tokens/s y peticiones (de /metrics)
         self._sync_tried = {}     # nodo → hora del último intento de sincronizar llama.cpp
@@ -368,6 +382,14 @@ class Cluster:
             if not isinstance(req["enabled"], bool):
                 raise ValueError("'enabled' debe ser true o false")
             cur["enabled"] = req["enabled"]
+        if "allow_slow" in req:
+            if not isinstance(req["allow_slow"], bool):
+                raise ValueError("'allow_slow' debe ser true o false")
+            if req["allow_slow"] and req.get("confirm") is not True:
+                raise ValueError("usar un nodo con red lenta requiere confirmación (confirm: true)")
+            cur["allow_slow"] = req["allow_slow"]
+            if not req["allow_slow"]:
+                cur.pop("allow_slow", None)
         for k, lo, hi, typ in (("layers", 1, 4096, int), ("bw_gbps", 1.0, 10000.0, float)):
             if k in req:
                 v = req[k]
@@ -582,7 +604,7 @@ class Cluster:
                 ok_nodes.append({"id": n.id, "name": n.name, "backend": "cpu" if cpu_on_gpu else i.get("backend", "cpu"),
                                  "gpu": gpu, "device": "gpu" if gpu else "cpu", "cap_bytes": cap,
                                  "bw_gbps": ns.get("bw_gbps") or (CPU_BW_GBPS if cpu_on_gpu else i.get("bw_gbps", 10)),
-                                 "layers": ns.get("layers"),
+                                 "layers": ns.get("layers"), "allow_slow": bool(ns.get("allow_slow")),
                                  "mbps": n.net["mbps"] if n.net else None,
                                  "rtt_ms": n.net["rtt_ms"] if n.net else None,
                                  "local": n.net.get("local") if n.net else None,
@@ -1174,11 +1196,14 @@ class Cluster:
                   if now - c["t"] < 600]
         return {"pending": pend, "claims": claims}
 
-    def claim(self, host):
+    def claim(self, host, port=None):
         """Reclama un nodo sin emparejar: intercambio de claves, código de verificación y espera a que se acepte
-        en el nodo; después le envía el secreto cifrado. Devuelve el código de verificación a mostrar."""
+        en el nodo; después le envía el secreto cifrado. Devuelve el código de verificación a mostrar.
+        Con `port` se puede reclamar por IP un nodo cuyo anuncio no ha llegado."""
         with self.reg.lock:
             p = self.reg.pending.get(host)
+        if not p and port:
+            p = {"host": host, "name": host, "http_port": int(port)}
         if not p:
             raise ValueError("ese equipo ya no está esperando unirse (¿se ha apagado o ya está emparejado?)")
         x, pub = pairing.keypair()
@@ -1252,6 +1277,183 @@ class Cluster:
             cl["state"], cl["detail"] = "error", str(e)[:200]
             self.event(f"{cl['name']}: no se pudo completar el emparejamiento ({e})")
 
+    # ------------------------------------------------------------ alta por IP, búsqueda, medición y baja de nodos
+    def add_node(self, host, port=None):
+        """Añade un nodo por IP/nombre cuando el anuncio por broadcast no llega. Si ya habla con nuestro secreto se
+        registra tal cual; si está libre se inicia el emparejamiento (código de verificación)."""
+        host, port = discovery.valid_host(host), discovery.valid_port(port)
+        if self.reg.get(f"{host}:{port}"):
+            raise ValueError("ese nodo ya está en la lista")
+        self.reg.banned.pop(host, None)
+        try:
+            info = call_agent(self.reg.secret, Node(host, port), "GET", "/info", timeout=3)
+        except Exception:
+            info = None
+        if info is not None:
+            n = self.reg.add(host, port, static=True)
+            n.info, n.last_seen, n.last_error = info, time.time(), ""
+            self.event(f"nodo {n.name} añadido a mano ({host}:{port})", node=n.name, kind="node")
+            return {"state": "añadido", "name": n.name}
+        r = discovery.probe(host, port, 2.0)
+        if r is None:
+            raise ValueError(f"no responde ningún agente DLLM en {host}:{port}: comprueba que está arrancado, la IP, "
+                             "el puerto y que el cortafuegos lo permite")
+        if r["state"] == "emparejado":
+            raise ValueError("ese agente ya está emparejado con otro secreto (otro orquestador o un clúster anterior): "
+                             "reinstálalo sin código de unión o desinstálalo y vuelve a instalarlo")
+        self.event(f"{host}:{port}: agente libre; iniciando emparejamiento", kind="node")
+        return dict(self.claim(host, port), state="reclamando")
+
+    def start_scan(self, cidr=None, port=None):
+        """Busca agentes DLLM en un rango de red (por defecto, el /24 del orquestador). Trabajo en segundo plano."""
+        job = self.jobs["scan"]
+        if job.get("state") == "running":
+            raise Busy("ya hay una búsqueda en curso")
+        port = discovery.valid_port(port)
+        cidr = (cidr or "").strip() or discovery.default_range(config.lan_ip())
+        hosts = discovery.hosts_of(cidr)
+        job.clear()
+        job.update(state="running", range=cidr, port=port, total=len(hosts), done=0, found=[], t=time.time())
+
+        def prog(n, item):
+            with self.reg.lock:
+                job["done"] += n
+                if item:
+                    known = next((x for x in self.reg.all() if x.host == item["host"] and x.http_port == item["port"]), None)
+                    if item["state"] == "emparejado":
+                        item["state"] = "en_cluster" if known else "otro"
+                    item["name"] = known.name if known else (self.reg.pending.get(item["host"]) or {}).get("name")
+                    job["found"].append(item)
+
+        def run():
+            try:
+                discovery.scan(hosts, port, prog)
+                job["found"].sort(key=lambda x: tuple(int(o) for o in x["host"].split(".")))
+                job["state"] = "done"
+            except Exception as e:
+                job.update(state="error", error=str(e)[:200])
+            n = len(job["found"])
+            self.event(f"búsqueda en {cidr}:{port}: {n} agente(s) encontrado(s)", kind="node")
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "range": cidr, "total": len(hosts)}
+
+    def start_bench(self, node_ids=None):
+        """Mide el enlace de los nodos: primero de uno en uno (cada uno con todo el ancho) y después todos a la vez,
+        como en un trabajo real, para ver cuánto cae cuando comparten el enlace del orquestador."""
+        job = self.jobs["bench"]
+        if job.get("state") == "running":
+            raise Busy("ya hay una medición en curso")
+        if node_ids:
+            nodes = [self.reg.get(i) for i in node_ids]
+            if not all(nodes):
+                raise ValueError("nodo desconocido")
+        else:
+            nodes = [n for n in self.reg.all() if self.reg.is_up(n)]
+        nodes = [n for n in nodes if self.reg.is_up(n)]
+        if not nodes:
+            raise ValueError("no hay nodos conectados que medir")
+        job.clear()
+        job.update(state="running", phase="uno a uno", total=len(nodes), done=0, current=None, items=[], joint=None,
+                   t=time.time(), min_mbps=self.cfg.min_mbps)
+        threading.Thread(target=self._bench_worker, args=(nodes, job), daemon=True).start()
+        return {"ok": True, "nodes": [n.name for n in nodes]}
+
+    def _bench_worker(self, nodes, job):
+        try:
+            for n in nodes:
+                job["current"] = n.name
+                it = {"node": n.name, "id": n.id}
+                try:
+                    n.net = bench_node(self.reg.secret, n)
+                    it.update(mbps=n.net["mbps"], rtt_ms=n.net["rtt_ms"], tier=n.net.get("tier"),
+                              local=n.net.get("local"))
+                except Exception as e:
+                    n.net, n.last_error = None, f"bench: {e}"[:200]
+                    it["error"] = str(e)[:160]
+                job["items"].append(it)
+                job["done"] += 1
+            # conjunto: todos a la vez (los locales no cruzan la red y no cuentan)
+            remote = [n for n in nodes if n.net and not n.net.get("local") and n.rpc_port]
+            if len(remote) >= 2:
+                job["phase"], job["current"] = "en conjunto", None
+                res = {}
+
+                def one(n):
+                    try:
+                        res[n.id] = probe_link(n.host, n.rpc_port, self.reg.secret)
+                    except Exception as e:
+                        res[n.id] = {"error": str(e)[:120]}
+                ths = [threading.Thread(target=one, args=(n,), daemon=True) for n in remote]
+                for t in ths:
+                    t.start()
+                for t in ths:
+                    t.join(timeout=60)
+                rows = []
+                for n in remote:
+                    r = res.get(n.id) or {}
+                    if "mbps" in r:
+                        n.net["joint_mbps"] = r["mbps"]
+                        n.net["joint_ratio"] = round(r["mbps"] / max(1, n.net["mbps"]), 2)
+                        rows.append({"node": n.name, "alone": n.net["mbps"], "joint": r["mbps"],
+                                     "ratio": n.net["joint_ratio"]})
+                job["joint"] = {"nodes": rows, "total_mbps": sum(x["joint"] for x in rows)}
+            for it in job["items"]:
+                n = self.reg.get(it["id"])
+                ns = self.node_settings(n.name) if n else {}
+                it["slow"] = bool(it.get("mbps") is not None and it["mbps"] < self.cfg.min_mbps and not it.get("local"))
+                it["allow_slow"] = bool(ns.get("allow_slow"))
+                if it["slow"]:
+                    self.event(f"{it['node']}: red de {it['mbps']} Mbps, por debajo del mínimo de "
+                               f"{self.cfg.min_mbps:g} Mbps; no se usará salvo que lo permitas (modo forzado)",
+                               level="warn", node=it["node"], kind="net")
+                elif it.get("error"):
+                    self.event(f"{it['node']}: no se pudo medir la red ({it['error']})", level="warn", node=it["node"],
+                               kind="net")
+            for x in (job["joint"] or {}).get("nodes", []):
+                if x["ratio"] < 0.6:
+                    self.event(f"{x['node']}: con todos los nodos a la vez baja de {x['alone']} a {x['joint']} Mbps: "
+                               "el enlace del orquestador se reparte entre ellos", level="warn", node=x["node"],
+                               kind="net")
+            self.event("medición de red terminada: " + ", ".join(
+                f"{i['node']} {i['mbps']} Mbps" if "mbps" in i else f"{i['node']} sin medir" for i in job["items"]),
+                kind="net")
+            job.update(state="done", phase="terminado", current=None)
+        except Exception as e:
+            job.update(state="error", error=str(e)[:200], current=None)
+
+    def forget_node(self, nid, block=True):
+        """Elimina un nodo de la lista (p. ej. con una IP vieja). Si está en uso, antes hay que descargar el modelo.
+        Si sigue anunciándose, se ignoran sus anuncios 10 min para que no reaparezca al instante."""
+        n = self.reg.get(nid or "")
+        if not n:
+            raise ValueError("nodo desconocido")
+        if any(n.id in c.used for c in list(self.slots.values())):
+            raise Busy(f"{n.name} está en uso por un modelo: descárgalo antes de eliminar el nodo")
+        up = self.reg.is_up(n)
+        self.reg.remove(nid, 600 if block and up and not n.static else 0)
+        self._node_up.pop(nid, None)
+        self.claims.pop(n.host, None)
+        if not any(x.name == n.name for x in self.reg.all()):
+            allns = self.all_node_settings()
+            if allns.pop(n.name, None) is not None:
+                self._node_file().write_text(json.dumps(allns, indent=2, ensure_ascii=False))
+        self.event(f"nodo {n.name} ({n.host}) eliminado de la lista", kind="node")
+        return {"ok": True, "static": n.static, "was_up": up,
+                "note": ("sigue vivo y se anuncia: se ignora 10 min; para quitarlo del todo, desinstálalo en ese equipo"
+                         if up and not n.static else "")}
+
+    def node_models(self, n):
+        """Modelos que tienen reparto en el nodo."""
+        out = []
+        for k, c in sorted(self.slots.items()):
+            if not c.plan or c.state in (IDLE, ERROR):
+                continue
+            for a in c.plan.get("assignments") or []:
+                if a.get("node_id") == n.id:
+                    out.append({"slot": k, "model": c.model, "state": c.state, "device": a.get("device"),
+                                "bytes": a.get("bytes"), "layers": a.get("layers")})
+        return out
+
     def snapshot(self):
         nodes = []
         for n in self.reg.all():
@@ -1265,7 +1467,7 @@ class Cluster:
                           "devices": i.get("devices"), "update": i.get("update"),
                           "auto_update": i.get("auto_update"), "settings": self.node_settings(n.name),
                           "telemetry": i.get("telemetry"),
-                          "rpc_running": i.get("rpc_running"),
+                          "rpc_running": i.get("rpc_running"), "models": self.node_models(n), "static": n.static,
                           "used": any(n.id in c.used for c in list(self.slots.values())),
                           "error": n.last_error, "cores": i.get("cores"), "threads": i.get("threads"),
                           "ram_total": i.get("ram_total"), "limits_mode": i.get("limits_mode"),
@@ -1278,7 +1480,8 @@ class Cluster:
                 "slots": self.slots_view(),
                 "ledger": self.ledger.view({n.id: n.info.get("cap_bytes") or 0 for n in self.reg.all()}),
                 "events": list(self.events)[-40:], "event_counts": self.elog.counts(), "llama_log": list(self.logbuf)[-15:], "last_crash": self.last_crash,
-                "llama_build": self.llama_build, "min_mbps": self.cfg.min_mbps, **self.pending_view()}
+                "llama_build": self.llama_build, "min_mbps": self.cfg.min_mbps, "jobs": {k: dict(v) for k, v in self.jobs.items()},
+                "scan_default": discovery.default_range(config.lan_ip()), **self.pending_view()}
 
     def metrics(self):
         L = ["# HELP dllm_state Estado del orquestador (1 = estado actual)", "# TYPE dllm_state gauge"]
@@ -1418,7 +1621,7 @@ def make_handler(cfg, cl):
                     return self._send(200, cl.presence.view())
                 if path == "/api/pair/claim" and self.command == "POST":
                     try:
-                        return self._send(200, cl.claim(str(json.loads(body or b"{}").get("host") or "")))
+                        return self._send(200, cl.claim(str(req.get("host") or ""), req.get("port") and discovery.valid_port(req.get("port"))))
                     except (ValueError, OSError) as e:
                         return self._send(400, {"error": str(e)})
                 if path == "/api/access":
@@ -1494,6 +1697,18 @@ def make_handler(cfg, cl):
                     return self._send(200, cl.set_node_settings(req))
                 if path == "/api/telemetry":
                     return self._send(200, cl.telemetry())
+                if path == "/api/nodes/add" and self.command == "POST":
+                    return self._send(200, cl.add_node(req.get("host"), req.get("port")))
+                if path == "/api/nodes/scan":
+                    if self.command == "POST":
+                        return self._send(200, cl.start_scan(req.get("range"), req.get("port")))
+                    return self._send(200, cl.jobs["scan"])
+                if path == "/api/nodes/bench":
+                    if self.command == "POST":
+                        return self._send(200, cl.start_bench(req.get("nodes") or None))
+                    return self._send(200, cl.jobs["bench"])
+                if path == "/api/nodes/forget" and self.command == "POST":
+                    return self._send(200, cl.forget_node(req.get("node"), req.get("block", True)))
                 if path == "/api/node/limits" and self.command == "POST":
                     return self._send(200, cl.set_node_limits(req))
                 if path == "/api/unload" and self.command == "POST":

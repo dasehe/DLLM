@@ -26,7 +26,7 @@ equipos** que da el asistente o el botón **API key** del panel en el orquestado
 | Pestaña | Para qué |
 |---|---|
 | **Monitor** | Estado del clúster y de cada nodo en tiempo real (ver abajo) |
-| **Nodos** | Lista de nodos y **Configurar** cada uno (ver [Configurar cada nodo](#configurar-cada-nodo)); **Equipos esperando unirse** para reclamar los instalados sin código ([INSTALACION](INSTALACION.md#unir-un-nodo-sin-código-reclamarlo-desde-el-orquestador)) |
+| **Nodos** | Tarjetas de nodo (modelos cargados, red, aporte), **Añadir por IP**, **Buscar en la red**, **Medir la red**, **Eliminar**, y **Configurar** cada uno (ver [Configurar cada nodo](#configurar-cada-nodo)); **Equipos esperando unirse** para reclamar los instalados sin código ([INSTALACION](INSTALACION.md#unir-un-nodo-sin-código-reclamarlo-desde-el-orquestador)) |
 | **Modelos** | Recursos del clúster, cargar o **simular** un modelo eligiendo nodos y GPU/CPU, modelos en memoria, parámetros de cada modelo, añadir desde Hugging Face u Ollama (ver [Modelos](#pestaña-modelos)) |
 | **Chat** | Conversación de prueba (con historial) contra el modelo cargado; adjunta imagen/audio si es multimodal |
 | **Registros** | Qué ha pasado, dónde y por qué: eventos con nivel, modelo y nodo, filtros y búsqueda, último fallo con la causa (ver [Registros](#registros)) |
@@ -76,6 +76,18 @@ Fuentes: `nvidia-smi`, el `sysfs` del driver amdgpu, los contadores del Administ
 `ioreg`. Windows no ofrece temperatura ni consumo de GPUs AMD/Intel sin el software propietario del fabricante, por
 eso aparecen como «—». El **tráfico RPC** mide los datos que pasan por el nodo: si sube mientras generas, ese nodo está
 trabajando. Las gráficas guardan los últimos ~5 minutos.
+
+### Añadir, buscar, medir y eliminar nodos
+
+Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, todos los parámetros técnicos. Se recuerda en el navegador.
+
+| Acción | Qué hace |
+|---|---|
+| **Añadir por IP** | IP o nombre (y puerto del agente, 8765 por defecto, en modo avanzado). Si el nodo ya usa el secreto del clúster se registra al instante; si está sin emparejar se inicia el emparejamiento (código de verificación, aceptar en el nodo); si está emparejado con otro secreto lo dice. Útil cuando el broadcast no llega (VLAN, VPN, Wi-Fi aislado) |
+| **Buscar en la red** | Explora un rango **privado** (por defecto el /24 del orquestador; en modo avanzado se elige: `192.168.1.0/24` o `192.168.1.10-50`, máx. 1024 direcciones) buscando agentes DLLM. Muestra *libre* (Reclamar), *emparejado* (Añadir, por si es de tu clúster) o *ya en este clúster* |
+| **Medir la red** | Mide **cada nodo por separado** (con todo el ancho) y luego **todos a la vez**, como en un trabajo conjunto: si el enlace del orquestador se reparte, el valor «en conjunto» cae y se avisa. Repítelo tras cambiar un cable o un conmutador. Un nodo concreto también se mide desde su tarjeta |
+| **Usar igualmente** | Un nodo por debajo del mínimo (800 Mbps, `--min-mbps`) no entra en los repartos. Este modo lo permite **tras confirmar**; el plan avisa de que es modo forzado. «Dejar de forzar» lo revierte. Para pruebas |
+| **Eliminar** | Quita el nodo de la lista (no lo desinstala). No se puede si un modelo lo usa. Si sigue vivo y anunciándose, se ignora 10 min. Los nodos fijados con `--node` reaparecen al reiniciar el orquestador |
 
 ### Configurar cada nodo
 
@@ -270,11 +282,16 @@ Si no hay modelo listo la API responde `503` con el estado actual.
 | `POST /api/models/delete` | `{"model": …}` | `409` si está cargado |
 | `GET/POST /api/hf/token` | `{"token": "hf_…"}` (vacío = borrar) | `{"set": true/false}` |
 | `POST /api/node/settings` | `{"node": "IP:8765", "enabled": true, "layers": 20, "bw_gbps": 360}` (`null` = automático) | Ajustes del nodo en el orquestador |
+| `POST /api/node/settings` | `{"node": "IP:8765", "allow_slow": true, "confirm": true}` | Modo forzado para una red lenta; sin `confirm: true` responde `400` |
+| `POST /api/nodes/add` | `{"host": "192.168.1.25", "port": 8765}` | `{"state": "añadido"\|"reclamando", ...}`; con `reclamando` incluye `sas` |
+| `GET\|POST /api/nodes/scan` | `{"range": "192.168.1.0/24", "port": 8765}` (opcional) | Lanza la búsqueda / estado y `found` (`libre`, `en_cluster`, `otro`) |
+| `GET\|POST /api/nodes/bench` | `{"nodes": ["IP:8765"]}` (opcional; vacío = todos) | Lanza la medición uno a uno y en conjunto / estado y resultados |
+| `POST /api/nodes/forget` | `{"node": "IP:8765"}` | Elimina el nodo de la lista; `409` si lo usa un modelo |
 | `GET /api/telemetry` | — | Estado en tiempo real: tokens/s, peticiones y, por nodo, GPU/CPU/RAM/tráfico con historial |
 | `POST /api/node/limits` | `{"node": "IP:8765", "share": 33}` o `"mem_gb"`/`"threads"`/`"device"` (`""` = automático), o `{"node": …, "reset": true}` | Límites efectivos; `400` con motivo si el nodo es manual o el valor no es válido |
 | `GET /metrics` | — | Métricas Prometheus |
 | `GET /api/access` | — | Si la petición es local, si hace falta clave y (en local) el enlace para otros equipos |
-| `POST /api/pair/claim` | `{"host": "IP"}` | Reclama un equipo de `pending` (en `/api/state`); devuelve el código de verificación |
+| `POST /api/pair/claim` | `{"host": "IP", "port": 8765}` (`port` solo si no está en `pending`) | Reclama un equipo de `pending` (en `/api/state`); devuelve el código de verificación |
 | `POST /api/ui/ping?id=…` · `/api/ui/bye?id=…` · `GET /api/ui/clients` | — | Pestañas del panel abiertas (lo usa `dllm open`) |
 | `GET /healthz` | — | `200` siempre que el proceso esté vivo (sin API key) |
 

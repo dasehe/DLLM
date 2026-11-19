@@ -40,7 +40,8 @@ dllm uninstall [--purge] # desinstalar (con --purge borra también configuració
 - **Cortafuegos:** en Windows el asistente abre solo los puertos necesarios, limitados a tu red (pide permiso de
   administrador una vez). En Linux/macOS te muestra los comandos exactos.
 - **Nodo sin código de unión:** déjalo vacío en el asistente y reclámalo desde el panel del orquestador (Nodos →
-  Equipos esperando unirse); confirma en el nodo el código de verificación.
+  Equipos esperando unirse); confirma en el nodo el código de verificación. Si no aparece, indica la IP del
+  orquestador en el asistente del nodo, o usa Nodos → Añadir por IP / Buscar en la red en el orquestador.
 - **Abrir el panel:** acceso directo *DLLM* (o `Open-DLLM.bat`); la consola se esconde y reaparece si cierras el navegador.
 - **Desinstalar:** `Uninstall-DLLM.bat` (Windows), `Uninstall-DLLM.command` (macOS) o `./uninstall.sh` (Linux), o
   la opción *Desinstalar* del asistente.

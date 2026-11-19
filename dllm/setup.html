@@ -48,7 +48,9 @@ details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inl
   <h3>2 · Configuración</h3>
   <div class="box" id="hwbox"></div>
   <div id="f_node" class="hide"><label>Código de unión del orquestador <span class="mut">(opcional)</span></label>
-    <textarea id="join" placeholder="DLLM1-…   (vacío: el orquestador reclamará este equipo desde su panel)"></textarea><div class="mut">Lo muestra el orquestador al terminar su instalación (o con <code>dllm join-code</code>). Sin código, este equipo aparecerá en su panel (Nodos → Equipos esperando unirse) y aquí confirmarás un código de verificación.</div></div>
+    <textarea id="join" placeholder="DLLM1-…   (vacío: el orquestador reclamará este equipo desde su panel)"></textarea><div class="mut">Lo muestra el orquestador al terminar su instalación (o con <code>dllm join-code</code>). Sin código, este equipo aparecerá en su panel (Nodos → Equipos esperando unirse) y aquí confirmarás un código de verificación.</div>
+    <label>IP del orquestador <span class="mut">(opcional, solo sin código)</span></label>
+    <input id="orchip" placeholder="192.168.1.10   (si el orquestador ya está activo y no os encontráis por la red)"><div class="mut">El nodo se anunciará directamente a esa IP en vez de por broadcast. Si aun así no aparece, en el orquestador: Nodos → <b>Añadir por IP</b> o <b>Buscar en la red</b>.</div></div>
   <label>Carpeta de DLLM</label>
     <div style="display:flex;gap:8px"><input id="idir" style="flex:1" onchange="freeSpace()"><button type="button" class="sec" onclick="pickDir()">Examinar…</button></div>
     <div class="mut" style="font-size:13px;margin-top:4px">Aquí se instalan llama.cpp (<code>llama.cpp</code>) y, en el orquestador, los modelos (<code>models</code>). La configuración y el secreto del clúster se guardan aparte, protegidos, en tu carpeta de usuario (<code>.dllm</code>).</div>
@@ -161,7 +163,7 @@ async function install(){
     bin_dir:$('bindir').value||null,install_dir:$('idir').value,firewall:$('fw').checked};
   if(D.keep_models&&$('idir').value===D.keep_models)o.models_dir=D.keep_models;
   if(role!=='orchestrator'){o.limits_mode=lm();if(lm()==='manual'){o.share=+$('share').value;o.mem_gb=$('mem').value||null;o.threads=$('threads').value||null}}
-  if(role==='node'){o.join_code=$('join').value;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null}
+  if(role==='node'){o.join_code=$('join').value;o.orch_ip=$('orchip').value.trim()||null;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null}
   try{await api('POST','/api/install',o)}catch(e){$('e2').textContent=e.message;return}
   since=0;$('log').innerHTML='';$('e3').textContent='';$('back3').classList.add('hide');go(3);poll=setInterval(tick,700);tick()
 }

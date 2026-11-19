@@ -64,7 +64,8 @@ fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prue
 6. Nodo instalado **sin código** que no sale en *Equipos esperando unirse*: los anuncios van por broadcast al puerto
    UDP 50999 y no cruzan subredes ni VPN; usa el código de unión. Si al reclamarlo «caduca», confirma en el nodo en
    menos de 5 min (página final del asistente o `dllm pair`). Si el código no coincide, **rechaza**: otro equipo de la
-   red ha intentado reclamarlo.
+   red ha intentado reclamarlo. Alternativas sin broadcast: en el panel, **Nodos → Añadir por IP** o **Buscar en la red**; al
+   instalar el nodo, indica la IP del orquestador (`--orch-ip`).
 
 ## Un nodo sale excluido del reparto
 
@@ -72,7 +73,7 @@ fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prue
 
 | Motivo | Solución |
 |---|---|
-| `red X Mbps < mínimo 800 Mbps` | Cable/switch Gigabit; revisa negociación (`ethtool eth0`, debe decir 1000Mb/s). Último recurso: `--min-mbps` |
+| `red X Mbps < mínimo 800 Mbps` | Cable/switch Gigabit; revisa negociación (`ethtool eth0`, debe decir 1000Mb/s). Último recurso: `--min-mbps`, o *Nodos → Usar igualmente* para ese nodo (modo forzado, pide confirmación). Si cambias el cable, repite *Medir la red* |
 | `build distinta (…); se le pedirá actualizar` | Normal: el nodo instalará solo la build del orquestador en unos minutos («actualizando llama.cpp … %») |
 | `build distinta y la actualización falló: …` | Sin Internet en el nodo, o no hay paquete para su sistema/backend: instala esa build a mano con `--bin-dir`, o reinstala el nodo con el código actual |
 | `build distinta (…): reinstala el nodo…` | El nodo tiene la actualización automática desactivada: reinstálalo con el código de unión actual |
