@@ -43,8 +43,9 @@ dllm uninstall [--purge] # desinstalar (con --purge borra también configuració
   Equipos esperando unirse); confirma en el nodo el código de verificación. Si no aparece, indica la IP del
   orquestador en el asistente del nodo, o usa Nodos → Añadir por IP / Buscar en la red en el orquestador.
 - **Abrir el panel:** acceso directo *DLLM* (o `Open-DLLM.bat`); la consola se esconde y reaparece si cierras el navegador.
-- **Desinstalar:** `Uninstall-DLLM.bat` (Windows), `Uninstall-DLLM.command` (macOS) o `./uninstall.sh` (Linux), o
-  la opción *Desinstalar* del asistente.
+- **Desinstalar:** `Uninstall-DLLM.bat` (Windows), `Uninstall-DLLM.command` (macOS) o `./uninstall.sh` (Linux), (programa aparte del
+  instalador; en un orquestador ofrece guardar antes una copia de la configuración).
+- **Recuperar un orquestador:** instálalo y en el primer paso elige *Restaurar desde una copia* (fichero `.dllmbak`).
 - Todos los equipos usan la **misma versión de llama.cpp**: la fija el orquestador en el código de unión.
 - Linux con GPU NVIDIA: se usa el paquete oficial CUDA (driver con CUDA ≥ 12.4); si no es posible, el asistente prueba
   Vulkan y luego CPU. Para una compilación propia: `scripts/build-llamacpp.sh cuda` y `--bin-dir`.

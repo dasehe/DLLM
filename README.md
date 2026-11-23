@@ -60,8 +60,9 @@ El asistente elige el backend más rápido para cada equipo (**CUDA** en NVIDIA,
 Metal en Mac; CPU) y, si falla, prueba el siguiente. Después abre el panel con el acceso directo **DLLM**: en el propio
 orquestador no pide contraseña, y el modelo recibe la **fecha y hora del servidor**.
 Todo lo pesado (llama.cpp y modelos) va a la **carpeta de DLLM** que elijas en el asistente. En Windows el asistente
-abre en el cortafuegos solo los puertos necesarios, limitados a tu red. Para quitarlo: `Uninstall-DLLM.bat`,
-`Uninstall-DLLM.command` o `./uninstall.sh` (o *Desinstalar* en el asistente).
+abre en el cortafuegos solo los puertos necesarios, limitados a tu red. Para quitarlo hay un programa aparte,
+separado del instalador: `Uninstall-DLLM.bat`, `Uninstall-DLLM.command` o `./uninstall.sh` (ofrece una copia previa de la
+configuración). Si pierdes un orquestador, el instalador tiene *Restaurar desde una copia*.
 
 Después abre el panel (`http://127.0.0.1:8080` en el orquestador), comprueba que ves los nodos, añade un modelo en
 **Añadir modelos** (busca en Hugging Face o escribe un nombre de Ollama, p. ej. `qwen2.5:7b`), elígelo y pulsa
@@ -90,6 +91,7 @@ Panel, CLI, API, métricas para Prometheus/Zabbix: **[docs/USO.md](docs/USO.md)*
 
 | Documento | Contenido |
 |---|---|
+| [Integraciones](docs/INTEGRACIONES.md) | AnythingLLM, Open WebUI y herramientas (function calling) |
 | [Instalación](docs/INSTALACION.md) | Asistente, instalación desatendida, sin Internet, GPU, cortafuegos, desinstalar |
 | [Uso](docs/USO.md) | Panel web, CLI, API OpenAI, carga de modelos, métricas, ejemplos |
 | [Arquitectura](docs/ARQUITECTURA.md) | Componentes, flujo, scheduler, puertos, límites |

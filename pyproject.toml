@@ -27,4 +27,4 @@ dllm = "dllm.cli:main"
 packages = ["dllm"]
 
 [tool.setuptools.package-data]
-dllm = ["ui.html", "setup.html"]
+dllm = ["ui.html", "setup.html", "uninstall.html"]

@@ -302,3 +302,16 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 - **Modo forzado**: `allow_slow` por nodo (en `nodes.json`) hace que `scheduler.plan` no excluya el nodo por debajo de
   `min_mbps` y añada un aviso. Activarlo exige `confirm: true` en la API.
 - **Baja**: `Registry.remove` elimina el nodo y, si seguía anunciándose, ignora sus beacons 10 min (`banned`).
+
+## Lanzamiento directo en GPU local, herramientas y copias (0.7)
+
+- **Directo local:** si el plan asigna todo el modelo a un único dispositivo de un nodo que es este mismo equipo
+  (`is_local_host`), `_launch_llama` usa `--device <dev>` sin `--rpc`: no hay `rpc-server` ni túnel para ese slot y
+  `_teardown` no llama a `/rpc/stop`. El libro de recursos solo reserva ese dispositivo, así que otros slots siguen
+  usando el resto de nodos. Se identifica la GPU local con `devices.probe_llama_server`; si no casa, vuelve a RPC.
+- **Herramientas:** `gguf.read_model` extrae `chat_template`/`tool_template`; el ajuste `tools` decide `--jinja`.
+  `/v1/models` publica capacidades; el proxy no toca `tools`/`tool_calls`.
+- **Copias:** `backup.py` (ZIP + manifiesto sha256; cifrado stdlib PBKDF2 + HMAC) es independiente del orquestador; lo
+  usan la API, el CLI, el instalador (`Setup.install(restore=…)`) y el desinstalador (copia previa).
+- **Instalador / desinstalador:** `wizard._WebState.mode` sirve `setup.html` o `uninstall.html`; `/api/uninstall`
+  solo existe en modo desinstalador.

@@ -283,7 +283,8 @@ KV_TYPES = ("f16", "q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl", "bf16", "f3
 ENUMS = {"cache_type_k": KV_TYPES, "cache_type_v": KV_TYPES, "flash_attn": ("auto", "on", "off"),
          "rope_scaling": ("none", "linear", "yarn"), "datetime": ("datetime", "date", "off"),
          "placement": ("auto", "split", "node"), "engine": ("llamacpp",),
-         "device_policy": ("auto", "gpu_strict", "cpu_only", "gpu_with_cpu_fallback")}
+         "device_policy": ("auto", "gpu_strict", "cpu_only", "gpu_with_cpu_fallback"),
+         "tools": ("auto", "on", "off")}
 BOOLS = ("embeddings",)
 # ajuste → opción de llama-server (comprobadas en su documentación)
 LOAD_FLAGS = {"cache_type_k": "-ctk", "cache_type_v": "-ctv", "flash_attn": "-fa", "batch_size": "-b",
@@ -503,7 +504,8 @@ class Manager:
             try:
                 m = gguf.read_model(str(p))
                 self._meta_cache[key] = {"arch": m["arch"], "n_layers": m["n_layers"], "ctx_train": m["ctx_train"],
-                                         "general_name": m["name"], "size": m["size"], "parts": m["parts"]}
+                                         "general_name": m["name"], "size": m["size"], "parts": m["parts"],
+                                         "chat_template": m["chat_template"], "tool_template": m["tool_template"]}
             except Exception as e:
                 self._meta_cache[key] = {"error": f"no se pudo leer: {e}", "size": p.stat().st_size, "parts": 1}
         return self._meta_cache[key]
@@ -541,8 +543,16 @@ class Manager:
                 item["mmproj_candidates"] = self.mmproj_candidates(name)
             except ModelError:
                 item["mmproj"], item["mmproj_candidates"] = None, []
+            item["vision"] = bool(item.get("mmproj"))
             out.append(item)
         return out
+
+    def list_one(self, name):
+        """Metadatos de un solo modelo (sin recorrer toda la carpeta)."""
+        try:
+            return dict(self._meta(self.resolve(name)))
+        except ModelError:
+            return {}
 
     def delete(self, name):
         p = self.resolve(name)

@@ -132,4 +132,7 @@ def read_model(path):
         "ctx_train": g("context_length"),
         "kv_layers": kv_layout(meta, arch, g("block_count"), g("embedding_length"), n_head),
         "n_swa": g("attention.sliding_window"),
+        "chat_template": bool(meta.get("tokenizer.chat_template")),
+        # la plantilla maneja herramientas (llama.cpp con --jinja las traduce al formato propio de cada modelo)
+        "tool_template": bool(re.search(r"\btools?\b|tool_call|<tool", str(meta.get("tokenizer.chat_template") or ""))),
     }

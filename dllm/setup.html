@@ -20,6 +20,8 @@ button{font:inherit;padding:9px 18px;border-radius:7px;border:0;background:var(-
 .err{color:var(--bad)}.ok{color:var(--ok)}.warn{color:var(--warn)}code,pre{font:12px monospace}pre{white-space:pre-wrap;word-break:break-all;margin:6px 0}
 .hide{display:none}.st{display:flex;gap:10px;padding:5px 0}.st span:first-child{width:18px}
 details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.up{background:var(--ok)}
+.ic{font-size:20px;margin-right:4px}.card{transition:border-color .15s,transform .15s}.card:hover{transform:translateY(-1px)}button{transition:opacity .15s}button:hover:not(:disabled){opacity:.88}
+.steps+.lbl{display:flex;margin:-12px 0 10px;font-size:12px;color:var(--mut)}.lbl span{flex:1}
 </style>
 </head>
 <body>
@@ -27,20 +29,22 @@ details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inl
 <h1>Instalar DLLM</h1>
 <div class="mut" id="sub">Detectando tu equipo…</div>
 <div class="steps"><div id="s1" class="on"></div><div id="s2"></div><div id="s3"></div><div id="s4"></div></div>
+<div class="lbl"><span>Papel</span><span>Ajustes</span><span>Instalación</span><span>Listo</span></div>
 
 <section id="p1">
   <h3>1 · ¿Qué quieres hacer con este equipo?</h3>
   <div class="cards">
-    <div class="card" data-role="orchestrator" onclick="pick('orchestrator')"><b>Orquestador</b><span class="mut">Reparte el modelo entre nodos y ofrece la API y el panel. Solo uno por clúster.</span></div>
-    <div class="card" data-role="node" onclick="pick('node')"><b>Nodo</b><span class="mut">Presta su CPU/GPU a un orquestador. Necesitarás su código de unión.</span></div>
-    <div class="card" data-role="both" onclick="pick('both')"><b>Ambos</b><span class="mut">Orquestador que además aporta su propia CPU/GPU.</span></div>
+    <div class="card" data-role="orchestrator" onclick="pick('orchestrator')"><b><span class="ic">🧠</span> Orquestador</b><span class="mut">Reparte el modelo entre nodos y ofrece la API y el panel. Solo uno por clúster.</span></div>
+    <div class="card" data-role="node" onclick="pick('node')"><b><span class="ic">🖥️</span> Nodo</b><span class="mut">Presta su CPU/GPU a un orquestador. Necesitarás su código de unión.</span></div>
+    <div class="card" data-role="both" onclick="pick('both')"><b><span class="ic">⚙️</span> Ambos</b><span class="mut">Orquestador que además aporta su propia CPU/GPU.</span></div>
   </div>
-  <div id="uninst" class="box hide"><b>DLLM ya está instalado en este equipo</b> <span class="mut" id="uninst_info"></span>
-    <div class="mut">Para reinstalar o cambiar de papel, elige arriba. Para quitarlo:</div>
-    <label style="font-weight:400"><input type="checkbox" id="un_purge" style="width:auto" checked> Borrar también llama.cpp y la configuración</label>
-    <label style="font-weight:400"><input type="checkbox" id="un_models" style="width:auto"> Borrar también los modelos descargados (solo si están en la carpeta de DLLM)</label>
-    <div class="row" style="margin-top:8px"><span class="err" id="un_err"></span><button class="sec" onclick="uninstall()">Desinstalar</button></div>
-    <div id="un_log" class="mut"></div></div>
+  <div id="exist" class="box hide"><b>DLLM ya está instalado en este equipo</b> <span class="mut" id="exist_info"></span>
+    <div class="mut">Elegir un papel y continuar <b>reinstala</b> (conserva el secreto del clúster). Para quitar DLLM usa el programa <b>Desinstalar DLLM</b>, que es independiente de este instalador.</div></div>
+  <details id="rest" class="box"><summary>🛟 ¿Recuperando un orquestador? Restaurar desde una copia</summary>
+    <div class="mut" style="margin:6px 0">Elige un papel con orquestador (Orquestador o Ambos) y carga aquí la copia exportada (<code>.dllmbak</code>): recuperará el secreto, los nodos, los modelos y los ajustes. Las rutas y el nombre serán los de este equipo.</div>
+    <input type="file" id="rfile" accept=".dllmbak,.zip" onchange="restLoad()">
+    <label>Contraseña <span class="mut">(solo si la copia está cifrada)</span></label><input type="password" id="rpass" autocomplete="off" onchange="restLoad()">
+    <div id="rinfo" class="mut" style="margin-top:6px"></div></details>
   <div class="row"><span></span><button id="n1" disabled onclick="go(2)">Siguiente</button></div>
 </section>
 
@@ -150,7 +154,7 @@ async function init(){
   const p=D.platform,gpu=(p.nvidia.map(g=>g.name).concat(p.other_gpu)).join(', ')||'sin GPU detectada';
   $('ver').textContent='v'+D.version;$('sub').textContent=`${D.hostname} · ${p.os}/${p.arch} · versión ${D.version}`;
   $('hwbox').innerHTML=`<b>Tu equipo</b><br>${gib(p.ram_total)} de RAM · ${p.cores} núcleos · ${gpu}<br><span class="mut">Backend sugerido: <b>${D.suggested_backend}</b>${D.existing?` · <span class="warn">ya hay una configuración (${D.existing.role}); se sustituirá</span>`:''}</span>`;
-  if(D.existing){$('uninst').classList.remove('hide');$('uninst_info').textContent=`(rol ${D.existing.role}${D.existing.install_dir?' · '+D.existing.install_dir:''})`;
+  if(D.existing){$('exist').classList.remove('hide');$('exist_info').textContent=`(rol ${D.existing.role}${D.existing.install_dir?' · '+D.existing.install_dir:''})`;
     if(D.existing.install_dir)D.default_install_dir=D.existing.install_dir;
     else if(D.existing.role!=='node'&&D.existing.models_dir)D.default_install_dir=D.keep_models=D.existing.models_dir}  // de ≤0.3.5: misma carpeta, los modelos se quedan donde están
   $('idir').value=D.default_install_dir;$('name').value=D.hostname;freeSpace();
@@ -163,7 +167,7 @@ async function install(){
     bin_dir:$('bindir').value||null,install_dir:$('idir').value,firewall:$('fw').checked};
   if(D.keep_models&&$('idir').value===D.keep_models)o.models_dir=D.keep_models;
   if(role!=='orchestrator'){o.limits_mode=lm();if(lm()==='manual'){o.share=+$('share').value;o.mem_gb=$('mem').value||null;o.threads=$('threads').value||null}}
-  if(role==='node'){o.join_code=$('join').value;o.orch_ip=$('orchip').value.trim()||null;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null}
+  if(role==='node'){o.join_code=$('join').value;o.orch_ip=$('orchip').value.trim()||null;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null;if(REST)o.restore=REST}
   try{await api('POST','/api/install',o)}catch(e){$('e2').textContent=e.message;return}
   since=0;$('log').innerHTML='';$('e3').textContent='';$('back3').classList.add('hide');go(3);poll=setInterval(tick,700);tick()
 }
@@ -202,12 +206,14 @@ async function pairTick(){const el=$('pairing');if(!el)return;let v;try{v=await 
 async function pairDecide(ok){try{await api('POST','/api/pairing',{id:PAIR,accept:ok})}catch(e){alert(e.message)}pairTick()}
 async function nodes(){try{const r=await api('GET','/api/nodes');const el=$('nodes');if(!el)return;
   el.innerHTML=r.nodes.length?r.nodes.map(n=>`<div><span class="dot ${n.up?'up':''}"></span>${esc(n.name)} <span class="mut">${esc(n.host)} · ${n.backend||'-'} · ${gib(n.cap_bytes)}</span></div>`).join(''):(r.error?'El orquestador aún está arrancando…':'Todavía ninguno. Instala un nodo con el código de arriba.')}catch(e){}}
-async function uninstall(){
-  if(!confirm('¿Desinstalar DLLM de este equipo?'))return;
-  $('un_err').textContent='';$('un_log').textContent='Desinstalando… (Windows puede pedir permiso de administrador para el cortafuegos)';
-  try{const r=await api('POST','/api/uninstall',{purge:$('un_purge').checked,models:$('un_models').checked});
-    $('un_log').innerHTML=r.done.map(x=>'✅ '+esc(x)).join('<br>')+'<br><b>DLLM se ha desinstalado.</b> Puedes cerrar el asistente o volver a instalarlo eligiendo un papel.';D.existing=null}
-  catch(e){$('un_log').textContent='';$('un_err').textContent=e.message}}
+let REST=null;
+async function restLoad(){const f=$('rfile').files[0],el=$('rinfo');REST=null;if(!f)return;
+  if(f.size>16*2**20){el.innerHTML='<span class="err">Fichero demasiado grande para ser una copia</span>';return}
+  const buf=new Uint8Array(await f.arrayBuffer());let bin='';for(let i=0;i<buf.length;i+=8192)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+8192));
+  const r={data:btoa(bin),pass:$('rpass').value||null};
+  try{const v=await api('POST','/api/restore/preview',r);REST=r;
+    el.innerHTML=`<span class="ok">✅ Copia válida</span> · ${esc(v.host||'')} · ${esc(v.created||'')} · ${(v.models||[]).length} modelo(s) a re-descargar · ${v.model_settings} ajuste(s) de modelo · ${v.nodes_added+v.node_settings} dato(s) de nodos${v.encrypted?' · cifrada':''}`}
+  catch(e){el.innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
 async function quit(){try{await api('POST','/api/quit')}catch(e){}document.body.innerHTML='<main><h1>Asistente cerrado</h1><p class="mut">Ya puedes cerrar esta pestaña. El panel de DLLM sigue funcionando.</p></main>'}
 init();
 const CID=Math.random().toString(36).slice(2,12);  // presencia: si cierras la pestaña sin terminar, la consola reaparece

@@ -3,6 +3,7 @@
 """Orquestador DLLM: descubre agentes, planifica el reparto, lanza llama-server sobre túneles
 autenticados hacia los rpc-server de los nodos, expone una API OpenAI-compatible y se
 recupera solo si un nodo cae."""
+import base64
 import collections
 import hmac
 import http.client
@@ -21,7 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import discovery, engine, eventlog
+from . import backup, discovery, engine, eventlog
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -287,6 +288,8 @@ class Cluster:
         self.state, self.error, self.model, self.ctx = IDLE, "", None, None
         self.plan, self.proc, self.tunnels, self.used = None, None, [], []
         self.llama_port = None
+        self.tools, self.tool_template = False, False  # --jinja activo / la plantilla admite herramientas
+        self.direct = None  # dispositivo local en el que corre llama-server sin RPC (None = reparto por RPC)
         self.driver = engine.driver_for({})
         self.inflight = 0
         self.desired = None  # (nombre, ctx) que el usuario quiere tener cargado
@@ -855,6 +858,53 @@ class Cluster:
         finally:
             self.ondemand_lock.release()
 
+    def test_tools(self, slot):
+        """Prueba real de function calling contra un modelo cargado: le pide usar una herramienta de ejemplo."""
+        c = self.slots.get(int(slot))
+        if not c or c.state != READY or not c.llama_port:
+            raise ValueError("el modelo no está listo")
+        if "embeddings" in c.driver.capabilities():
+            raise ValueError("un modelo de embeddings no usa herramientas")
+        body = {"model": c.model, "temperature": 0, "max_tokens": 200, "stream": False,
+                "messages": [{"role": "user", "content": "¿Qué tiempo hace ahora mismo en Madrid? Usa la herramienta."}],
+                "tools": [{"type": "function", "function": {
+                    "name": "get_weather", "description": "Devuelve el tiempo actual de una ciudad",
+                    "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}],
+                "tool_choice": "auto"}
+        t0 = time.time()
+        cn = http.client.HTTPConnection("127.0.0.1", c.llama_port, timeout=180)
+        try:
+            cn.request("POST", "/v1/chat/completions", body=json.dumps(body), headers={"Content-Type": "application/json"})
+            r = cn.getresponse()
+            raw = r.read()
+        except OSError as e:
+            raise ValueError(f"el modelo no respondió: {e}")
+        finally:
+            cn.close()
+        out = {"slot": c.slot, "model": c.model, "jinja": c.tools, "tool_template": c.tool_template,
+               "seconds": round(time.time() - t0, 1), "status": r.status}
+        try:
+            msg = json.loads(raw)["choices"][0]["message"]
+        except (ValueError, KeyError, IndexError, TypeError):
+            out.update(ok=False, detail=f"respuesta no válida ({r.status}): {raw[:200].decode('utf-8', 'replace')}")
+            return out
+        calls = msg.get("tool_calls") or []
+        if calls and calls[0].get("function", {}).get("name") == "get_weather":
+            try:
+                args = json.loads(calls[0]["function"].get("arguments") or "{}")
+            except ValueError:
+                args = None
+            out.update(ok=args is not None, arguments=args,
+                       detail="el modelo llamó a la herramienta" + ("" if args is not None else " con argumentos no válidos"))
+        else:
+            out.update(ok=False, detail="el modelo respondió con texto en vez de llamar a la herramienta: "
+                       + ("su plantilla no admite herramientas" if not c.tool_template else
+                          "prueba con un modelo/cuantización mayor o revisa el prompt de sistema"),
+                       sample=str(msg.get("content") or "")[:200])
+        self.event(f"prueba de herramientas en {c.model}: {'correcta' if out['ok'] else 'sin llamada a herramienta'}",
+                   level="info" if out["ok"] else "warn", kind="tools", detail={"slot": c.slot})
+        return out
+
     def models_listing(self):
         data = []
         loaded = set()
@@ -865,7 +915,9 @@ class Cluster:
                 data.append({"id": c.model, "object": "model", "owned_by": "dllm",
                              "dllm": {"slot": k, "state": c.state, "pinned": c.pinned,
                                       "activity": "BUSY" if c.inflight else "IDLE",
-                                      "capabilities": sorted(c.driver.capabilities())}})
+                                      "capabilities": sorted(c.driver.capabilities()
+                                                             | ({"tools"} if c.tools and c.tool_template else set())
+                                                             | ({"vision"} if c.mmproj else set()))}})
         if getattr(self.cfg, "on_demand", False):
             for it in self.list_models():
                 if it["name"] not in loaded and not it["name"].startswith("mmproj"):
@@ -891,6 +943,8 @@ class Cluster:
                         "policy": (c.plan or {}).get("policy"),
                         "reserved": dict(self.ledger.res.get(k, {})),
                         "targets": c.targets, "recoveries": c.recoveries,
+                        "direct": c.direct["desc"] if c.direct else None,
+                        "tools": c.tools, "tool_template": c.tool_template, "vision": bool(c.mmproj),
                         "assignments": [{k2: a.get(k2) for k2 in ("name", "layers", "bytes", "device", "backend")}
                                         for a in (c.plan or {}).get("assignments", [])],
                         "metrics": {**c.metrics_req.summary(), **self._live(c)}})
@@ -948,13 +1002,20 @@ class Cluster:
                     rsv = plan.get("reserve") or {}
                     self.ledger.reserve(self.slot, rsv.get("vram"), rsv.get("ram"))
                 used = [self.reg.get(a["node_id"]) for a in plan["assignments"]]
-                for n in used:
-                    self.event(f"arrancando rpc-server en {n.name}" + (f" (slot {self.slot})" if self.slot else ""))
-                    dev = next((a.get("device") for a in plan["assignments"] if a["node_id"] == n.id), None)
-                    call_agent(self.reg.secret, n, "POST", "/rpc/start", {"slot": self.slot, "device": dev}, timeout=40)
-                    self._chk(gen)
+                self.direct = self._direct_device(plan, used)
+                if self.direct:
+                    self.event(f"el modelo cabe en la GPU local ({self.direct['desc']}): se ejecuta directamente, sin RPC",
+                               kind="load")
+                else:
+                    for n in used:
+                        self.event(f"arrancando rpc-server en {n.name}" + (f" (slot {self.slot})" if self.slot else ""))
+                        dev = next((a.get("device") for a in plan["assignments"] if a["node_id"] == n.id), None)
+                        call_agent(self.reg.secret, n, "POST", "/rpc/start", {"slot": self.slot, "device": dev},
+                                   timeout=40)
+                        self._chk(gen)
                 self.used = [n.id for n in used]
-                self.tunnels = [Tunnel(n.host, n.rpc_port, self.reg.secret, self.slot).start() for n in used]
+                self.tunnels = [] if self.direct else [Tunnel(n.host, n.rpc_port, self.reg.secret, self.slot).start()
+                                                       for n in used]
                 self._launch_llama(path, ctx, plan)
                 self._wait_ready(gen)
                 self._set(READY)
@@ -967,6 +1028,26 @@ class Cluster:
                 self.event(f"error: {e}")
                 self._teardown()
                 self._set(ERROR, str(e))
+
+    def _direct_device(self, plan, used):
+        """GPU local en la que ejecutar el modelo sin RPC, o None. Solo si el reparto es un único nodo que es este mismo
+        equipo, en GPU, y llama-server local ve esa GPU. Evita el túnel y rpc-server; los demás modelos siguen
+        pudiendo usar el resto de nodos (y esta GPU: la reserva de VRAM es la misma)."""
+        if getattr(self.cfg, "no_direct_local", False) or len(used) != 1 or not used[0]:
+            return None
+        n, a = used[0], plan["assignments"][0]
+        if a.get("device") == "cpu" or a.get("backend") == "cpu" or not is_local_host(n.host):
+            return None
+        try:
+            if self._local_devs is None:
+                self._local_devs = devices.probe_llama_server(self.cfg.llama_bin)
+        except RuntimeError:
+            return None
+        want = ((n.info or {}).get("device_desc") or "").lower(), ((n.info or {}).get("device") or "").lower()
+        for d in self._local_devs:
+            if not devices.is_cpu(d) and (d["desc"].lower() == want[0] and want[0] or d["name"].lower() == want[1] and want[1]):
+                return d
+        return None
 
     def _launch_llama(self, path, ctx, plan):
         self.llama_port = hw.slot_port({c.llama_port for c in self.slots.values() if c is not self})
@@ -982,10 +1063,19 @@ class Cluster:
         if mp:
             self.mmproj = os.path.basename(mp)
             self.event(f"multimodal: proyector {self.mmproj}")
+        info = self.models.list_one(self.model) if hasattr(self.models, "list_one") else {}
+        mode = st.get("tools", "auto")
+        self.tools = mode == "on" or (mode == "auto" and bool(info.get("chat_template")))
+        self.tool_template = bool(info.get("tool_template"))
+        if self.tools and not self.tool_template:
+            self.event("aviso: la plantilla de este modelo no parece admitir herramientas (tool calling); se activa "
+                       "--jinja pero puede que no devuelva tool_calls", level="warn", kind="load")
         cmd = self.driver.build_command({
-            "bin": self.cfg.llama_bin, "model_path": path, "port": self.llama_port, "ctx": ctx,
-            "rpc": [f"127.0.0.1:{t.port}" for t in self.tunnels], "tensor_split": plan["tensor_split"],
-            "ngl": plan.get("ngl", 999), "device_args": self._device_args(plan) if self.tunnels else [],
+            "jinja": self.tools, "bin": self.cfg.llama_bin, "model_path": path, "port": self.llama_port, "ctx": ctx,
+            "rpc": [f"127.0.0.1:{t.port}" for t in self.tunnels],
+            "tensor_split": None if self.direct else plan["tensor_split"], "ngl": plan.get("ngl", 999),
+            "device_args": (["--device", self.direct["name"]] if self.direct
+                            else self._device_args(plan) if self.tunnels else []),
             "mmproj": mp, "extra": self.cfg.llama_arg or []})
         self.event("lanzando: " + " ".join(cmd))
         self.logbuf.clear()
@@ -1044,14 +1134,14 @@ class Cluster:
             t.stop()
         self.tunnels = []
         self.ledger.release(self.slot)
-        for nid in self.used:
+        for nid in ([] if self.direct else self.used):
             n = self.reg.get(nid)
             if n and self.reg.is_up(n):
                 try:
                     call_agent(self.reg.secret, n, "POST", "/rpc/stop", {"slot": self.slot}, timeout=3)
                 except Exception:
                     pass
-        self.used = []
+        self.used, self.direct = [], None
 
     # ---------------------------------------------------------- vigilancia
     def cfg_auto_sync(self):
@@ -1265,6 +1355,7 @@ class Cluster:
                     if st != 200:
                         raise RuntimeError(d.get("error") or f"HTTP {st}")
                     cl["state"] = "unido"
+                    self.remember_node(cl["host"], cl.get("port") or d.get("port") or 8765)
                     self.event(f"{cl['name']} ({cl['host']}) se ha unido al clúster")
                     return
                 if state in ("rechazada", "caducada", "desconocida"):
@@ -1292,6 +1383,7 @@ class Cluster:
         if info is not None:
             n = self.reg.add(host, port, static=True)
             n.info, n.last_seen, n.last_error = info, time.time(), ""
+            self.remember_node(host, port)
             self.event(f"nodo {n.name} añadido a mano ({host}:{port})", node=n.name, kind="node")
             return {"state": "añadido", "name": n.name}
         r = discovery.probe(host, port, 2.0)
@@ -1303,6 +1395,102 @@ class Cluster:
                              "reinstálalo sin código de unión o desinstálalo y vuelve a instalarlo")
         self.event(f"{host}:{port}: agente libre; iniciando emparejamiento", kind="node")
         return dict(self.claim(host, port), state="reclamando")
+
+    # -- nodos añadidos por IP: se recuerdan entre reinicios (en otra VLAN no se anunciarían solos)
+    @staticmethod
+    def _added_file():
+        return config.home() / "nodes_added.json"
+
+    def added_nodes(self):
+        try:
+            v = json.loads(self._added_file().read_text())
+            return [x for x in v if isinstance(x, dict) and x.get("host")]
+        except (OSError, ValueError):
+            return []
+
+    def remember_node(self, host, port, add=True):
+        cur = [x for x in self.added_nodes() if (x["host"], int(x.get("port") or 8765)) != (host, int(port))]
+        if add:
+            cur.append({"host": host, "port": int(port)})
+        try:
+            self._added_file().parent.mkdir(parents=True, exist_ok=True)
+            self._added_file().write_text(json.dumps(cur, indent=2))
+        except OSError as e:
+            self.event(f"no se pudo guardar la lista de nodos añadidos: {e}", level="warn")
+
+    # ------------------------------------------------------------ copia de seguridad / restauración
+    def inventory(self):
+        """Modelos instalados (para saber cuáles faltan tras restaurar y poder descargarlos de nuevo)."""
+        out = []
+        for m in self.models.list():
+            parts = m["name"].split("/")
+            hf = {"repo": parts[1].replace("__", "/"), "file": parts[-1]} if parts[0] == "hf" and len(parts) >= 3 else None
+            out.append({"name": m["name"], "size": m.get("size"), "source": m.get("source"), "quant": m.get("quant"),
+                        "hf": hf})
+        return out
+
+    def export_backup(self, passphrase, plain=False, include_logs=False):
+        if not plain and len(passphrase or "") < 8:
+            raise ValueError("indica una contraseña de al menos 8 caracteres (o confirma que la quieres sin cifrar)")
+        blob = backup.build(config.home(), self.inventory(), __version__, socket.gethostname(), include_logs,
+                            None if plain else passphrase)
+        self.event("copia de seguridad exportada" + (" SIN cifrar" if plain else " (cifrada)"),
+                   level="warn" if plain else "info", kind="backup")
+        return blob, backup.filename(socket.gethostname())
+
+    @staticmethod
+    def _decode_backup(data):
+        try:
+            return base64.b64decode(data or "", validate=True)
+        except ValueError:
+            raise ValueError("fichero de copia no válido")
+
+    def backup_preview(self, data, passphrase):
+        man, files = backup.open_backup(self._decode_backup(data), passphrase)
+        s = backup.summary(man, files, config.home())
+        have = {m["name"] for m in self.models.list()}
+        s["missing_models"] = [m for m in s["models"] if m.get("name") not in have]
+        return s
+
+    def backup_import(self, data, passphrase, confirm=False):
+        if confirm is not True:
+            raise ValueError("restaurar sustituye la configuración actual: confirma la operación (confirm: true)")
+        man, files = backup.open_backup(self._decode_backup(data), passphrase)
+        actions, safety = backup.restore(files, config.home())
+        for x in json.loads(files.get("nodes_added.json") or b"[]"):
+            try:
+                self.reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)
+            except (ValueError, KeyError, TypeError):
+                pass
+        cfgj = json.loads(files.get("config.json") or b"{}")
+        new_secret = cfgj.get("secret") or (json.loads(files.get("cluster.json") or b"{}")).get("secret")
+        new_key = (cfgj.get("orchestrator") or {}).get("api_key")
+        restart = bool((new_secret and new_secret != self.reg.secret) or (new_key and new_key != self.cfg.api_key))
+        have = {m["name"] for m in self.models.list()}
+        missing = [m for m in man.get("models") or [] if m.get("name") not in have]
+        self.event(f"configuración restaurada desde una copia del {time.strftime('%d/%m/%Y %H:%M', time.localtime(man.get('created') or 0))}"
+                   f" ({len(actions)} elementos)" + ("; hace falta reiniciar DLLM" if restart else ""), kind="backup")
+        return {"ok": True, "actions": actions, "safety_backup": safety, "restart_required": restart,
+                "missing_models": missing}
+
+    def redownload_models(self, names):
+        """Vuelve a descargar de Hugging Face los modelos del inventario que faltan. Los de Ollama o locales no
+        se pueden reconstruir solos: se devuelven como `manual`."""
+        have = {m["name"] for m in self.models.list()}
+        started, manual, failed = [], [], []
+        for it in names or []:
+            if not isinstance(it, dict) or it.get("name") in have:
+                continue
+            hf = it.get("hf")
+            if not hf:
+                manual.append(it.get("name"))
+                continue
+            try:
+                self.models.add_hf(str(hf["repo"]), str(hf["file"]))
+                started.append(it["name"])
+            except Exception as e:
+                failed.append({"name": it.get("name"), "error": str(e)[:160]})
+        return {"started": started, "manual": manual, "failed": failed}
 
     def start_scan(self, cidr=None, port=None):
         """Busca agentes DLLM en un rango de red (por defecto, el /24 del orquestador). Trabajo en segundo plano."""
@@ -1433,6 +1621,7 @@ class Cluster:
         self.reg.remove(nid, 600 if block and up and not n.static else 0)
         self._node_up.pop(nid, None)
         self.claims.pop(n.host, None)
+        self.remember_node(n.host, n.http_port, add=False)
         if not any(x.name == n.name for x in self.reg.all()):
             allns = self.all_node_settings()
             if allns.pop(n.name, None) is not None:
@@ -1607,6 +1796,9 @@ def make_handler(cfg, cl):
                 body = b""
                 if self.command == "POST":
                     n = int(self.headers.get("Content-Length") or 0)
+                    if n > (24 << 20) and not path.startswith("/v1/"):
+                        self.close_connection = True
+                        return self._send(413, {"error": "petición demasiado grande"})
                     body = self.rfile.read(n) if n else b""
                 if path.startswith("/v1/"):
                     return self._proxy(body)
@@ -1697,6 +1889,21 @@ def make_handler(cfg, cl):
                     return self._send(200, cl.set_node_settings(req))
                 if path == "/api/telemetry":
                     return self._send(200, cl.telemetry())
+                if path == "/api/backup/export" and self.command == "POST":
+                    blob, fname = cl.export_backup(req.get("passphrase"), req.get("plain") is True,
+                                                   req.get("include_logs") is True)
+                    return self._send(200, raw=blob, ctype="application/octet-stream",
+                                      headers={"Content-Disposition": f'attachment; filename="{fname}"',
+                                               "X-Filename": fname, "Cache-Control": "no-store"})
+                if path == "/api/backup/preview" and self.command == "POST":
+                    return self._send(200, cl.backup_preview(req.get("data"), req.get("passphrase")))
+                if path == "/api/backup/import" and self.command == "POST":
+                    return self._send(200, cl.backup_import(req.get("data"), req.get("passphrase"),
+                                                            req.get("confirm")))
+                if path == "/api/backup/redownload" and self.command == "POST":
+                    return self._send(200, cl.redownload_models(req.get("models")))
+                if path == "/api/tools/test" and self.command == "POST":
+                    return self._send(200, cl.test_tools(req.get("slot", 0)))
                 if path == "/api/nodes/add" and self.command == "POST":
                     return self._send(200, cl.add_node(req.get("host"), req.get("port")))
                 if path == "/api/nodes/scan":
@@ -1823,6 +2030,11 @@ def run(cfg):
         h, _, p = n.partition(":")
         reg.add(h, int(p or 8765), static=True)
     cl = Cluster(cfg, reg)
+    for x in cl.added_nodes():  # nodos añadidos a mano en otras sesiones
+        try:
+            reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)
+        except ValueError:
+            pass
     for fn in (reg.probe_loop, cl.watchdog, cl.metrics_loop):
         threading.Thread(target=fn, daemon=True).start()
     threading.Thread(target=reg.beacon_loop, args=(cfg.beacon_port,), daemon=True).start()

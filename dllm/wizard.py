@@ -5,6 +5,8 @@
 El frontend web es un servidor LOCAL (127.0.0.1) protegido con token aleatorio y comprobación de Host/Origin,
 porque puede instalar un servicio en el equipo: ninguna otra página o usuario debe poder manejarlo.
 """
+import base64
+import binascii
 import json
 import os
 import pkgutil
@@ -22,7 +24,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, auth, config, devices, discovery, hw, installer, legal_notice, limits, presence
+from . import __version__, auth, backup, config, devices, discovery, hw, installer, legal_notice, limits, presence
 from .util import FastHTTPServer
 
 ROLES = ("orchestrator", "node", "both")
@@ -154,6 +156,9 @@ class Setup:
             self.emit(0, "run")
             n = self.normalize(o)
             role, info = n["role"], installer.platform_info()
+            rest = self.open_restore(o.get("restore")) if o.get("restore") else None
+            if rest and role == "node":
+                raise ValueError("una copia de un orquestador no se restaura en un nodo")
             old = config.load()
             cfg = config.default(role)
             cfg["name"], cfg["models_dir"], cfg["install_dir"] = n["name"], n["models_dir"], n["install_dir"]
@@ -252,6 +257,11 @@ class Setup:
                     except OSError as e:
                         raise RuntimeError(f"no se pudo crear la carpeta de modelos {cfg['models_dir']}: {e}")
                 config.save(cfg)
+                if rest:  # recuperación: secreto, API key, modelos y nodos de la copia; rutas y nombre de esta máquina
+                    acts, _ = backup.restore(rest[1], config.home(), safety=False)
+                    self.emit(2, "ok", "copia restaurada: " + ", ".join(acts), label="Restauración")
+                    cfg = config.load() or cfg
+                    o_ = cfg["orchestrator"]
             self.emit(2, "ok", str(config.path()))
 
             # 3 · programa
@@ -318,6 +328,19 @@ class Setup:
         except Exception as e:
             self.emit(step, "err", str(e))
             raise
+
+    @staticmethod
+    def open_restore(r):
+        """Abre una copia (base64 + contraseña opcional) y devuelve (manifiesto, ficheros). Lanza ValueError."""
+        try:
+            blob = base64.b64decode((r or {}).get("data") or "", validate=True)
+            return backup.open_backup(blob, (r or {}).get("pass") or None)
+        except (binascii.Error, ValueError) as e:  # BackupError hereda de ValueError
+            raise ValueError(str(e) or "la copia no es válida")
+
+    def restore_preview(self, r):
+        man, files = self.open_restore(r)
+        return backup.summary(man, files, config.home())
 
     @staticmethod
     def join_code(cfg, advertise=None):
@@ -624,9 +647,73 @@ def run_tui(a):
 
 
 # ================================================================ navegador
+def _dir_size(p, cap=5000):
+    t, n = 0, 0
+    try:
+        for f in Path(p).rglob("*"):
+            n += 1
+            if n > cap:
+                break
+            try:
+                t += f.stat().st_size if f.is_file() else 0
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return t
+
+
+def uninstall_inspect(dry=False):
+    """Qué hay instalado y qué se borraría con cada opción (sin tocar nada)."""
+    cfg = config.load()
+    if not cfg:
+        return {"installed": False}
+    idir, mdir = cfg.get("install_dir"), cfg.get("models_dir")
+    own_models = bool(idir and mdir and Path(mdir).resolve() == Path(idir).resolve() / "models")
+    models = [f for f in Path(mdir).glob("*.gguf")] if mdir and Path(mdir).is_dir() else []
+    return {"installed": True, "role": cfg["role"], "name": cfg.get("name"), "install_dir": idir,
+            "home": str(config.home()), "models_dir": mdir, "models_own": own_models,
+            "models_count": len(models), "models_bytes": sum(f.stat().st_size for f in models if f.exists()),
+            "llama_bytes": _dir_size(config.llama_dir(cfg)), "config_bytes": _dir_size(config.home()),
+            "can_backup": cfg["role"] != "node",
+            "plan_keep": installer.uninstall_all(cfg, purge=False, dry_run=True),
+            "plan_purge": installer.uninstall_all(cfg, purge=True, models=False, dry_run=True),
+            "plan_all": installer.uninstall_all(cfg, purge=True, models=True, dry_run=True)}
+
+
+def uninstall_run(body, dry=False):
+    """Desinstala. `backup`: guarda antes una copia de la configuración (opcionalmente cifrada) en `backup_dir`."""
+    cfg = config.load() or {}
+    out = {"done": [], "backup": None}
+    if body.get("backup"):
+        if not cfg or cfg.get("role") == "node":
+            raise ValueError("los nodos no tienen configuración de clúster que guardar")
+        d = Path(os.path.expanduser(body.get("backup_dir") or "~")).resolve()
+        if not d.is_dir():
+            raise ValueError(f"la carpeta de la copia no existe: {d}")
+        home = config.home()
+        try:
+            d.relative_to(home.resolve())
+            raise ValueError("guarda la copia fuera de la carpeta de configuración: se borraría con ella")
+        except ValueError as e:
+            if "guarda la copia" in str(e):
+                raise
+        blob = backup.build(home, host=cfg.get("name") or "", passphrase=body.get("backup_pass") or None)
+        f = d / backup.filename(cfg.get("name") or "")
+        if not dry:
+            fd = os.open(str(f), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(blob)
+        out["backup"] = str(f)
+    out["done"] = installer.uninstall_all(cfg, purge=bool(body.get("purge", True)), models=bool(body.get("models")),
+                                          dry_run=dry)
+    return out
+
+
 class _WebState:
-    def __init__(self, token, port, dry):
+    def __init__(self, token, port, dry, mode="install"):
         self.token, self.port, self.setup, self.last = token, port, Setup(dry_run=dry), time.time()
+        self.mode, self.dry = mode, dry
         self.presence = presence.Presence()
 
 
@@ -686,7 +773,8 @@ def _make_web_handler(st):
             sp = st.setup
             try:
                 if path == "/":
-                    html = pkgutil.get_data("dllm", "setup.html").decode().replace("__TOKEN__", st.token)
+                    page = "uninstall.html" if st.mode == "uninstall" else "setup.html"
+                    html = pkgutil.get_data("dllm", page).decode().replace("__TOKEN__", st.token)
                     return self._send(200, raw=html.encode(), ctype="text/html; charset=utf-8")
                 if path == "/api/detect":
                     return self._send(200, sp.detect())
@@ -707,11 +795,16 @@ def _make_web_handler(st):
                     return self._send(200, browse_dir((q.get("path") or [None])[0]))
                 if path == "/api/mkdir" and self.command == "POST":
                     return self._send(200, make_dir(body.get("path"), body.get("name")))
+                if path == "/api/inspect":
+                    return self._send(200, uninstall_inspect())
                 if path == "/api/uninstall" and self.command == "POST":
+                    if st.mode != "uninstall":
+                        raise RuntimeError("la desinstalación está en su propio programa: ejecuta Uninstall-DLLM")
                     if sp.running:
                         raise RuntimeError("hay una instalación en curso")
-                    return self._send(200, {"done": installer.uninstall_all(
-                        purge=bool(body.get("purge", True)), models=bool(body.get("models")), dry_run=sp.dry)})
+                    return self._send(200, uninstall_run(body, dry=sp.dry))
+                if path == "/api/restore/preview" and self.command == "POST":
+                    return self._send(200, sp.restore_preview(body))
                 if path == "/api/pairing":
                     cfg = config.load() or {}
                     port = (cfg.get("agent") or {}).get("port", 8765)
@@ -741,16 +834,16 @@ def has_display():
     return sys.platform in ("win32", "darwin") or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
-def run_web(a):
+def run_web(a, mode="install"):
     token = secrets.token_urlsafe(16)
     srv = FastHTTPServer(("127.0.0.1", a.port or 0), BaseHTTPRequestHandler)
     port = srv.server_address[1]
-    st = _WebState(token, port, a.dry_run)
+    st = _WebState(token, port, a.dry_run, mode)
     srv.RequestHandlerClass = _make_web_handler(st)
     srv.daemon_threads = True
     url = f"http://127.0.0.1:{port}/?t={token}"
     closed = threading.Event()
-    print(f"Asistente de DLLM en: {url}\n(solo accesible desde este equipo; ciérralo desde la propia página o con Ctrl+C)", flush=True)
+    print(f"{'Desinstalador' if mode == 'uninstall' else 'Asistente'} de DLLM en: {url}\n(solo accesible desde este equipo; ciérralo desde la propia página o con Ctrl+C)", flush=True)
     if not a.no_browser:
         try:
             webbrowser.open(url)
@@ -783,6 +876,10 @@ def run_web(a):
     if res == "salir":
         srv.shutdown()
     return 0
+
+
+def main_uninstall(a):
+    return run_web(a, "uninstall")
 
 
 def main(a):

@@ -17,13 +17,15 @@ def _kv_u32(k, v):
     return _s(k) + struct.pack("<I", 4) + struct.pack("<I", v)
 
 
-def write_gguf(path, size_bytes, n_layers=32, n_embd=4096, n_head=32, n_head_kv=8, ctx=8192, arch="llama"):
+def write_gguf(path, size_bytes, n_layers=32, n_embd=4096, n_head=32, n_head_kv=8, ctx=8192, arch="llama", chat_template=None):
     kvs = [_kv_str("general.architecture", arch), _kv_str("general.name", "mock-model"),
            _kv_u32(f"{arch}.block_count", n_layers), _kv_u32(f"{arch}.embedding_length", n_embd),
            _kv_u32(f"{arch}.attention.head_count", n_head), _kv_u32(f"{arch}.attention.head_count_kv", n_head_kv),
            _kv_u32(f"{arch}.context_length", ctx),
            # array de strings (como el vocabulario): el lector debe saltárselo
            _s("tokenizer.ggml.tokens") + struct.pack("<IIQ", 9, 8, 3) + _s("a") + _s("bb") + _s("ccc")]
+    if chat_template:
+        kvs.append(_kv_str("tokenizer.chat_template", chat_template))
     with open(path, "wb") as f:
         f.write(b"GGUF" + struct.pack("<IQQ", 3, 0, len(kvs)))
         for kv in kvs:

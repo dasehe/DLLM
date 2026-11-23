@@ -89,7 +89,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <span style="flex:1"></span><label class="advsw" title="Muestra todos los parámetros técnicos (reparto, caché, muestreo, versiones…)"><input type="checkbox" id="advsw" onchange="setAdv(this.checked)"> Modo avanzado</label><button class="sec sm" onclick="setKey()">API key</button></div>
   <nav id="nav">
     <button data-t="mon" class="on">📊 Monitor</button><button data-t="nod">🖥️ Nodos</button><button data-t="mod">🧠 Modelos</button>
-    <button data-t="chat">💬 Chat</button><button data-t="ev">📜 Registros</button>
+    <button data-t="chat">💬 Chat</button><button data-t="con">🔌 Conectar</button><button data-t="ev">📜 Registros</button><button data-t="sys">⚙️ Sistema</button>
   </nav>
 </header>
 <main>
@@ -188,6 +188,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
           <label class="adv">Lote físico (ubatch)<input id="ms_ubatch_size" type="number" min="16" step="16" placeholder="512"></label>
           <label>Dispositivo<select id="ms_device_policy"><option value="">automático</option><option value="gpu_strict">solo GPU (error si no cabe)</option><option value="cpu_only">solo CPU (RAM del orquestador)</option><option value="gpu_with_cpu_fallback">GPU y, si no cabe, CPU</option></select><span class="help">«Solo CPU» no gasta VRAM: útil para modelos auxiliares fijados.</span></label>
           <label>Reparto<select id="ms_placement"><option value="">automático</option><option value="split">repartido entre nodos</option><option value="node">en un único nodo</option></select><span class="help">Los modelos pequeños (embeddings, voz) rinden más sin cruzar la red.</span></label>
+          <label class="adv">Herramientas (function calling)<select id="ms_tools"><option value="">automático (según la plantilla)</option><option value="on">forzar activadas</option><option value="off">desactivadas</option></select><span class="help">Activa <code>--jinja</code> para que el modelo acepte <code>tools</code> y devuelva <code>tool_calls</code>.</span></label>
           <label class="adv">Modo embeddings<select id="ms_embeddings"><option value="">no</option><option value="true">sí (atiende /v1/embeddings)</option></select></label>
           <label class="adv">Peticiones simultáneas<input id="ms_parallel" type="number" min="1" max="64" step="1" placeholder="auto"><span class="help">El contexto se reparte entre ellas.</span></label>
           <label class="adv">RoPE · escalado<select id="ms_rope_scaling"><option value="">del modelo</option><option>none</option><option>linear</option><option>yarn</option></select></label>
@@ -242,6 +243,58 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
       <input type="file" id="att" accept="image/*,audio/wav,audio/mpeg,.wav,.mp3" class="hide" onchange="attName()">
       <button class="sec hide" id="attb" onclick="$('att').click()" title="Adjuntar imagen o audio">📎 Adjuntar</button><button onclick="send()">Enviar</button></div>
     <div class="mut" id="attn" style="font-size:12px"></div>
+  </section>
+</div>
+
+<!-- ============================== CONECTAR ============================== -->
+<div id="t-con" class="tab hide">
+  <section><h2>Conecta tu aplicación a DLLM</h2>
+    <div class="mut">DLLM habla el protocolo de OpenAI en <code>/v1</code>: sirve para AnythingLLM, Open WebUI, Continue, LangChain, el SDK de OpenAI… El campo <code>model</code> elige el modelo; las herramientas (<code>tools</code>) llegan intactas al modelo.</div>
+    <div class="kpis" style="margin-top:12px">
+      <div class="card"><div class="l mut">URL base</div><div class="row"><code id="c_url" style="font-size:14px"></code><button class="sec sm" onclick="cp('c_url')">Copiar</button></div><div class="mut" id="c_urlnote" style="font-size:12px"></div></div>
+      <div class="card"><div class="l mut">API key</div><div class="row"><code id="c_key" style="font-size:14px"></code><button class="sec sm" onclick="cp('c_keyraw')">Copiar</button></div><span id="c_keyraw" class="hide"></span><div class="mut" id="c_keynote" style="font-size:12px"></div></div>
+      <div class="card"><div class="l mut">Estado de la conexión</div><div class="row"><span id="c_test" class="mut">—</span><button class="sec sm" onclick="conTest()">Probar</button></div></div>
+    </div>
+  </section>
+  <section><h2>Modelos disponibles y qué saben hacer</h2>
+    <div class="scroll" style="max-height:none"><table><thead><tr><th>Nombre (campo model)</th><th>Estado</th><th>Capacidades</th><th></th></tr></thead><tbody id="c_models"></tbody></table></div>
+    <div class="mut" style="font-size:12px;margin-top:6px">🛠 herramientas = el modelo puede llamar a funciones (function calling). Si un modelo no las admite, el front-end deberá usar su propio modo de «agente» por prompt. «Probar» le pide usar una herramienta de ejemplo y lo comprueba de verdad.</div>
+    <div id="c_tooltest" style="margin-top:8px"></div>
+  </section>
+  <section><h2>Cómo configurarlo</h2>
+    <div class="tabs" id="c_tabs"></div><div id="c_snip"></div>
+  </section>
+</div>
+
+<!-- ============================== SISTEMA ============================== -->
+<div id="t-sys" class="tab hide">
+  <section><h2>Copia de seguridad</h2>
+    <div class="mut">Un solo fichero con <b>toda la configuración</b>: secreto del clúster (los nodos vuelven a conectar solos), API key, parámetros de cada modelo, ajustes de nodos, nodos añadidos por IP, token de Hugging Face y la lista de modelos instalados (los modelos en sí no se incluyen: pesan demasiado; se pueden volver a descargar).</div>
+    <div class="grid" style="margin-top:12px">
+      <div class="card"><h3>💾 Crear copia</h3>
+        <div class="form" style="margin-top:10px">
+          <label>Contraseña (mín. 8)<input id="bk_pw" type="password" autocomplete="new-password"></label>
+          <label>Repite la contraseña<input id="bk_pw2" type="password" autocomplete="new-password"></label>
+        </div>
+        <label class="switch adv" style="margin-top:8px"><input type="checkbox" id="bk_logs"> Incluir también los registros históricos</label>
+        <label class="switch adv"><input type="checkbox" id="bk_plain"> Sin cifrar (⚠ contiene el secreto del clúster)</label>
+        <div class="row" style="margin-top:10px"><button onclick="bkExport()">Descargar copia</button><span id="bk_msg" class="mut"></span></div>
+        <div class="mut" style="font-size:12px;margin-top:8px">Guárdala fuera de este equipo (otro disco, NAS, gestor de contraseñas). Sin la contraseña no se puede abrir.</div></div>
+      <div class="card"><h3>♻️ Restaurar copia</h3>
+        <div class="form" style="margin-top:10px">
+          <label>Fichero de la copia<input id="bk_file" type="file" accept=".dllmbak,.zip" onchange="$('bk_prev').innerHTML='';$('bk_go').classList.add('hide')"></label>
+          <label>Contraseña<input id="bk_rpw" type="password" autocomplete="off"></label></div>
+        <div class="row" style="margin-top:10px"><button class="sec" onclick="bkPreview()">Ver qué contiene</button></div>
+        <div id="bk_prev" style="margin-top:10px"></div>
+        <div id="bk_go" class="hide"><label class="switch" style="margin-top:6px"><input type="checkbox" id="bk_ok"> Entiendo que sustituye la configuración actual (se guarda una copia previa)</label>
+          <div class="row" style="margin-top:8px"><button onclick="bkImport()">Restaurar ahora</button></div></div>
+        <div id="bk_res" style="margin-top:10px"></div></div>
+    </div>
+  </section>
+  <section><h2>Recuperación ante desastres</h2>
+    <div class="mut" style="line-height:1.7">1. En el equipo nuevo, instala DLLM con el <b>Instalador</b> y elige <b>Restaurar desde una copia</b> (o, con DLLM ya instalado, usa «Restaurar copia» aquí o <code>dllm backup import</code>).<br>
+    2. Los nodos siguen funcionando: la copia lleva el secreto del clúster, así que se reconectan solos (si no estaban en la misma red, quedan listados porque se recuerdan los añadidos por IP).<br>
+    3. Descarga de nuevo los modelos que falten (botón en el resultado de la restauración).</div>
   </section>
 </div>
 
@@ -302,7 +355,7 @@ const mbps=b=>b==null?na:(b>=1e6?(b/1e6).toFixed(1)+' MB/s':(b/1e3).toFixed(0)+'
 function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   document.querySelectorAll('.tab').forEach(d=>d.classList.toggle('hide',d.id!=='t-'+t));
   try{history.replaceState(null,'','#'+t)}catch(e){}
-  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad()}
+  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad();if(t==='con')conLoad();if(t==='sys')sysLoad()}
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 /* ---------- estado general ---------- */
@@ -490,11 +543,12 @@ async function load(){delete $('plan').dataset.manual;PROJ=null;try{const tg=tar
 
 /* ---------- modelos en memoria ---------- */
 async function dropSlot(n,txt){if(txt&&!confirm(txt))return;try{await api('POST','/api/unload',{slot:n});refresh();loadRes()}catch(e){alert(e.message)}}
-const where=(x,nm)=>x.assignments&&x.assignments.length?x.assignments.map(a=>`${esc(a.name)} <span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${dev(a.device)||esc(a.backend||'')}</span> ${gib(a.bytes)}`).join('<br>'):(x.policy==='cpu_only'?'orquestador <span class="badge b-off">CPU</span>':'<span class="mut">—</span>');
+const where=(x,nm)=>x.assignments&&x.assignments.length?x.assignments.map(a=>`${esc(a.name)} <span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${dev(a.device)||esc(a.backend||'')}</span> ${gib(a.bytes)}${x.direct?' <span class="pill g" title="Sin RPC: llama-server usa la GPU de este equipo directamente">directa</span>':''}`).join('<br>'):(x.policy==='cpu_only'?'orquestador <span class="badge b-off">CPU</span>':'<span class="mut">—</span>');
 function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||x.state!=='IDLE');
   const nm=id=>{const n=(S.nodes||[]).find(x=>x.id===id);return n?n.name:id};
   $('slotlist').innerHTML=sl.length?sl.map(x=>{const m=x.metrics||{},busy=x.state==='LOADING'||x.state==='RECOVERING',gone=x.state==='UNLOADING';
-    const act=gone?'<span class="mut">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:x.slot===0?`<button class="sec sm" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`;
+    const tt=x.state==='READY'&&x.model?`<button class="sec sm" onclick="testTools(${x.slot},this)" title="Comprueba que el modelo llama a una herramienta de ejemplo">🛠 Probar</button> `:'';
+    const act=gone?'<span class="mut">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:tt+(x.slot===0?`<button class="sec sm" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`);
     const perf=m.requests?`${m.requests} peticiones${m.errors?` · <span class="err">${m.errors} con error</span>`:''}<br><span class="mut">media ${m.avg_ms==null?'—':Math.round(m.avg_ms)+' ms'} · p95 ${m.p95_ms==null?'—':Math.round(m.p95_ms)+' ms'}${m.tok_s?` · ${m.tok_s} tok/s`:''}</span>`:'<span class="mut">sin peticiones</span>';
     return `<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${x.model?esc(x.model):'<span class="mut">(vacío)</span>'}<br><span class="mut">ctx ${x.ctx||'—'} · ${esc(x.policy||'auto')}${x.llama_port?' · puerto '+x.llama_port:''}</span></td>
     <td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.recoveries?` <span class="mut">recuperado ${x.recoveries}×</span>`:''}${x.error?`<br><span class="err">${esc(x.error)}</span><br><a href="#ev" onclick="evFocus(${x.slot});return false">Ver registro</a>`:''}</td>
@@ -502,6 +556,70 @@ function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||
   const L=S.ledger||{};const parts=Object.entries(L).map(([id,v])=>{const r=Object.values(v.reserved||{}).reduce((a,b)=>a+b,0),q=Object.values(v.ram_reserved||{}).reduce((a,b)=>a+b,0);return r||q?`${esc(id==='@host'?'orquestador':nm(id))}: ${r?'VRAM '+gib(r)+' de '+gib(v.cap):''}${r&&q?' · ':''}${q?'RAM '+gib(q):''}`:''}).filter(Boolean);
   $('ledgernote').innerHTML=parts.length?'Memoria reservada · '+parts.join(' · '):''}
 async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
+
+/* ---------- sistema: copia de seguridad ---------- */
+function sysLoad(){}
+function b64file(f){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]||'');r.onerror=()=>ko(new Error('no se pudo leer el fichero'));r.readAsDataURL(f)})}
+async function bkExport(){const m=$('bk_msg'),plain=$('bk_plain').checked,pw=$('bk_pw').value;m.className='mut';
+  if(!plain){if(pw.length<8){m.className='err';m.textContent='La contraseña debe tener al menos 8 caracteres';return}
+    if(pw!==$('bk_pw2').value){m.className='err';m.textContent='Las contraseñas no coinciden';return}}
+  else if(!confirm('La copia contendrá el secreto del clúster y la API key SIN cifrar. ¿Continuar?'))return;
+  try{const h={'Content-Type':'application/json'};if(key())h['Authorization']='Bearer '+key();
+    const r=await fetch('/api/backup/export',{method:'POST',headers:h,body:JSON.stringify({passphrase:pw,plain,include_logs:$('bk_logs').checked})});
+    if(!r.ok){let e='';try{e=(await r.json()).error}catch(x){}throw new Error(e||('HTTP '+r.status))}
+    const name=r.headers.get('X-Filename')||'dllm.dllmbak',b=await r.blob(),a=document.createElement('a');
+    a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    m.className='ok';m.textContent='✅ '+name+' descargada'}catch(e){m.className='err';m.textContent=e.message}}
+let BKM=[];
+async function bkPreview(){const f=$('bk_file').files[0],box=$('bk_prev');if(!f){box.innerHTML='<span class="err">Elige el fichero de la copia</span>';return}
+  box.innerHTML='<span class="mut">abriendo…</span>';$('bk_go').classList.add('hide');$('bk_res').innerHTML='';
+  try{const s=await api('POST','/api/backup/preview',{data:await b64file(f),passphrase:$('bk_rpw').value});BKM=s.missing_models||[];
+    box.innerHTML=`<div class="card" style="background:var(--track)"><div>Copia de DLLM <b>${esc(s.version||'?')}</b> · ${s.created?new Date(s.created*1000).toLocaleString():''} · equipo <b>${esc(s.host||'?')}</b> · rol ${esc(s.role||'?')}${s.encrypted?' · 🔒 cifrada':''}</div>
+      <div class="mut" style="margin-top:6px">Parámetros de ${s.model_settings} modelo(s) · ajustes de ${s.node_settings} nodo(s) · ${s.nodes_added} nodo(s) añadidos por IP · API key: ${s.api_key?'sí':'no'} · token de Hugging Face: ${s.hf_token?'sí':'no'} · registros: ${s.has_logs?'sí':'no'}</div>
+      ${s.secret_changes?'<div class="slowbox" style="margin-top:8px">⚠️ El secreto del clúster de la copia es <b>distinto</b> del de este equipo. Los nodos actuales dejarán de conectar hasta que se reinstalen con el secreto de la copia (o vuelvan a emparejarse).</div>':''}
+      <div class="mut" style="margin-top:6px">Modelos del inventario: ${(s.models||[]).length} · <b>faltan en este equipo: ${BKM.length}</b>${BKM.length?' ('+BKM.slice(0,6).map(x=>esc(x.name)).join(', ')+(BKM.length>6?'…':'')+')':''}</div></div>`;
+    $('bk_go').classList.remove('hide')}catch(e){box.innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+async function bkImport(){if(!$('bk_ok').checked){alert('Marca la casilla de confirmación');return}
+  try{const r=await api('POST','/api/backup/import',{data:await b64file($('bk_file').files[0]),passphrase:$('bk_rpw').value,confirm:true});
+    $('bk_res').innerHTML=`<div class="card" style="background:var(--track)">✅ Restaurado: ${r.actions.map(esc).join(' · ')}${r.safety_backup?`<div class="mut" style="font-size:12px;margin-top:4px">La configuración anterior se guardó en <code>${esc(r.safety_backup)}</code></div>`:''}
+      ${r.restart_required?'<div class="slowbox" style="margin-top:8px">⚠️ <b>Reinicia DLLM</b> para aplicar el secreto o la API key restaurados (cierra y vuelve a abrir el orquestador, o reinicia su servicio).</div>':'<div class="ok" style="margin-top:6px">No hace falta reiniciar.</div>'}
+      ${r.missing_models.length?`<div style="margin-top:8px">Faltan ${r.missing_models.length} modelo(s): <button class="sm" onclick="bkRedl()">Descargar de Hugging Face los que se pueda</button><div id="bk_redl" class="mut" style="font-size:12px;margin-top:4px"></div></div>`:''}</div>`;
+    BKM=r.missing_models;$('bk_go').classList.add('hide');refresh();models()}catch(e){$('bk_res').innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+async function bkRedl(){try{const r=await api('POST','/api/backup/redownload',{models:BKM});
+  $('bk_redl').innerHTML=`${r.started.length?'⬇️ Descargando '+r.started.length+' (mira Modelos → Descargas). ':''}${r.manual.length?'<br>Hay que añadir a mano (Ollama o locales): '+r.manual.map(esc).join(', '):''}${r.failed.length?'<br><span class="err">Fallaron: '+r.failed.map(f=>esc(f.name+' — '+f.error)).join('; ')+'</span>':''}`}catch(e){$('bk_redl').innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+
+/* ---------- conectar ---------- */
+let CON=null,conTab='anything';
+async function cp(id){const el=$(id);const t=el.dataset.v||el.textContent;try{await navigator.clipboard.writeText(t)}catch(e){const r=document.createRange();r.selectNode(el);getSelection().removeAllRanges();getSelection().addRange(r)}
+  const o=el.textContent;if(!el.dataset.v){el.textContent='copiado ✓';setTimeout(()=>el.textContent=o,900)}}
+function conBase(){return location.origin+'/v1'}
+async function conLoad(){const base=conBase(),k=key();$('c_url').textContent=base;
+  const lo=/^(127\.|localhost|\[?::1)/.test(location.hostname);
+  $('c_urlnote').textContent=lo?'Solo accesible desde este equipo. Para otros equipos, arranca con --host 0.0.0.0 (exige API key) y usa la IP del orquestador.':'Accesible desde la red.';
+  $('c_key').textContent=k?k.slice(0,4)+'…'+k.slice(-3):'(sin clave en este navegador)';$('c_keyraw').textContent=k;$('c_keyraw').dataset.v=k;
+  $('c_keynote').textContent=k?'La misma que usas para entrar en este panel.':'Si el orquestador escucha solo en loopback no hace falta; si no, usa la API key (botón arriba).';
+  try{const r=await api('GET','/v1/models');CON=r.data||[]}catch(e){CON=[]}
+  $('c_models').innerHTML=CON.length?CON.map(m=>{const d=m.dllm||{},c=d.capabilities||[];
+    const caps=[c.includes('tools')?'<span class="pill g">🛠 herramientas</span>':'<span class="pill">sin herramientas</span>',c.includes('vision')?'<span class="pill g">👁 visión</span>':'',c.includes('embeddings')?'<span class="pill g">📐 embeddings</span>':c.includes('chat')?'<span class="pill g">💬 chat</span>':''].join(' ');
+    return `<tr><td><code>${esc(m.id)}</code> <button class="sec sm" onclick="cp0('${esc(m.id)}')">Copiar</button></td><td>${esc(d.state||'')}</td><td>${caps}</td><td>${d.slot!=null&&!c.includes('embeddings')?`<button class="sec sm" onclick="testTools(${d.slot},this)">🛠 Probar</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="4" class="mut">Ningún modelo cargado todavía: cárgalo en la pestaña Modelos.</td></tr>';
+  conSnip()}
+function cp0(t){try{navigator.clipboard.writeText(t)}catch(e){}}
+async function conTest(){$('c_test').className='mut';$('c_test').textContent='probando…';
+  try{const t0=performance.now();const r=await api('GET','/v1/models');$('c_test').className='ok';$('c_test').textContent=`✅ responde (${Math.round(performance.now()-t0)} ms) · ${(r.data||[]).length} modelo(s)`}catch(e){$('c_test').className='err';$('c_test').textContent='✗ '+e.message}}
+async function testTools(slot,btn){const o=btn.textContent;btn.disabled=true;btn.textContent='probando…';
+  try{const r=await api('POST','/api/tools/test',{slot});
+    const html=`<div class="card"><b>${r.ok?'✅':'⚠️'} ${esc(r.model)}</b> · ${esc(r.detail)} <span class="mut">(${r.seconds} s${r.arguments?' · argumentos '+esc(JSON.stringify(r.arguments)):''})</span>${r.sample?`<div class="mut" style="font-size:12px;margin-top:4px">«${esc(r.sample)}»</div>`:''}</div>`;
+    ['c_tooltest'].forEach(id=>{const e=$(id);if(e)e.innerHTML=html});if(cur!=='con')alert((r.ok?'✅ ':'⚠️ ')+r.model+': '+r.detail)}
+  catch(e){alert(e.message)}finally{btn.disabled=false;btn.textContent=o}}
+function conSnip(){const base=conBase(),k=key()||'TU_API_KEY',m=((CON||[]).find(x=>!(x.dllm?.capabilities||[]).includes('embeddings'))||{}).id||'NOMBRE_DEL_MODELO';
+  const T={anything:['AnythingLLM',`Ajustes → Proveedor de LLM → <b>Generic OpenAI</b>\n\n  Base URL:        ${base}\n  API Key:         ${k}\n  Chat Model Name: ${m}\n  Token context window: el contexto con el que cargaste el modelo\n  Max tokens:      p. ej. 4096\n\nPara embeddings (RAG): Ajustes → Embedder → Generic OpenAI con la misma URL y un modelo cargado en «modo embeddings».\nAgentes/herramientas: usa un modelo marcado 🛠; AnythingLLM le dará sus @agent skills.`],
+   owui:['Open WebUI',`Ajustes de administrador → Conexiones → <b>API de OpenAI</b> → ＋\n\n  URL:  ${base}\n  Clave: ${k}\n\nLos modelos aparecen solos. Herramientas: en el chat, ajustes avanzados del modelo → «Function Calling» = <b>Native</b>\n(con modelos 🛠 va mejor que «Default»).`],
+   curl:['curl',`curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${k}" -H "Content-Type: application/json" \\\n  -d '{"model":"${m}","messages":[{"role":"user","content":"Hola"}]}'`],
+   py:['Python (openai)',`from openai import OpenAI\nc = OpenAI(base_url="${base}", api_key="${k}")\nr = c.chat.completions.create(model="${m}", messages=[{"role":"user","content":"Hola"}])\nprint(r.choices[0].message.content)`],
+   tools:['Herramientas',`curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${k}" -H "Content-Type: application/json" \\\n  -d '{"model":"${m}","messages":[{"role":"user","content":"¿Qué tiempo hace en Madrid?"}],\n       "tools":[{"type":"function","function":{"name":"get_weather","description":"Tiempo actual",\n         "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]}'\n\nLa respuesta trae choices[0].message.tool_calls. Tu aplicación ejecuta la función y vuelve a llamar\ncon un mensaje {"role":"tool","tool_call_id":…,"content":…}. DLLM no ejecuta herramientas: las ejecuta el front-end.`]};
+  $('c_tabs').innerHTML=Object.entries(T).map(([id,v])=>`<button class="sec ${id===conTab?'on':''}" onclick="conTab='${id}';conSnip()">${v[0]}</button>`).join('');
+  $('c_snip').innerHTML=`<pre id="c_code" style="max-height:none;background:var(--track);padding:12px;border-radius:9px">${T[conTab][1].replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/&lt;b>/g,'<b>').replace(/&lt;\/b>/g,'</b>')}</pre><div class="row" style="margin-top:6px"><button class="sec sm" onclick="cpSnip()">Copiar</button></div>`}
+function cpSnip(){const t=$('c_code').innerText;try{navigator.clipboard.writeText(t)}catch(e){}}
 
 /* ---------- registros ---------- */
 let evSlot='';
@@ -523,12 +641,12 @@ async function evLoad(){if(cur!=='ev')return;
 async function models(){try{M=await api('GET','/api/models');const c=$('models').value;
   $('models').innerHTML=M.length?M.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${gib(x.size)})</option>`).join(''):'<option value="">(sin modelos: añade uno abajo)</option>';
   if(c&&M.some(x=>x.name===c))$('models').value=c;else pickModel();
-  $('mlist').innerHTML=M.length?M.map((x,i)=>`<tr><td>${esc(x.name)}${x.error?`<br><span class="err">${esc(x.error)}</span>`:''}</td><td>${gib(x.size)}${x.parts>1?` <span class="mut">(${x.parts} partes)</span>`:''}</td><td>${esc(x.arch||'-')}${x.n_layers?` · ${x.n_layers} capas`:''}${x.ctx_train?`<br><span class="mut">ctx máx. ${x.ctx_train}</span>`:''}</td><td>${esc(x.quant||'-')}</td><td>${esc(x.source)}${x.mmproj?'<br><span class="mut">👁 multimodal</span>':''}</td><td><button class="sec sm" onclick="editSettings(${i})">Parámetros${Object.keys(x.settings||{}).length?' ●':''}</button> <button class="sec sm" onclick="delModel(${i})">Eliminar</button></td></tr>`).join(''):'<tr><td colspan="6" class="mut">Sin modelos todavía.</td></tr>';
+  $('mlist').innerHTML=M.length?M.map((x,i)=>`<tr><td>${esc(x.name)}${x.tool_template?' <span class="pill g" title="La plantilla del modelo admite herramientas (function calling)">🛠 herramientas</span>':''}${x.vision?' <span class="pill g" title="Tiene proyector multimodal">👁 visión</span>':''}${x.error?`<br><span class="err">${esc(x.error)}</span>`:''}</td><td>${gib(x.size)}${x.parts>1?` <span class="mut">(${x.parts} partes)</span>`:''}</td><td>${esc(x.arch||'-')}${x.n_layers?` · ${x.n_layers} capas`:''}${x.ctx_train?`<br><span class="mut">ctx máx. ${x.ctx_train}</span>`:''}</td><td>${esc(x.quant||'-')}</td><td>${esc(x.source)}${x.mmproj?'<br><span class="mut">👁 multimodal</span>':''}</td><td><button class="sec sm" onclick="editSettings(${i})">Parámetros${Object.keys(x.settings||{}).length?' ●':''}</button> <button class="sec sm" onclick="delModel(${i})">Eliminar</button></td></tr>`).join(''):'<tr><td colspan="6" class="mut">Sin modelos todavía.</td></tr>';
 }catch(e){}}
 function pickModel(){const m=M.find(x=>x.name===$('models').value);if(m&&m.settings&&m.settings.ctx)$('ctx').value=m.settings.ctx}
 const SK=['ctx','cache_type_k','cache_type_v','flash_attn','batch_size','ubatch_size','parallel','rope_scaling','rope_freq_base','rope_freq_scale',
-  'temperature','top_k','top_p','min_p','typical_p','repeat_penalty','presence_penalty','frequency_penalty','max_tokens','seed','stop','system_prompt','datetime','device_policy','placement'];
-const TXT=new Set(['cache_type_k','cache_type_v','flash_attn','rope_scaling','stop','system_prompt','datetime','device_policy','placement']);
+  'temperature','top_k','top_p','min_p','typical_p','repeat_penalty','presence_penalty','frequency_penalty','max_tokens','seed','stop','system_prompt','datetime','device_policy','placement','tools'];
+const TXT=new Set(['tools','cache_type_k','cache_type_v','flash_attn','rope_scaling','stop','system_prompt','datetime','device_policy','placement']);
 const KVT=['f16','q8_0','q5_1','q5_0','q4_1','q4_0','iq4_nl','bf16','f32'];
 ['ms_cache_type_k','ms_cache_type_v'].forEach(id=>$(id).innerHTML='<option value="">por defecto (f16)</option>'+KVT.map(t=>`<option>${t}</option>`).join(''));
 function editSettings(i){const m=M[i];msel=m.name;$('ms_title').textContent='Parámetros de '+m.name;const s=m.settings||{};
@@ -588,7 +706,7 @@ async function send(){const t=$('msg').value.trim();const f=$('att').files[0];if
   catch(e){out.textContent='Error: '+e.message;hist.pop()}}
 
 /* ---------- arranque ---------- */
-const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','ev'].includes(start)?start:'mon');
+const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','con','ev','sys'].includes(start)?start:'mon');
 try{setAdv(localStorage.getItem('dllm_adv')==='1')}catch(e){}
 refresh();models();initTok();setInterval(refresh,2000);setInterval(tele,2000);setInterval(dl,1500);
 // presencia: `dllm open` sabe así si el panel sigue abierto (y ofrece reabrirlo si se cierra)

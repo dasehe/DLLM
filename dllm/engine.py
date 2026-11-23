@@ -84,6 +84,10 @@ class LlamaCppDriver(EngineDriver):
         cmd += ["--metrics"] + models.load_args(self.settings)
         if self.embeddings:
             cmd += ["--embeddings"]
+        elif spec.get("jinja"):
+            # plantilla Jinja del propio modelo: necesaria para que /v1/chat/completions acepte `tools` y devuelva
+            # `tool_calls` (function calling) con el formato que ese modelo usa
+            cmd += ["--jinja"]
         if spec.get("mmproj"):
             # visión/audio: el proyector se ejecuta en el orquestador (CPU), no se reparte entre los nodos
             cmd += ["--mmproj", spec["mmproj"], "--no-mmproj-offload"]

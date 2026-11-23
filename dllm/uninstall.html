@@ -1,0 +1,105 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later · Copyright (C) 2026 David Serrano Hernando y colaboradores de DLLM -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desinstalar DLLM</title>
+<style>
+:root{--bg:#fff;--fg:#1c1e21;--mut:#6b7280;--card:#f6f7f9;--bd:#e2e5ea;--ac:#dc2626;--ok:#16a34a;--warn:#d97706;--pr:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8eb;--mut:#9aa1ab;--card:#1d2026;--bd:#2c313a;--ac:#f87171;--ok:#4ade80;--warn:#fbbf24;--pr:#60a5fa}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:720px;margin:0 auto;padding:24px 16px}h1{font-size:22px;margin:0 0 4px}h3{margin:22px 0 8px}.mut{color:var(--mut)}
+.hero{border-left:5px solid var(--ac);padding-left:12px;margin-bottom:10px}
+.opt{display:flex;gap:12px;border:2px solid var(--bd);background:var(--card);border-radius:10px;padding:12px 14px;margin:8px 0;cursor:pointer}
+.opt.sel{border-color:var(--ac)}.opt.off{opacity:.55;cursor:not-allowed}.opt input{width:auto;margin-top:4px}
+.opt b{display:block}.tag{font-size:12px;padding:1px 8px;border-radius:9px;background:var(--bd);margin-left:6px}
+label{display:block;margin:10px 0 4px;font-weight:500}
+input[type=text],input[type=password]{width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit}
+button{font:inherit;padding:10px 20px;border-radius:7px;border:0;background:var(--ac);color:#fff;cursor:pointer}button.sec{background:var(--bd);color:var(--fg)}button:disabled{opacity:.5}
+.row{display:flex;gap:10px;margin-top:20px;justify-content:space-between;align-items:center}.box{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;margin:10px 0}
+.err{color:var(--ac)}.ok{color:var(--ok)}.hide{display:none}details{margin-top:12px}summary{cursor:pointer;color:var(--mut)}pre{font:12px monospace;white-space:pre-wrap;word-break:break-all;margin:6px 0}
+</style>
+</head>
+<body>
+<main>
+<div class="hero"><h1>Desinstalar DLLM</h1><div class="mut" id="sub">Comprobando qué hay instalado…</div></div>
+
+<section id="v_none" class="hide"><div class="box"><b>DLLM no está instalado en este equipo.</b>
+<div class="mut">No hay configuración que quitar. Si quedaron restos de una versión antigua, pulsa «Limpiar restos».</div></div>
+<div class="row"><button class="sec" onclick="quit()">Cerrar</button><button onclick="run()">Limpiar restos</button></div></section>
+
+<section id="v_main" class="hide">
+  <div class="box" id="what"></div>
+  <h3>1 · ¿Cuánto quieres quitar?</h3>
+  <label class="opt" id="o1"><input type="radio" name="lvl" value="1" onchange="pick()"><span><b>Solo detener DLLM <span class="tag">reversible</span></b>
+    <span class="mut">Para el programa y quita el arranque automático y las reglas del cortafuegos. Conserva configuración, llama.cpp y modelos: se reactiva con el instalador.</span></span></label>
+  <label class="opt sel" id="o2"><input type="radio" name="lvl" value="2" checked onchange="pick()"><span><b>Quitar DLLM y su configuración <span class="tag">recomendado</span></b>
+    <span class="mut">Además borra la configuración (secreto del clúster, ajustes), el programa y el llama.cpp descargado. <b>Los modelos se conservan.</b></span></span></label>
+  <label class="opt" id="o3"><input type="radio" name="lvl" value="3" onchange="pick()"><span><b>Quitarlo todo, incluidos los modelos <span class="tag">irreversible</span></b>
+    <span class="mut" id="o3d"></span></span></label>
+
+  <div id="bk" class="hide">
+    <h3>2 · Copia de seguridad (muy recomendado)</h3>
+    <div class="box"><label style="margin:0;font-weight:400"><input type="checkbox" id="bk_on" style="width:auto" checked onchange="pick()"> Guardar antes una copia de <b>toda</b> la configuración del orquestador</label>
+      <div class="mut">Con ella puedes recuperarlo todo (secreto, nodos, modelos, ajustes) en minutos desde el instalador: «Restaurar desde una copia».</div>
+      <div id="bk_f"><label>Carpeta donde guardarla</label><input type="text" id="bk_dir" value="~">
+      <label>Contraseña para cifrarla <span class="mut">(opcional, pero la copia contiene el secreto del clúster)</span></label><input type="password" id="bk_pass" autocomplete="new-password"></div></div>
+  </div>
+
+  <details><summary>Ver exactamente qué se hará</summary><pre id="plan"></pre></details>
+  <div class="row"><span class="err" id="err"></span><span><button class="sec" onclick="quit()">Cancelar</button> <button id="go" onclick="run()">Desinstalar</button></span></div>
+</section>
+
+<section id="v_done" class="hide"><div class="box"><b class="ok">DLLM se ha desinstalado.</b><div id="log" style="margin-top:8px"></div></div>
+<div id="bkdone" class="box hide"></div>
+<div class="mut">Para volver a instalarlo ejecuta el instalador; si guardaste una copia, elige «Restaurar desde una copia» en el primer paso.</div>
+<div class="row"><span></span><button class="sec" onclick="quit()">Cerrar</button></div></section>
+</main>
+<footer class="mut" style="max-width:1000px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-align:center">
+DLLM — idea original y desarrollo inicial de David Serrano Hernando · © 2026 David Serrano Hernando y colaboradores ·
+software libre bajo <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU AGPL-3.0-or-later</a>, sin garantía ·
+<a href="https://github.com/dasehe/dllm" target="_blank" rel="noopener">código fuente</a>
+</footer>
+<script>
+const T='__TOKEN__';let I=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const gib=b=>((b||0)/2**30).toFixed(1)+' GiB';
+async function api(m,p,b){const r=await fetch(p+(p.includes('?')?'&':'?')+'t='+T,{method:m,headers:{'Content-Type':'application/json','X-Setup-Token':T},body:b?JSON.stringify(b):undefined});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+const lvl=()=>+document.querySelector('input[name=lvl]:checked').value;
+function pick(){const l=lvl();['o1','o2','o3'].forEach((o,i)=>$(o).classList.toggle('sel',i+1===l));
+  const b=I.can_backup&&l>1;$('bk').classList.toggle('hide',!b);$('bk_f').classList.toggle('hide',!$('bk_on').checked);
+  $('plan').textContent=(l===1?I.plan_keep:l===2?I.plan_purge:I.plan_all).map(x=>'· '+x).join('\n')+(b&&$('bk_on').checked?'\n· (antes) copia de la configuración en '+$('bk_dir').value:'');
+  $('go').textContent=l===3?'Borrar todo':'Desinstalar'}
+async function init(){
+  try{I=await api('GET','/api/inspect')}catch(e){$('sub').textContent='Error: '+e.message;return}
+  if(!I.installed){$('sub').textContent='Nada instalado';$('v_none').classList.remove('hide');return}
+  $('sub').textContent='Esto se hace en este equipo; no afecta al resto del clúster.';
+  $('what').innerHTML=`<b>Instalado:</b> rol ${esc(I.role)} · ${esc(I.name||'')}<br><span class="mut">Configuración ${esc(I.home)} (${gib(I.config_bytes)}) · llama.cpp ${gib(I.llama_bytes)}${I.install_dir?' · carpeta '+esc(I.install_dir):''}</span>`
+    +(I.role!=='node'?`<br><span class="mut">Modelos en ${esc(I.models_dir)}: ${I.models_count} (${gib(I.models_bytes)})</span>`:'');
+  const m=$('o3');
+  if(I.role==='node'||!I.models_own){m.classList.add('off');m.querySelector('input').disabled=true;
+    $('o3d').textContent=I.role==='node'?'Un nodo no guarda modelos.':'Tus modelos están en una carpeta que no creó DLLM ('+(I.models_dir||'')+'): DLLM nunca la borra; hazlo a mano si quieres.'}
+  else $('o3d').textContent=`Borra también ${I.models_count} modelo(s) (${gib(I.models_bytes)}) de ${I.models_dir}. Tendrás que descargarlos de nuevo.`;
+  $('v_main').classList.remove('hide');pick()}
+async function run(){
+  const l=I?lvl():2;
+  if(l===3&&!confirm('Se borrarán los modelos descargados. ¿Seguro?'))return;
+  const body={purge:l>1,models:l===3};
+  if(I&&I.can_backup&&l>1&&$('bk_on').checked){body.backup=true;body.backup_dir=$('bk_dir').value.trim()||'~';body.backup_pass=$('bk_pass').value}
+  $('err').textContent='';$('go').disabled=true;$('go').textContent='Desinstalando… (Windows puede pedir permiso de administrador)';
+  try{const r=await api('POST','/api/uninstall',body);
+    $('log').innerHTML=r.done.map(x=>'✅ '+esc(x)).join('<br>');
+    if(r.backup){$('bkdone').classList.remove('hide');$('bkdone').innerHTML=`<b>Copia guardada:</b><br><code>${esc(r.backup)}</code><br><span class="mut">${body.backup_pass?'Cifrada: guarda la contraseña, sin ella no se puede abrir.':'Sin cifrar: contiene el secreto del clúster, guárdala en un sitio seguro.'}</span>`}
+    $('v_main').classList.add('hide');$('v_none').classList.add('hide');$('v_done').classList.remove('hide');$('sub').textContent='Terminado'}
+  catch(e){$('err').textContent=e.message;$('go').disabled=false;pick()}}
+async function quit(){try{await api('POST','/api/quit')}catch(e){}document.body.innerHTML='<main><h1>Desinstalador cerrado</h1><p class="mut">Ya puedes cerrar esta pestaña.</p></main>'}
+init();
+const CID=Math.random().toString(36).slice(2,12);
+const ping=()=>fetch('/api/ui/ping?id='+CID+'&t='+T,{method:'POST',headers:{'X-Setup-Token':T}}).catch(()=>{});
+ping();setInterval(ping,10000);addEventListener('pagehide',()=>{try{navigator.sendBeacon('/api/ui/bye?id='+CID+'&t='+T)}catch(e){}});
+</script>
+</body>
+</html>

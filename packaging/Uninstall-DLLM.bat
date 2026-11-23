@@ -13,6 +13,6 @@ if not defined PY (
   pause
   exit /b 1
 )
-%PY% dllm.pyz uninstall --interactive
+%PY% dllm.pyz uninstall --gui --hide-console
 pause
 endlocal

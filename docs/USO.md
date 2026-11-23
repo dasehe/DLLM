@@ -207,7 +207,8 @@ solo como texto, elige *Ninguno* en su proyector.
 | `dllm unload` | Descarga el modelo y libera los nodos |
 | `dllm join-code` | Muestra el código de unión (orquestador) |
 | `dllm doctor` | Diagnóstico del equipo local |
-| `dllm uninstall [--purge] [--models]` | Desinstala: programa, arranque automático y cortafuegos; con `--purge` también llama.cpp y la configuración; con `--models` los modelos de la carpeta de DLLM |
+| `dllm backup export\|import\|inspect [FICHERO]` | Copia de seguridad completa (cifrada por defecto) y restauración |
+| `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Desinstala: programa, arranque automático y cortafuegos; con `--purge` también llama.cpp y la configuración; con `--models` los modelos de la carpeta de DLLM |
 
 `MODELO` es la ruta relativa a la carpeta de modelos, p. ej. `qwen/qwen2.5-32b-instruct-q4_k_m.gguf`.
 `status/plan/load/unload` hablan con `http://127.0.0.1:8080` usando la API key de la configuración local; para otro
@@ -326,6 +327,31 @@ cambie el conjunto de nodos (p. ej. cuando el equipo caído vuelva). Las peticio
 - Si el reparto no refleja la realidad (p. ej. una CPU que rinde más de lo estimado), ajusta en el asistente
   *ancho de banda* (`--bw-gbps`) o *memoria a ofrecer* (`--mem-gb`).
 - Cuantizaciones Q4_K_M/Q5_K_M dan el mejor equilibrio calidad/tamaño.
+
+### GPU local directa
+
+Si un modelo cabe entero en la GPU de un nodo **de este mismo equipo**, DLLM lo lanza ahí sin RPC ni túnel
+(`llama-server --device <GPU>`, sin `--rpc`): menos latencia y sin pasar por la red. Esa GPU queda reservada en el
+libro de recursos, pero **el resto de nodos y la RAM siguen libres** para cargar otros modelos a la vez (p. ej. uno
+pequeño en la GPU local y uno grande repartido entre los demás). El slot muestra la etiqueta *directa*. Si no encaja o
+no se puede identificar la GPU, usa el reparto RPC de siempre. Desactivar: `dllm run --no-direct-local`.
+
+## Conectar front-ends y herramientas
+
+La pestaña **Conectar** da la URL base, la API key y fragmentos listos para AnythingLLM, Open WebUI, curl y Python; la
+lista de modelos (`/v1/models`) incluye sus capacidades (`tools`, `vision`, `embeddings`) y **Probar** hace una llamada
+real de función para comprobarlo. DLLM arranca `llama-server` con `--jinja` si la plantilla del modelo admite
+herramientas (ajuste `tools`: `auto`/`on`/`off`), de modo que `tools`/`tool_calls` del protocolo OpenAI funcionan tal
+cual; **no ejecuta las herramientas**: lo hace el front-end. Ver [INTEGRACIONES.md](INTEGRACIONES.md).
+
+## Copia de seguridad y recuperación
+
+*Sistema* → **Crear copia** descarga un único fichero `.dllmbak` (ZIP con sha256 por fichero; cifrado con
+PBKDF2-HMAC-SHA256 + HMAC, solo biblioteca estándar) con: secreto del clúster, API key, ajustes de modelos y nodos, nodos
+añadidos por IP, token de Hugging Face y la lista de modelos instalados con su origen. Los modelos no se incluyen (se
+re-descargan). **Restaurar copia** muestra qué contiene y qué cambiaría; antes de aplicarla guarda el estado actual en
+`~/.dllm/backups/` (conserva 5). Equivalente en terminal: `dllm backup export|inspect|import`. Si la restauración cambia
+el secreto o la API key, pide reiniciar. En un equipo nuevo: instalador → *Restaurar desde una copia*.
 
 ### Varios modelos a la vez
 

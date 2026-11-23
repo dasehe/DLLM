@@ -5,6 +5,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [Sin publicar]
 
 ### Añadido
+- **Desinstalador separado del instalador**: `Uninstall-DLLM`/`uninstall.sh`/`dllm uninstall --gui` abren su propia
+  página con tres niveles (detener / quitar DLLM y configuración / todo), plan detallado y **copia previa opcional y
+  cifrable** de la configuración (si falla, no se desinstala). El instalador ya no incluye controles de desinstalación.
+- **Restaurar desde una copia en el instalador** (`restore` en la instalación, `POST /api/restore/preview`): recupera
+  secreto, API key, ajustes y nodos en una máquina nueva conservando nombre y rutas locales. Instalador con tarjetas de
+  rol, etapas rotuladas y aviso de «ya instalado».
+- **Copia de seguridad completa** (`dllm backup`, pestaña Sistema, `/api/backup/*`): un fichero `.dllmbak` cifrable con
+  secreto, API key, ajustes de modelos/nodos, nodos añadidos por IP, token HF e inventario de modelos para re-descargar;
+  vista previa, copia de seguridad automática antes de restaurar y re-descarga de modelos.
+- **GPU local directa**: un modelo que cabe en la GPU local se lanza sin RPC ni túnel y deja libres el resto de nodos.
+- **Preparado para herramientas (function calling)**: `--jinja` automático según la plantilla del modelo, ajuste `tools`,
+  capacidades en `/v1/models`, pestaña **Conectar** (URL, clave, fragmentos para AnythingLLM/Open WebUI/curl/Python) y
+  `POST /api/tools/test`. DLLM no ejecuta las herramientas.
 - **Administración de nodos desde el panel** (Nodos): *Añadir por IP* (si ya habla con el secreto del clúster se
   registra; si está libre inicia el emparejamiento), *Buscar en la red* (explora un rango privado, por defecto el /24 del
   orquestador, y clasifica los agentes: libre, ya en el clúster o emparejado), *Medir la red* (cada nodo por separado y

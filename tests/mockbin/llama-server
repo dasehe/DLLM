@@ -114,6 +114,11 @@ class H(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 time.sleep(0.05)
             self.wfile.write(b"data: [DONE]\n\n")
+        elif body.get("tools") and "--jinja" in args and not body.get("_notool"):
+            call = {"id": "call_1", "type": "function",
+                    "function": {"name": body["tools"][0]["function"]["name"], "arguments": "{\"city\": \"Madrid\"}"}}
+            self._j(200, {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [call]}}],
+                          "mock": info})
         else:
             self._j(200, {"choices": [{"message": {"role": "assistant", "content": "mock"}}], "mock": info})
 

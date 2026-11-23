@@ -4,11 +4,13 @@ import argparse
 import json
 import os
 import signal
+import socket
 import sys
 import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from . import __version__, auth, config, hw, legal_notice
 
@@ -232,6 +234,68 @@ def cmd_join_code(a):
     print(wizard.Setup.join_code(cfg, a.advertise_host or cfg.get("advertise_host")))
 
 
+def _passphrase(a, confirm=False):
+    import getpass
+    if a.passphrase_file:
+        return Path(a.passphrase_file).read_text(encoding="utf-8").strip()
+    if os.environ.get("DLLM_BACKUP_PASSPHRASE"):
+        return os.environ["DLLM_BACKUP_PASSPHRASE"]
+    p = getpass.getpass("Contraseña de la copia: ")
+    if confirm and p != getpass.getpass("Repite la contraseña: "):
+        sys.exit("las contraseñas no coinciden")
+    return p
+
+
+def cmd_backup(a):
+    """Copia de seguridad / restauración de toda la configuración, sin necesidad de que el orquestador esté en marcha."""
+    from . import backup, models as models_mod
+    home = config.home()
+    if a.action == "export":
+        cfg = config.load() or {}
+        inv = []
+        if cfg.get("models_dir") and Path(cfg["models_dir"]).is_dir():
+            for m in models_mod.Manager(cfg["models_dir"]).list():
+                parts = m["name"].split("/")
+                inv.append({"name": m["name"], "size": m.get("size"), "source": m.get("source"), "quant": m.get("quant"),
+                            "hf": {"repo": parts[1].replace("__", "/"), "file": parts[-1]}
+                            if parts[0] == "hf" and len(parts) >= 3 else None})
+        pw = None if a.plain else _passphrase(a, confirm=True)
+        try:
+            blob = backup.build(home, inv, __version__, socket.gethostname(), a.logs, pw)
+        except backup.BackupError as e:
+            sys.exit(str(e))
+        out = Path(a.file or backup.filename(socket.gethostname()))
+        out.write_bytes(blob)
+        try:
+            os.chmod(out, 0o600)
+        except OSError:
+            pass
+        print(f"Copia creada: {out} ({len(blob) // 1024} KiB){' · SIN CIFRAR: contiene el secreto del clúster' if a.plain else ' · cifrada'}")
+        return
+    try:
+        blob = Path(a.file).read_bytes()
+        man, files = backup.open_backup(blob, _passphrase(a) if backup.is_encrypted(blob) else None)
+    except (OSError, backup.BackupError) as e:
+        sys.exit(f"no se pudo abrir la copia: {e}")
+    s = backup.summary(man, files, home)
+    print(f"Copia de DLLM {s['version']} del {time.strftime('%d/%m/%Y %H:%M', time.localtime(s['created'] or 0))} · "
+          f"equipo {s['host']} · rol {s['role']}\n  ajustes de {s['model_settings']} modelo(s), {s['node_settings']} nodo(s), "
+          f"{s['nodes_added']} nodo(s) añadidos por IP · token de Hugging Face: {'sí' if s['hf_token'] else 'no'} · "
+          f"{len(s['models'])} modelo(s) en el inventario")
+    if s["secret_changes"]:
+        print("  ATENCIÓN: el secreto del clúster es distinto del de este equipo; los nodos actuales dejarán de conectar "
+              "hasta que se reinstalen con el de la copia.")
+    if a.action == "inspect":
+        return
+    if not a.yes and input("¿Restaurar y sustituir la configuración actual? [s/N] ").strip().lower() not in ("s", "si", "sí", "y"):
+        return
+    actions, safety = backup.restore(files, home)
+    print("Restaurado: " + "; ".join(actions))
+    if safety:
+        print(f"La configuración anterior se guardó en {safety}")
+    print("Reinicia DLLM para aplicar el secreto y la configuración.")
+
+
 def cmd_doctor(a):
     from . import installer
     bad = 0
@@ -242,7 +306,11 @@ def cmd_doctor(a):
 
 
 def cmd_uninstall(a):
-    from . import installer
+    from . import installer, wizard
+    if a.gui and wizard.has_display():
+        return wizard.main_uninstall(a)
+    if a.gui:
+        a.interactive = True  # sin escritorio: preguntas en la terminal
     if a.interactive:
         cfg = config.load()
         if not cfg:
@@ -309,6 +377,15 @@ def build_parser():
     s.add_argument("--advertise-host", help="IP a incluir en el código (por defecto la de la LAN)")
     s.set_defaults(fn=cmd_join_code)
     sub.add_parser("doctor", help="diagnóstico local").set_defaults(fn=cmd_doctor)
+    s = sub.add_parser("backup", help="copia de seguridad y restauración de toda la configuración")
+    s.add_argument("action", choices=["export", "import", "inspect"])
+    s.add_argument("file", nargs="?", help="export: fichero de salida (def. dllm-<equipo>-<fecha>.dllmbak); "
+                                           "import/inspect: fichero de la copia")
+    s.add_argument("--passphrase-file", help="fichero con la contraseña (si no, se pide; o DLLM_BACKUP_PASSPHRASE)")
+    s.add_argument("--plain", action="store_true", help="export: SIN cifrar (contiene el secreto del clúster)")
+    s.add_argument("--logs", action="store_true", help="export: incluye también los registros (events.jsonl)")
+    s.add_argument("--yes", action="store_true", help="import: no preguntar")
+    s.set_defaults(fn=cmd_backup)
     s = sub.add_parser("pair", help="nodo sin código de unión: confirmar el orquestador que lo reclama")
     s.set_defaults(fn=cmd_pair)
 
@@ -322,7 +399,12 @@ def build_parser():
     s.add_argument("--purge", action="store_true", help="borra también configuración y llama.cpp descargado")
     s.add_argument("--models", action="store_true",
                    help="con --purge: borra también la carpeta de modelos si la creó DLLM")
-    s.add_argument("--interactive", action="store_true", help="pregunta qué borrar (lo usan los desinstaladores)")
+    s.add_argument("--interactive", action="store_true", help="pregunta qué borrar en esta terminal")
+    s.add_argument("--gui", action="store_true", help="desinstalador en el navegador (lo usan Uninstall-DLLM y uninstall.sh)")
+    s.add_argument("--no-browser", action="store_true", help="con --gui: no abrir el navegador, solo mostrar la URL")
+    s.add_argument("--hide-console", action="store_true", help="con --gui (Windows): esconde la consola")
+    s.add_argument("--port", type=int, default=0, help="con --gui: puerto (0 = aleatorio)")
+    s.add_argument("--dry-run", action="store_true", help="con --gui: simula sin borrar nada")
     s.set_defaults(fn=cmd_uninstall)
 
     s = sub.add_parser("init", help="crea el secreto del clúster (modo manual)")
@@ -376,6 +458,8 @@ def build_parser():
     s.add_argument("--bin-dir", help="carpeta con llama-server")
     s.add_argument("--llama-bin")
     s.add_argument("--llama-arg", action="append", help="argumento extra para llama-server (repetible)")
+    s.add_argument("--no-direct-local", action="store_true",
+                   help="no ejecutar sin RPC los modelos que caben en la GPU local (por defecto sí)")
     s.add_argument("--min-mbps", type=float, default=800.0, help="red mínima orquestador↔nodo (def. 800)")
     s.add_argument("--on-demand", action="store_true",
                    help="cargar bajo demanda el modelo pedido en «model» si está en la carpeta de modelos "

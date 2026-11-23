@@ -257,14 +257,27 @@ nodos no necesitan un código nuevo. Si cambia la versión de llama.cpp, **los n
 orquestador les pide instalar la misma (paquete oficial, sha256 verificado). Para actualizar también el programa DLLM
 de un nodo, vuelve a ejecutar el asistente en él.
 
+## Restaurar desde una copia (recuperación ante desastres)
+
+En el equipo nuevo, instala con el instalador, elige **Orquestador** o **Ambos** y abre *«Restaurar desde una copia»* en
+el primer paso: carga el fichero `.dllmbak` (y su contraseña). Se recuperan el secreto del clúster (los nodos vuelven a
+conectar solos), la API key, los ajustes de modelos y nodos y los nodos añadidos por IP; el nombre y las rutas son los de
+la máquina nueva. Los modelos no viajan en la copia: el panel (Sistema) los vuelve a descargar. Ver
+[USO.md](USO.md#copia-de-seguridad-y-recuperación).
+
 ## Desinstalar
 
 Sirve igual para un nodo, un orquestador o ambos:
 
+El desinstalador es un **programa aparte** del instalador (el instalador ya no lleva botones de desinstalar):
+
 - **Desde el paquete:** doble clic en `Uninstall-DLLM.bat` (Windows) o `Uninstall-DLLM.command` (macOS), o
-  `./uninstall.sh` (Linux). Pregunta qué borrar.
-- **Desde el asistente:** si DLLM ya está instalado, la primera pantalla muestra **Desinstalar** (en terminal, opción 4).
-- **Por línea de comandos:**
+  `./uninstall.sh` (Linux). Abre una página en el navegador (en terminal sin escritorio, hace las preguntas por texto).
+- Muestra lo instalado y tres niveles: **solo detener** (reversible), **quitar DLLM y su configuración** (los modelos se
+  conservan) o **quitarlo todo** (también los modelos, solo si los creó DLLM). «Ver exactamente qué se hará» lista cada paso.
+- En un orquestador ofrece **guardar antes una copia de toda la configuración** (cifrable con contraseña) fuera de la
+  carpeta que se va a borrar; si la copia falla no se desinstala nada.
+- **Por línea de comandos** (`dllm uninstall --gui` abre la página; `--interactive`, preguntas en la terminal):
 
 ```bash
 dllm uninstall                   # para el programa, quita el arranque automático y las reglas del cortafuegos
