@@ -131,6 +131,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
       <fieldset><legend>En el orquestador</legend>
         <div class="form">
           <label class="switch"><input type="checkbox" id="ne_enabled"> Usar este nodo en los repartos</label>
+          <label class="switch" title="Solo aplica si este nodo es el propio equipo del orquestador"><input type="checkbox" id="ne_direct"> Permitir ejecución directa en su GPU (sin RPC) cuando un modelo quepa</label>
           <label class="adv">Capas fijas<input id="ne_layers" type="number" min="1" step="1" placeholder="automático"><span class="help">Cuántas capas del modelo lleva este nodo. Vacío = las decide el reparto.</span></label>
           <label class="adv">Ancho de banda de memoria (GB/s)<input id="ne_bw" type="number" min="1" step="1" placeholder="estimado"><span class="help">Para ordenar nodos por velocidad. Ej.: RTX 3060 = 360, RX 7600 XT = 288.</span></label>
         </div>
@@ -188,6 +189,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
           <label class="adv">Lote físico (ubatch)<input id="ms_ubatch_size" type="number" min="16" step="16" placeholder="512"></label>
           <label>Dispositivo<select id="ms_device_policy"><option value="">automático</option><option value="gpu_strict">solo GPU (error si no cabe)</option><option value="cpu_only">solo CPU (RAM del orquestador)</option><option value="gpu_with_cpu_fallback">GPU y, si no cabe, CPU</option></select><span class="help">«Solo CPU» no gasta VRAM: útil para modelos auxiliares fijados.</span></label>
           <label>Reparto<select id="ms_placement"><option value="">automático</option><option value="split">repartido entre nodos</option><option value="node">en un único nodo</option></select><span class="help">Los modelos pequeños (embeddings, voz) rinden más sin cruzar la red.</span></label>
+          <label>GPU local directa<select id="ms_local_gpu"><option value="">automática (según el host)</option><option value="on">obligar (error si no es posible)</option><option value="off">nunca (usar siempre RPC)</option></select><span class="help">Si el modelo cabe en la GPU de este equipo se ejecuta sin RPC. «Nunca» lo reparte por RPC aunque quepa; el host también puede prohibirlo en Nodos → Configurar.</span></label>
           <label class="adv">Herramientas (function calling)<select id="ms_tools"><option value="">automático (según la plantilla)</option><option value="on">forzar activadas</option><option value="off">desactivadas</option></select><span class="help">Activa <code>--jinja</code> para que el modelo acepte <code>tools</code> y devuelva <code>tool_calls</code>.</span></label>
           <label class="adv">Modo embeddings<select id="ms_embeddings"><option value="">no</option><option value="true">sí (atiende /v1/embeddings)</option></select></label>
           <label class="adv">Peticiones simultáneas<input id="ms_parallel" type="number" min="1" max="64" step="1" placeholder="auto"><span class="help">El contexto se reparte entre ellas.</span></label>
@@ -482,15 +484,15 @@ function setAdv(v){document.body.classList.toggle('advanced',!!v);const c=$('adv
 function editNode(id){if(!S)return;const n=S.nodes.find(x=>x.id===id);if(!n)return;editing=id;const s=n.settings||{},l=n.limits||{};
   $('ne_title').textContent='Configurar '+n.name;
   $('ne_hw').textContent=`${n.cores??'?'} hilos · ${gib(n.ram_total)} RAM${n.gpu?' · '+n.gpu.name+' '+gib(n.gpu.total):''} · recomendado: ${gib(n.recommended&&n.recommended.mem_bytes)} y ${n.recommended?n.recommended.threads:'?'} hilos · máximo: ${gib(n.ceiling)}`;
-  $('ne_enabled').checked=s.enabled!==false;$('ne_layers').value=s.layers??'';$('ne_bw').value=s.bw_gbps??'';
+  $('ne_enabled').checked=s.enabled!==false;$('ne_direct').checked=s.direct_local!==false;$('ne_layers').value=s.layers??'';$('ne_bw').value=s.bw_gbps??'';
   const man=n.limits_mode==='manual';$('ne_manual').classList.toggle('hide',!man);$('ne_auto').classList.toggle('hide',man);$('ne_autob').classList.toggle('hide',man);
   const devs=(n.devices||[]);$('ne_dev').innerHTML='<option value="">Automático (el de más memoria)</option>'+devs.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} · ${esc(d.desc)} (${gib(d.total)})</option>`).join('')+(devs.some(d=>/^cpu/i.test(d.name))?'':'<option value="CPU">CPU (no prestar GPU)</option>');
   $('ne_dev').value=n.backend==='cpu'&&n.device==null&&devs.length?'CPU':'';if(n.device&&devs.some(d=>d.name===n.device))$('ne_dev').value=n.device;
   $('ne_share').value=l.share||50;$('ne_sharev').textContent=l.share||50;$('ne_mem').value=l.mem_gb??'';$('ne_thr').value=l.threads??'';
   $('ne_msg1').textContent=$('ne_msg2').textContent='';$('nedit').classList.remove('hide');$('nedit').scrollIntoView({behavior:'smooth',block:'nearest'})}
 function closeNode(){editing=null;$('nedit').classList.add('hide')}
-async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,layers:null,bw_gbps:null}:{node:editing,enabled:$('ne_enabled').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null};
-  try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_layers').value='';$('ne_bw').value=''}refresh()}
+async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,direct_local:true,layers:null,bw_gbps:null}:{node:editing,enabled:$('ne_enabled').checked,direct_local:$('ne_direct').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null};
+  try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_direct').checked=true;$('ne_layers').value='';$('ne_bw').value=''}refresh()}
   catch(e){$('ne_msg1').className='err';$('ne_msg1').textContent=e.message}}
 async function saveLimits(reset){if(!editing)return;const n=S.nodes.find(x=>x.id===editing)||{};
   const b=reset?{node:editing,reset:true}:{node:editing,share:+$('ne_share').value,mem_gb:$('ne_mem').value||null,threads:$('ne_thr').value||null};
@@ -645,8 +647,8 @@ async function models(){try{M=await api('GET','/api/models');const c=$('models')
 }catch(e){}}
 function pickModel(){const m=M.find(x=>x.name===$('models').value);if(m&&m.settings&&m.settings.ctx)$('ctx').value=m.settings.ctx}
 const SK=['ctx','cache_type_k','cache_type_v','flash_attn','batch_size','ubatch_size','parallel','rope_scaling','rope_freq_base','rope_freq_scale',
-  'temperature','top_k','top_p','min_p','typical_p','repeat_penalty','presence_penalty','frequency_penalty','max_tokens','seed','stop','system_prompt','datetime','device_policy','placement','tools'];
-const TXT=new Set(['tools','cache_type_k','cache_type_v','flash_attn','rope_scaling','stop','system_prompt','datetime','device_policy','placement']);
+  'temperature','top_k','top_p','min_p','typical_p','repeat_penalty','presence_penalty','frequency_penalty','max_tokens','seed','stop','system_prompt','datetime','device_policy','placement','tools','local_gpu'];
+const TXT=new Set(['tools','local_gpu','cache_type_k','cache_type_v','flash_attn','rope_scaling','stop','system_prompt','datetime','device_policy','placement']);
 const KVT=['f16','q8_0','q5_1','q5_0','q4_1','q4_0','iq4_nl','bf16','f32'];
 ['ms_cache_type_k','ms_cache_type_v'].forEach(id=>$(id).innerHTML='<option value="">por defecto (f16)</option>'+KVT.map(t=>`<option>${t}</option>`).join(''));
 function editSettings(i){const m=M[i];msel=m.name;$('ms_title').textContent='Parámetros de '+m.name;const s=m.settings||{};

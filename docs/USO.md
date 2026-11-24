@@ -334,7 +334,18 @@ Si un modelo cabe entero en la GPU de un nodo **de este mismo equipo**, DLLM lo 
 (`llama-server --device <GPU>`, sin `--rpc`): menos latencia y sin pasar por la red. Esa GPU queda reservada en el
 libro de recursos, pero **el resto de nodos y la RAM siguen libres** para cargar otros modelos a la vez (p. ej. uno
 pequeño en la GPU local y uno grande repartido entre los demás). El slot muestra la etiqueta *directa*. Si no encaja o
-no se puede identificar la GPU, usa el reparto RPC de siempre. Desactivar: `dllm run --no-direct-local`.
+no se puede identificar la GPU, usa el reparto RPC de siempre.
+
+**Tú decides dónde se usa**, en tres niveles (el más específico gana):
+
+| Nivel | Dónde | Efecto |
+|---|---|---|
+| Modelo | Modelos → Ajustes → *GPU local directa* (`local_gpu`) | `auto` (por defecto): según el host · `off`: **nunca** directo, siempre RPC aunque quepa · `on`: **obliga**; si no es posible (destino en CPU, nodo remoto, GPU no visible) la carga falla con el motivo |
+| Host | Nodos → Configurar → *Permitir ejecución directa* (`direct_local`, API `/api/node/settings`) | Desmarcado: ese equipo nunca ejecuta en directo (los modelos con `auto` irán por RPC). El valor por defecto es permitido |
+| Global | `--no-direct-local` al arrancar | Desactiva el directo para todos los modelos en `auto` |
+
+Cada decisión que descarta el modo directo queda anotada en *Registros*. Para no usar un equipo en absoluto, desmárcalo con
+*Usar este nodo en los repartos*; para fijar dónde corre un modelo, usa *destinos* (`targets`) al cargarlo.
 
 ## Conectar front-ends y herramientas
 

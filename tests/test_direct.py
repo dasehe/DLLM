@@ -136,6 +136,58 @@ class DirectLocalGpu(unittest.TestCase):
         self.wait(lambda: self.slot(0)["state"] == "IDLE", 30, "descarga")
         self.assertIsNone(self.slot(0)["direct"])
 
+    def nid(self, name):
+        return next(n["id"] for n in self.api("GET", "/api/state")[1]["nodes"] if n["name"] == name)
+
+    def _load0(self, model="small.gguf", device="gpu", node="gpu"):
+        st, r = self.api("POST", "/api/load", {"model": model, "ctx": 2048, "slot": 0,
+                                               "targets": [{"node": node, "device": device}]})
+        self.assertEqual(st, 202, r)
+
+    def _unload0(self):
+        self.api("POST", "/api/unload", {"slot": 0})
+        self.wait(lambda: self.slot(0)["state"] == "IDLE", 30, "descarga")
+
+    def test_choices_model_node(self):
+        """Ajuste del modelo (local_gpu) y del nodo (direct_local): se puede elegir no usar el directo."""
+        if self.NODB:
+            self.skipTest("el global ya lo desactiva")
+        st, r = self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {"local_gpu": "off"}})
+        self.assertEqual(st, 200, r)
+        self._load0()
+        self.ready(0)
+        self.assertTrue(self.chat("small.gguf")["rpc"])         # forzado a RPC aunque cabe en la GPU local
+        self.assertIsNone(self.slot(0)["direct"])
+        self._unload0()
+        self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {}})
+        # el host lo prohíbe
+        st, r = self.api("POST", "/api/node/settings", {"node": self.nid("gpu"), "direct_local": False})
+        self.assertEqual(st, 200, r)
+        self.assertEqual(r["settings"]["direct_local"], False)
+        self._load0()
+        self.ready(0)
+        self.assertTrue(self.chat("small.gguf")["rpc"])
+        self._unload0()
+        # modelo «on» manda sobre el host
+        self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {"local_gpu": "on"}})
+        self._load0()
+        self.ready(0)
+        self.assertEqual(self.chat("small.gguf")["rpc"], [])
+        self._unload0()
+        # «on» sin posibilidad (destino CPU): error claro, no cae en silencio
+        self._load0(node="cpu", device="cpu")
+        self.wait(lambda: self.slot(0)["state"] == "ERROR", 60, "error local_gpu=on")
+        self.assertIn("local_gpu=on", self.slot(0)["error"])
+        # valor por defecto otra vez: vuelve a ser directo
+        self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {}})
+        self.api("POST", "/api/node/settings", {"node": self.nid("gpu"), "direct_local": True})
+        self._load0()
+        self.ready(0)
+        self.assertEqual(self.chat("small.gguf")["rpc"], [])
+        self._unload0()
+        st, r = self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {"local_gpu": "x"}})
+        self.assertEqual(st, 400)
+
 
 class DirectDisabled(DirectLocalGpu):
     NODB = True

@@ -284,7 +284,7 @@ ENUMS = {"cache_type_k": KV_TYPES, "cache_type_v": KV_TYPES, "flash_attn": ("aut
          "rope_scaling": ("none", "linear", "yarn"), "datetime": ("datetime", "date", "off"),
          "placement": ("auto", "split", "node"), "engine": ("llamacpp",),
          "device_policy": ("auto", "gpu_strict", "cpu_only", "gpu_with_cpu_fallback"),
-         "tools": ("auto", "on", "off")}
+         "tools": ("auto", "on", "off"), "local_gpu": ("auto", "on", "off")}
 BOOLS = ("embeddings",)
 # ajuste → opción de llama-server (comprobadas en su documentación)
 LOAD_FLAGS = {"cache_type_k": "-ctk", "cache_type_v": "-ctv", "flash_attn": "-fa", "batch_size": "-b",

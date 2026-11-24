@@ -385,6 +385,13 @@ class Cluster:
             if not isinstance(req["enabled"], bool):
                 raise ValueError("'enabled' debe ser true o false")
             cur["enabled"] = req["enabled"]
+        if "direct_local" in req:  # True = valor por defecto (se puede ejecutar directo en este equipo)
+            if req["direct_local"] not in (True, False, None):
+                raise ValueError("'direct_local' debe ser true o false")
+            if req["direct_local"] is False:
+                cur["direct_local"] = False
+            else:
+                cur.pop("direct_local", None)
         if "allow_slow" in req:
             if not isinstance(req["allow_slow"], bool):
                 raise ValueError("'allow_slow' debe ser true o false")
@@ -1032,22 +1039,50 @@ class Cluster:
     def _direct_device(self, plan, used):
         """GPU local en la que ejecutar el modelo sin RPC, o None. Solo si el reparto es un único nodo que es este mismo
         equipo, en GPU, y llama-server local ve esa GPU. Evita el túnel y rpc-server; los demás modelos siguen
-        pudiendo usar el resto de nodos (y esta GPU: la reserva de VRAM es la misma)."""
-        if getattr(self.cfg, "no_direct_local", False) or len(used) != 1 or not used[0]:
+        pudiendo usar el resto de nodos (y esta GPU: la reserva de VRAM es la misma).
+        Se puede decidir en tres niveles (de más a menos específico): ajuste del modelo `local_gpu` (auto|on|off),
+        ajuste del nodo `direct_local` (false = nunca directo en este equipo) y la opción global --no-direct-local.
+        `on` obliga: si no es posible, la carga falla con el motivo en vez de caer en silencio a RPC."""
+        mode = self.models.settings(self.model).get("local_gpu", "auto")
+        dev, why = self._direct_candidate(plan, used)
+        if mode == "off":
+            if dev:
+                self.event("ejecución directa en GPU local desactivada para este modelo (local_gpu=off): se usa RPC")
             return None
+        if mode == "on":
+            if not dev:
+                raise LoadError(f"local_gpu=on: no se puede ejecutar directo en la GPU local ({why}). "
+                                "Pon el modelo en 'auto' o fija un destino que sea la GPU de este equipo.")
+            return dev
+        if dev:
+            n = used[0]
+            if getattr(self.cfg, "no_direct_local", False):
+                self.event("ejecución directa desactivada (--no-direct-local): se usa RPC")
+                return None
+            if self.node_settings(n.name).get("direct_local") is False:
+                self.event(f"ejecución directa desactivada en el nodo {n.name} (ajuste del nodo): se usa RPC")
+                return None
+        return dev
+
+    def _direct_candidate(self, plan, used):
+        """(dispositivo, motivo): ¿puede este plan ejecutarse directo en la GPU local? Sin mirar las preferencias."""
+        if len(used) != 1 or not used[0]:
+            return None, "el reparto usa más de un nodo"
         n, a = used[0], plan["assignments"][0]
-        if a.get("device") == "cpu" or a.get("backend") == "cpu" or not is_local_host(n.host):
-            return None
+        if a.get("device") == "cpu" or a.get("backend") == "cpu":
+            return None, "el reparto es en CPU"
+        if not is_local_host(n.host):
+            return None, f"el nodo {n.name} no es este equipo"
         try:
             if self._local_devs is None:
                 self._local_devs = devices.probe_llama_server(self.cfg.llama_bin)
-        except RuntimeError:
-            return None
+        except RuntimeError as e:
+            return None, f"no se pudo listar las GPU de llama-server ({e})"
         want = ((n.info or {}).get("device_desc") or "").lower(), ((n.info or {}).get("device") or "").lower()
         for d in self._local_devs:
             if not devices.is_cpu(d) and (d["desc"].lower() == want[0] and want[0] or d["name"].lower() == want[1] and want[1]):
-                return d
-        return None
+                return d, ""
+        return None, "llama-server local no ve la GPU de ese nodo"
 
     def _launch_llama(self, path, ctx, plan):
         self.llama_port = hw.slot_port({c.llama_port for c in self.slots.values() if c is not self})

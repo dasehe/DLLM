@@ -308,7 +308,8 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 - **Directo local:** si el plan asigna todo el modelo a un único dispositivo de un nodo que es este mismo equipo
   (`is_local_host`), `_launch_llama` usa `--device <dev>` sin `--rpc`: no hay `rpc-server` ni túnel para ese slot y
   `_teardown` no llama a `/rpc/stop`. El libro de recursos solo reserva ese dispositivo, así que otros slots siguen
-  usando el resto de nodos. Se identifica la GPU local con `devices.probe_llama_server`; si no casa, vuelve a RPC.
+  usando el resto de nodos. Se identifica la GPU local con `devices.probe_llama_server`; si no casa, vuelve a RPC. `_direct_candidate` dice si es
+  posible y `_direct_device` aplica las preferencias (modelo `local_gpu` > nodo `direct_local` > `--no-direct-local`).
 - **Herramientas:** `gguf.read_model` extrae `chat_template`/`tool_template`; el ajuste `tools` decide `--jinja`.
   `/v1/models` publica capacidades; el proxy no toca `tools`/`tool_calls`.
 - **Copias:** `backup.py` (ZIP + manifiesto sha256; cifrado stdlib PBKDF2 + HMAC) es independiente del orquestador; lo

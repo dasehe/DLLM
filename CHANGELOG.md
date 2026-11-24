@@ -15,6 +15,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
   secreto, API key, ajustes de modelos/nodos, nodos añadidos por IP, token HF e inventario de modelos para re-descargar;
   vista previa, copia de seguridad automática antes de restaurar y re-descarga de modelos.
 - **GPU local directa**: un modelo que cabe en la GPU local se lanza sin RPC ni túnel y deja libres el resto de nodos.
+  Configurable en tres niveles: por modelo (`local_gpu` = auto/on/off), por host (`direct_local` en Nodos → Configurar) y global
+  (`--no-direct-local`); `on` obliga y falla con el motivo si no es posible.
 - **Preparado para herramientas (function calling)**: `--jinja` automático según la plantilla del modelo, ajuste `tools`,
   capacidades en `/v1/models`, pestaña **Conectar** (URL, clave, fragmentos para AnythingLLM/Open WebUI/curl/Python) y
   `POST /api/tools/test`. DLLM no ejecuta las herramientas.
