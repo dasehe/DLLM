@@ -79,6 +79,11 @@ Empaqueta `dllm/` en un `dllm.pyz` (zipapp) y añade los lanzadores de `packagin
    release con el `.zip`, `SHA256SUMS` y la sección del CHANGELOG como notas.
    Alternativa equivalente: `git tag vX.Y.Z && git push origin vX.Y.Z` (la etiqueta debe coincidir con la versión).
 
+**Versiones pequeñas (desde 0.7.0):** cada cambio o grupo pequeño de cambios se publica con su propia versión: corrección
+de un fallo o ajuste mínimo → versión de parche (0.7.1, 0.7.2…); funcionalidad nueva → versión menor (0.8.0). No se acumulan
+cambios en `[Sin publicar]` más de lo necesario: cada commit que cambia el comportamiento sube la versión (en
+`dllm/__init__.py`, `pyproject.toml` y la sección del CHANGELOG) y avisa de que se puede pulsar *Run workflow*.
+
 Versionado semántico: cambios incompatibles en configuración, código de unión o protocolo del agente → versión menor
 mientras estemos en 0.x, y documentarlo en el CHANGELOG con instrucciones de actualización.
 

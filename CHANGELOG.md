@@ -4,6 +4,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.0] - 2026-11-24
+
 ### Añadido
 - **Desinstalador separado del instalador**: `Uninstall-DLLM`/`uninstall.sh`/`dllm uninstall --gui` abren su propia
   página con tres niveles (detener / quitar DLLM y configuración / todo), plan detallado y **copia previa opcional y

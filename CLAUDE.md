@@ -17,6 +17,9 @@ Idioma del proyecto: **español** (código comentado, mensajes, documentación, 
 
 ## Publicar una versión
 
+**Versiones pequeñas:** cada cambio (aunque sea un arreglo mínimo) sube la versión: parche = fallo/ajuste pequeño, menor =
+funcionalidad nueva. Un commit por versión, con su sección en `CHANGELOG.md`.
+
 Ver `docs/DESARROLLO.md#publicar-una-versión`: versión en `dllm/__init__.py` y `pyproject.toml`, sección en
 `CHANGELOG.md`, tests, push a `main` y **Actions → release → Run workflow** (o etiqueta `vX.Y.Z`). El workflow
 `release.yml` construye y publica. Desde las sesiones de Claude el proxy de git no deja subir etiquetas: usar el botón.
