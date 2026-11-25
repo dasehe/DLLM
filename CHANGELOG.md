@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.4] - 2026-11-25
+
+### Añadido
+- Fichero `LICENSE` con el texto oficial de la GNU AGPL v3 (el paquete ya lo incluye).
+
 ## [0.7.3] - 2026-11-25
 
 ### Corregido
