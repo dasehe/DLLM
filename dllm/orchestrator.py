@@ -462,7 +462,7 @@ class Cluster:
         for n in self.reg.all():
             i = n.info
             nodes.append({"id": n.id, "name": n.name, "up": self.reg.is_up(n), "used": any(n.id in c.used for c in list(self.slots.values())),
-                          "backend": i.get("backend"), "device_desc": i.get("device_desc"), "cores": i.get("cores"),
+                          "backend": i.get("backend"), "device_desc": i.get("device_desc"), "gpu_warning": i.get("gpu_warning"), "cores": i.get("cores"),
                           "threads": i.get("threads"), "cap_bytes": i.get("cap_bytes"),
                           "settings": self.node_settings(n.name), "now": i.get("telemetry") or {},
                           "hist": [compact(t) for t in n.hist],
@@ -1687,7 +1687,7 @@ class Cluster:
                           "bw_gbps": i.get("bw_gbps"), "cpu": i.get("cpu"), "os": i.get("os"),
                           "ram_free": i.get("ram_free"), "gpu": i.get("gpu"), "net": n.net,
                           "rpc_bin": i.get("rpc_bin"), "rpc_build": i.get("rpc_build"),
-                          "device": i.get("device"), "device_desc": i.get("device_desc"),
+                          "device": i.get("device"), "device_desc": i.get("device_desc"), "gpu_warning": i.get("gpu_warning"),
                           "devices": i.get("devices"), "update": i.get("update"),
                           "auto_update": i.get("auto_update"), "settings": self.node_settings(n.name),
                           "telemetry": i.get("telemetry"),

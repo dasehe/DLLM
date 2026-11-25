@@ -68,6 +68,7 @@ class Agent:
         self.llama_backend = getattr(a, "llama_backend", None)
         self.update = {"state": "inactiva"}
         self.devices, self.device, self.device_error = [], None, ""
+        self.gpu_warning = ""
         self.allow = set(a.allow_ip or [])
         self.announce = list(a.announce_to or [])
         self.beacon_port = a.beacon_port
@@ -92,6 +93,14 @@ class Agent:
             dev = None if forced_cpu else devices.choose(self.devices, getattr(self.a, "device", None))
             self.device, self.device_error = dev, ""
             self.probe.set_device(dev)
+            self.gpu_warning = ""
+            if dev is None and not forced_cpu:
+                seen = hw.nvidia_gpus()
+                if seen:
+                    self.gpu_warning = (f"Hay una GPU ({seen[0]['name']}) pero este llama.cpp no la usa (solo ve CPU): "
+                                        "el nodo presta CPU y RAM. Actualiza llama.cpp con CUDA/Vulkan "
+                                        "(Sistema → Actualizar llama.cpp) o instala el driver; se vuelve a comprobar solo cada minuto.")
+                    log("aviso: " + self.gpu_warning)
             if dev:
                 log(f"dispositivo: {dev['name']} · {dev['desc']} · {dev['total'] / hw.GiB:.1f} GiB "
                     f"({dev['free'] / hw.GiB:.1f} libres)")
@@ -105,6 +114,12 @@ class Agent:
         """La memoria libre de la GPU cambia (otros programas): se vuelve a medir mientras rpc-server no la usa."""
         while True:
             time.sleep(60)
+            if not self.device and not self.rpc_running() and self.rpc_bin and self.update.get("state") != "descargando":
+                try:  # GPU nueva, driver instalado o llama.cpp actualizado: se detecta sin reiniciar
+                    self.detect_devices()
+                except Exception:
+                    pass
+                continue
             if self.device and not self.rpc_running() and self.update.get("state") != "descargando":
                 try:
                     for d in devices.probe_rpc_server(self.rpc_bin):
@@ -398,6 +413,7 @@ class Agent:
                   "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "cpu_device": any(devices.is_cpu(d) for d in self.devices), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
                   "devices": self.devices, "device": self.device and self.device["name"],
                   "device_desc": self.device and self.device["desc"], "device_error": self.device_error,
+                  "gpu_warning": self.gpu_warning,
                   "auto_update": self.auto_update, "llama_backend": self.llama_backend, "update": self.update,
                   "telemetry": self.sampler.latest})
         return s

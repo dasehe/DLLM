@@ -8,7 +8,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from dllm import auth, scheduler, util  # noqa: E402
+from dllm import auth, hw, scheduler, util  # noqa: E402
 
 GiB = 1 << 30
 MODEL = {"name": "m", "size": 6 * GiB, "n_layers": 32, "n_embd": 4096, "n_head": 32, "n_head_kv": 8}
@@ -145,3 +145,31 @@ class TestProbe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGpuSinAcelerador(unittest.TestCase):
+    """nvidia-smi ve una GPU pero llama.cpp (solo CPU) no ofrece ninguna: capacidad CPU/RAM y aviso, no VRAM fantasma."""
+
+    def test_probe_cae_a_cpu(self):
+        from unittest import mock
+        gpu = [{"name": "RTX 3060", "total": 12 << 30, "free": 11 << 30}]
+        with mock.patch.object(hw, "nvidia_gpus", return_value=gpu):
+            p = hw.Probe("auto", bw_gbps=None)
+            self.assertEqual(p.backend, "gpu")
+            p.set_device(None)
+            self.assertEqual(p.backend, "cpu")
+            self.assertIsNone(p.hardware()["gpu"])
+            q = hw.Probe("gpu")  # explícito: se respeta
+            q.set_device(None)
+            self.assertEqual(q.backend, "gpu")
+
+    def test_telemetria_muestra_la_gpu_sin_usar(self):
+        from unittest import mock
+        from dllm import telemetry
+        gpu = [{"name": "RTX 3060", "vram_total": 12 << 30, "vram_used": 1 << 30, "util": 3.0}]
+        with mock.patch.object(telemetry, "nvidia_smi", return_value=gpu):
+            g = telemetry.Sampler(lambda: None)._gpu(None)
+        self.assertTrue(g["unused"])
+        self.assertEqual(g["name"], "RTX 3060")
+        with mock.patch.object(telemetry, "nvidia_smi", return_value=[]):
+            self.assertIsNone(telemetry.Sampler(lambda: None)._gpu(None))

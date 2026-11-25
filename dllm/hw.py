@@ -220,6 +220,7 @@ def cpu_bw_estimate(size=48 << 20, iters=4):
 
 class Probe:
     def __init__(self, backend="auto", reserve_gb=1.0, bw_gbps=None, gpu_index=0):
+        auto = backend == "auto"
         self.cores = os.cpu_count() or 1
         self.cpu = cpu_name()
         self.reserve = int(reserve_gb * GiB)
@@ -232,6 +233,7 @@ class Probe:
             print("aviso: --backend gpu pero no hay nvidia-smi/GPU; usando cpu", file=sys.stderr)
             backend = "cpu"
         self.backend = backend
+        self.auto_backend = auto
         self.bw = bw_gbps or (GPU_BW_DEFAULT if backend == "gpu" else cpu_bw_estimate())
 
     def set_device(self, dev):
@@ -241,6 +243,11 @@ class Probe:
             self.backend = "gpu"
             if not self.bw_fixed:
                 self.bw = GPU_BW_DEFAULT
+        elif self.backend == "gpu" and self.auto_backend:
+            # nvidia-smi veía una GPU, pero llama.cpp no ofrece ningún acelerador: la capacidad real es CPU/RAM
+            self.backend = "cpu"
+            if not self.bw_fixed:
+                self.bw = cpu_bw_estimate()
 
     def hardware(self):
         total, avail = mem_info()

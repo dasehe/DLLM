@@ -388,6 +388,7 @@ async function tele(){if(cur!=='mon')return;try{const t=await api('GET','/api/te
 function ncard(n,i){const t=n.now||{},g=t.gpu,off=(n.settings||{}).enabled===false;
   const badge=!n.up?'<span class="badge b-off">sin conexión</span>':off?'<span class="badge b-off">desactivado</span>':n.used?'<span class="badge b-use">en uso</span>':'<span class="badge">disponible</span>';
   let h=`<div class="card ncard"><div class="hd"><div><h3><span class="dot ${n.up?'up':''}"></span>${esc(n.name)}</h3><div class="mut" style="font-size:12px">${esc(n.device_desc||(n.backend==='cpu'?'CPU':'—'))}${g&&g.source?` · ${esc(g.source)}`:''}</div></div>${badge}</div>`;
+  if(n.gpu_warning)h+=`<div class="slowbox">⚠️ ${esc(n.gpu_warning)}</div>`;
   if(g){const vp=g.vram_total?100*(g.vram_used||0)/g.vram_total:null;
     h+=meter('GPU',g.util,fmt(g.util,0,' %'));
     h+=meter('VRAM',vp,g.vram_used!=null?`${gib(g.vram_used)} / ${gib(g.vram_total)}`:na);
@@ -423,6 +424,7 @@ function nodeCard(n){const st=n.settings||{},off=st.enabled===false,slow=isSlow(
   let h=`<div class="card nodec ${n.up?'':'down'}"><div class="hd"><div><h3><span class="dot ${n.up?'up':''}"></span>${esc(n.name)}</h3><div class="mut" style="font-size:12px">${esc(n.host)} · ${esc(n.device_desc||(n.backend==='cpu'?'CPU':n.backend||'—'))}</div></div><div>${badge}</div></div>`;
   h+=`<div class="kv"><span class="k">Aporta</span><span>${n.cap_bytes==null?'—':gib(n.cap_bytes)+(n.gpu?' de VRAM':' de RAM')} · ${n.threads??'?'} hilos</span><span class="k">Red</span><span>${netcell(n)}</span></div>`;
   h+=`<div>${nodeChips(n)}</div>`;
+  if(n.gpu_warning)h+=`<div class="slowbox">⚠️ ${esc(n.gpu_warning)}</div>`;
   if(slow&&!forced)h+=`<div class="slowbox">⚠️ Red lenta (${n.net.mbps} Mbps, el mínimo es ${S.min_mbps}). No se usa en los repartos. <button class="sm" onclick="allowSlow('${esc(n.id)}',true)">Usar igualmente (pruebas)</button></div>`;
   if(slow&&forced)h+=`<div class="slowbox forced">🧪 Modo forzado: se usa aunque su red sea lenta (${n.net.mbps} Mbps). <button class="sec sm" onclick="allowSlow('${esc(n.id)}',false)">Dejar de forzar</button></div>`;
   if(n.error&&!n.up)h+=`<div class="err" style="font-size:12px">${esc(n.error)}</div>`;

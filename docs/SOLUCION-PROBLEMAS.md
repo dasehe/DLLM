@@ -67,6 +67,13 @@ fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prue
    red ha intentado reclamarlo. Alternativas sin broadcast: en el panel, **Nodos → Añadir por IP** o **Buscar en la red**; al
    instalar el nodo, indica la IP del orquestador (`--orch-ip`).
 
+## Un nodo tiene GPU pero Monitor dice «sin GPU» (aviso «llama.cpp no la usa»)
+
+`nvidia-smi` ve la GPU, pero el `rpc-server` instalado es solo CPU (o al arrancarlo faltaba el driver/Vulkan), así que no puede
+prestarla: el nodo se anuncia como CPU/RAM y muestra el aviso. En el nodo, actualiza llama.cpp con CUDA o Vulkan (Sistema →
+Actualizar llama.cpp) o instala el driver; el agente vuelve a detectar los dispositivos cada minuto, sin reiniciar. Comprueba con
+`rpc-server --list-devices` y `python3 ~/.dllm/dllm.pyz doctor`.
+
 ## Un nodo sale excluido del reparto
 
 `dllm plan MODELO` dice el motivo:

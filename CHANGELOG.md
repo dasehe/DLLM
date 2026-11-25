@@ -4,6 +4,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.5] - 2026-11-25
+
+### Corregido
+- Un nodo con una GPU que `nvidia-smi` veía pero que el `rpc-server` instalado (llama.cpp solo CPU) no ofrecía aparecía
+  como «GPU con VRAM» en Nodos y como «sin GPU» en Monitor, y el reparto contaba VRAM que no se podía usar. Ahora el nodo
+  se anuncia como CPU/RAM (salvo `--backend gpu` explícito), muestra el aviso «hay una GPU pero llama.cpp no la usa:
+  actualiza llama.cpp con CUDA/Vulkan», Monitor enseña la GPU del equipo aunque no se preste, y el agente vuelve a
+  detectar los dispositivos cada minuto (GPU nueva, driver o llama.cpp actualizado) sin reiniciar.
+
 ## [0.7.4] - 2026-11-25
 
 ### Añadido

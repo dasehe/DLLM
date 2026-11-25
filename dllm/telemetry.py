@@ -269,8 +269,9 @@ class Sampler:
                 self.tx += n
 
     def _gpu(self, device):
-        if not device:
-            return None
+        if not device:  # llama.cpp no usa ninguna GPU, pero si el equipo tiene una se muestra (sin prestarla)
+            g = _match(nvidia_smi(), None)
+            return dict(g, unused=True) if g else None
         g = _match(nvidia_smi(), device)
         if g is None and sys.platform.startswith("linux"):
             g = _match(amdgpu_sysfs(), device)
