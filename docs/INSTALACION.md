@@ -40,25 +40,22 @@ LEEME-INSTALAR.md      resumen de estas instrucciones
 SHA256SUMS             sumas de comprobación
 ```
 
-> El repositorio es privado: para descargar la release hay que iniciar sesión en GitHub con una cuenta con acceso.
 > También puedes generar el paquete tú mismo: `python scripts/build_package.py` (ver [DESARROLLO](DESARROLLO.md)).
 
 ### Ubuntu / Debian en una sola línea
 
 ```bash
-export GH_TOKEN=<token con permiso de lectura>     # solo mientras el repositorio sea privado
-bash <(curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/instalar-ubuntu.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/instalar-ubuntu.sh)
 ```
 
 Instala git/python3/unzip si faltan, descarga el repositorio en `~/dllm-src` (variable `DLLM_SRC`), construye el paquete y
-lanza el instalador (`--tui` automático por SSH; cualquier opción se pasa a `install.sh`). El token solo se usa en cada
-orden de git, no se guarda. También puedes descargar el script y ejecutarlo: `bash instalar-ubuntu.sh`. Sin `curl`
-interactivo no hace falta `sudo` si ya tienes las dependencias.
+lanza el instalador (`--tui` automático por SSH; cualquier opción se pasa a `install.sh`). También puedes descargar el
+script y ejecutarlo: `bash instalar-ubuntu.sh`. Si el repositorio vuelve a ser privado, exporta antes `GH_TOKEN` (token de
+lectura; solo se usa en cada orden de git y no se guarda) y añade a `curl` la cabecera `-H "Authorization: token $GH_TOKEN"`.
 
 ### Desde el repositorio (Ubuntu / Debian)
 
-Mientras no haya release publicada, o si prefieres compilar el paquete tú mismo (el repositorio es privado: `git`
-pedirá usuario y un token con permiso de lectura, o usa SSH):
+Si prefieres compilar el paquete tú mismo:
 
 ```bash
 sudo apt update && sudo apt install -y git python3

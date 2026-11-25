@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.2] - 2026-11-25
+
+### Cambiado
+- Repositorio público: la instalación en Ubuntu es `bash <(curl -fsSL …/instalar-ubuntu.sh)` sin token (el token queda como
+  opción si vuelve a ser privado). Documentación de instalación actualizada.
+
 ## [0.7.1] - 2026-11-25
 
 ### Añadido

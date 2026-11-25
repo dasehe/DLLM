@@ -3,7 +3,7 @@
 # Copyright (C) 2026 David Serrano Hernando y colaboradores de DLLM
 # Instalación de DLLM en Ubuntu/Debian de una sola vez: dependencias, descarga, paquete y asistente.
 #   Uso:  bash instalar-ubuntu.sh [opciones de install.sh, p. ej. --tui]
-#   Repo privado: exporta GH_TOKEN=<token con permiso de lectura> (no se guarda en ningún fichero ni en el remoto).
+#   Repo público: no hace falta nada. Si vuelve a ser privado: GH_TOKEN=<token de lectura> (no se guarda en ningún sitio).
 #   Variables: DLLM_SRC (carpeta de las fuentes, def. ~/dllm-src), DLLM_REPO (def. dasehe/DLLM), DLLM_REF (def. main).
 set -euo pipefail
 
