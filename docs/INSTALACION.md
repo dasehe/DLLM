@@ -43,6 +43,18 @@ SHA256SUMS             sumas de comprobación
 > El repositorio es privado: para descargar la release hay que iniciar sesión en GitHub con una cuenta con acceso.
 > También puedes generar el paquete tú mismo: `python scripts/build_package.py` (ver [DESARROLLO](DESARROLLO.md)).
 
+### Ubuntu / Debian en una sola línea
+
+```bash
+export GH_TOKEN=<token con permiso de lectura>     # solo mientras el repositorio sea privado
+bash <(curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/instalar-ubuntu.sh)
+```
+
+Instala git/python3/unzip si faltan, descarga el repositorio en `~/dllm-src` (variable `DLLM_SRC`), construye el paquete y
+lanza el instalador (`--tui` automático por SSH; cualquier opción se pasa a `install.sh`). El token solo se usa en cada
+orden de git, no se guarda. También puedes descargar el script y ejecutarlo: `bash instalar-ubuntu.sh`. Sin `curl`
+interactivo no hace falta `sudo` si ya tienes las dependencias.
+
 ### Desde el repositorio (Ubuntu / Debian)
 
 Mientras no haya release publicada, o si prefieres compilar el paquete tú mismo (el repositorio es privado: `git`

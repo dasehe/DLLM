@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.1] - 2026-11-25
+
+### Añadido
+- `scripts/instalar-ubuntu.sh`: instalación en Ubuntu/Debian en un solo comando (dependencias, descarga con `GH_TOKEN`
+  si el repo es privado, paquete y asistente; `--tui` automático sin escritorio).
+
 ## [0.7.0] - 2026-11-24
 
 ### Añadido
