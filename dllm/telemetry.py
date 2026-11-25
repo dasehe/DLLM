@@ -56,8 +56,20 @@ def parse_nvidia_smi(text):
     return out
 
 
-def nvidia_smi():
-    exe = shutil.which("nvidia-smi")
+_WHICH = {}
+
+
+def _which(name, ttl=300):
+    """shutil.which recorre todo el PATH: se cachea unos minutos (se usa cada 2 s)."""
+    k = (name, os.environ.get("PATH"))
+    v = _WHICH.get(k)
+    if v is None or time.time() - v[1] > ttl:
+        v = _WHICH[k] = (shutil.which(name), time.time())
+    return v[0]
+
+
+def nvidia_smi_once():
+    exe = _which("nvidia-smi")
     if not exe:
         return []
     try:
@@ -66,6 +78,64 @@ def nvidia_smi():
         return parse_nvidia_smi(r.stdout)
     except (OSError, subprocess.TimeoutExpired):
         return []
+
+
+class NvidiaStream:
+    """Un único `nvidia-smi -lms` en marcha en lugar de lanzar el programa cada 2 s (cada arranque inicializa NVML y
+    cuesta decenas de ms de CPU). Si el proceso muere o deja de escribir, se vuelve a la consulta puntual; tras varios
+    fallos seguidos se queda en modo puntual."""
+
+    def __init__(self, interval_ms=2000):
+        self.interval = interval_ms / 1000
+        self.proc, self.latest, self.ts, self.fails, self.exe = None, {}, 0.0, 0, None
+        self.lock = threading.Lock()
+
+    def _start(self, exe):
+        try:
+            self.proc = subprocess.Popen([exe, f"--query-gpu={NVIDIA_FIELDS}", "--format=csv,noheader,nounits",
+                                          f"-lms={int(self.interval * 1000)}"],
+                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        except OSError:
+            self.proc, self.fails = None, self.fails + 1
+            return
+        threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
+
+    def _reader(self, proc):
+        try:
+            for line in proc.stdout:
+                for g in parse_nvidia_smi(line):
+                    with self.lock:
+                        self.latest[g["index"]] = g
+                        self.ts = time.time()
+        except (OSError, ValueError):
+            pass
+        self.fails += 1
+
+    def read(self):
+        exe = _which("nvidia-smi")
+        if not exe:
+            return []
+        if exe != self.exe:  # otro nvidia-smi (PATH distinto): se empieza de cero
+            self.stop()
+            with self.lock:
+                self.proc, self.latest, self.ts, self.fails, self.exe = None, {}, 0.0, 0, exe
+        if self.fails < 3 and (self.proc is None or self.proc.poll() is not None):
+            self._start(exe)
+        with self.lock:
+            fresh = time.time() - self.ts < 3 * self.interval + 1
+            cur = sorted(self.latest.values(), key=lambda g: g["index"]) if fresh else None
+        return cur if cur is not None else nvidia_smi_once()
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+
+
+_STREAM = NvidiaStream()
+
+
+def nvidia_smi():
+    return _STREAM.read()
 
 
 # ============================================================ AMD (Linux, sysfs)

@@ -4,6 +4,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.7] - 2026-11-25
+
+### Cambiado (rendimiento)
+- Telemetría incremental: `GET /api/telemetry?since=<t>` solo devuelve las muestras nuevas; el panel acumula el
+  historial en el navegador (antes recibía 150 muestras por nodo cada 2 s).
+- Panel servido comprimido (gzip, ~90 KB → ~20 KB) con ETag y revalidación 304; la API de gestión comprime respuestas
+  JSON grandes si el cliente lo acepta. La API `/v1` no se toca (sin latencia añadida).
+- El panel deja de consultar al orquestador mientras su pestaña está oculta y se actualiza al volver.
+- Agentes con GPU NVIDIA: un único `nvidia-smi -lms` persistente en lugar de lanzar el programa cada 2 s (con vuelta
+  automática a la consulta puntual si falla); búsqueda de ejecutables en el PATH cacheada.
+
 ## [0.7.6] - 2026-11-25
 
 ### Añadido

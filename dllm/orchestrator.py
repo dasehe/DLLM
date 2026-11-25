@@ -5,6 +5,8 @@ autenticados hacia los rpc-server de los nodos, expone una API OpenAI-compatible
 recupera solo si un nodo cae."""
 import base64
 import collections
+import gzip
+import hashlib
 import hmac
 import http.client
 import json
@@ -453,7 +455,12 @@ class Cluster:
             prev = s
             self.llama_hist.append(s)
 
-    def telemetry(self):
+    def telemetry(self, since=None):
+        """Con `since` (marca de tiempo de la respuesta anterior) solo envía las muestras nuevas: el panel pide cada 2 s
+        y el historial completo (150 muestras por nodo) se mandaba entero cada vez."""
+        def newer(seq):
+            return [t for t in seq if since is None or t["t"] > since]
+
         def compact(t):
             g = t.get("gpu") or {}
             return [round(t["t"], 1), g.get("util"), g.get("vram_used"), g.get("power"), g.get("temp"),
@@ -465,12 +472,12 @@ class Cluster:
                           "backend": i.get("backend"), "device_desc": i.get("device_desc"), "gpu_warning": i.get("gpu_warning"), "cores": i.get("cores"),
                           "threads": i.get("threads"), "cap_bytes": i.get("cap_bytes"),
                           "settings": self.node_settings(n.name), "now": i.get("telemetry") or {},
-                          "hist": [compact(t) for t in n.hist],
+                          "hist": [compact(t) for t in newer(list(n.hist))],
                           "hist_cols": ["t", "gpu_util", "vram_used", "power", "temp", "cpu", "rpc_bps"]})
         lh = list(self.llama_hist)
-        return {"t": time.time(), "state": self.state, "model": self.model,
+        return {"t": time.time(), "delta": since is not None, "state": self.state, "model": self.model,
                 "llama": lh[-1] if lh else {}, "llama_hist": [[round(x["t"], 1), x.get("tok_s"), x.get("requests")]
-                                                             for x in lh], "nodes": nodes}
+                                                             for x in newer(lh)], "nodes": nodes}
 
     def resources(self, extra=None, skip=()):
         """Recursos del clúster: VRAM, RAM y núcleos por nodo y en total, con lo ya reservado por los modelos cargados.
@@ -1781,11 +1788,20 @@ def make_handler(cfg, cl):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, obj=None, raw=None, ctype="application/json", headers=None):
-            body = raw if raw is not None else json.dumps(obj).encode()
+        def _send(self, code, obj=None, raw=None, ctype="application/json", headers=None, gz=None):
+            body = raw if raw is not None else json.dumps(obj, separators=(",", ":")).encode()
+            # panel y API de gestión: gzip si el cliente lo acepta y compensa (la API /v1 va tal cual, sin latencia extra)
+            if gz is None and len(body) >= 1400 and not self.path.startswith("/v1") \
+                    and (ctype.startswith("text/") or ctype.startswith("application/json")) \
+                    and "gzip" in self.headers.get("Accept-Encoding", ""):
+                gz = gzip.compress(body, 5)
             self.send_response(code)
             for k, v in (headers or {}).items():
                 self.send_header(k, str(v))
+            if gz is not None and "gzip" in self.headers.get("Accept-Encoding", ""):
+                body = gz
+                self.send_header("Content-Encoding", "gzip")
+                self.send_header("Vary", "Accept-Encoding")
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -1814,9 +1830,14 @@ def make_handler(cfg, cl):
             path = urlparse(self.path).path
             try:
                 if path == "/":
-                    # pkgutil funciona también cuando el paquete va dentro de un .pyz
-                    return self._send(200, raw=pkgutil.get_data("dllm", "ui.html"),
-                                      ctype="text/html; charset=utf-8")
+                    html, gz, etag = _ui_page()
+                    if self.headers.get("If-None-Match") == etag:
+                        self.send_response(304)
+                        self.send_header("ETag", etag)
+                        self.end_headers()
+                        return
+                    return self._send(200, raw=html, gz=gz, ctype="text/html; charset=utf-8",
+                                      headers={"ETag": etag, "Cache-Control": "no-cache"})
                 if path == "/healthz":
                     return self._send(200, {"ok": True})
                 ip = self.client_address[0]
@@ -1925,7 +1946,12 @@ def make_handler(cfg, cl):
                 if path == "/api/node/settings" and self.command == "POST":
                     return self._send(200, cl.set_node_settings(req))
                 if path == "/api/telemetry":
-                    return self._send(200, cl.telemetry())
+                    q = parse_qs(urlparse(self.path).query).get("since", [None])[0]
+                    try:
+                        since = float(q) if q is not None else None
+                    except ValueError:
+                        raise ValueError("'since' debe ser una marca de tiempo")
+                    return self._send(200, cl.telemetry(since))
                 if path == "/api/backup/export" and self.command == "POST":
                     blob, fname = cl.export_backup(req.get("passphrase"), req.get("plain") is True,
                                                    req.get("include_logs") is True)
@@ -2046,6 +2072,17 @@ def make_handler(cfg, cl):
                 up.close()
 
     return H
+
+
+_UI = []
+
+
+def _ui_page():
+    """Panel (90 KB) leído, comprimido y con ETag una sola vez; el navegador lo revalida con 304."""
+    if not _UI:
+        html = pkgutil.get_data("dllm", "ui.html")  # funciona también dentro del .pyz
+        _UI.extend([html, gzip.compress(html, 9), '"%s"' % hashlib.sha256(html).hexdigest()[:16]])
+    return _UI
 
 
 def run(cfg):

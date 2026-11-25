@@ -361,7 +361,7 @@ function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.cla
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 /* ---------- estado general ---------- */
-async function refresh(){try{const s=await api('GET','/api/state');S=s;
+async function refresh(){if(document.hidden)return;try{const s=await api('GET','/api/state');S=s;
   $('state').textContent=s.state;$('state').className='badge '+s.state;$('ver').textContent='v'+s.version;
   $('model').textContent=(s.model||'')+(s.error?' — '+s.error:'')+(s.recoveries?` · recuperaciones: ${s.recoveries}`:'');
   $('attb').classList.toggle('hide',!s.multimodal);
@@ -372,7 +372,12 @@ async function refresh(){try{const s=await api('GET','/api/state');S=s;
 }catch(e){$('state').textContent='sin conexión';$('state').className='badge ERROR'}}
 
 /* ---------- monitor ---------- */
-async function tele(){if(cur!=='mon')return;try{const t=await api('GET','/api/telemetry');T=t;
+let TH={},TL=[],TT=null;  // historial de telemetría acumulado en el navegador: el servidor solo manda lo nuevo
+function teleMerge(t){const cut=a=>a.length>150?a.slice(-150):a;
+  if(!t.delta){TH={};TL=[]}
+  t.nodes.forEach(n=>{n.hist=TH[n.id]=cut((TH[n.id]||[]).concat(n.hist))});
+  t.llama_hist=TL=cut(TL.concat(t.llama_hist));TT=t.t}
+async function tele(){if(cur!=='mon'||document.hidden)return;try{const t=await api('GET','/api/telemetry'+(TT?'?since='+TT:''));teleMerge(t);T=t;
   const l=t.llama||{};$('k_toks').textContent=l.tok_s!=null?l.tok_s.toFixed(1):'—';
   spark('sp_toks',t.llama_hist.map(x=>x[1]),null,'var(--ok)');
   $('k_req').textContent=l.requests!=null?l.requests:'—';$('k_kv').textContent=l.kv_usage!=null?`contexto en uso: ${(l.kv_usage*100).toFixed(0)} %`:'';
@@ -679,7 +684,7 @@ async function olLocal(){try{const r=await api('GET','/api/ollama/local');
   $('llres').innerHTML=r.models.length?'<table>'+r.models.map(x=>`<tr><td>${esc(x.name)}</td><td>${gib(x.size)}</td><td><button class="sm" onclick='startDl({source:"ollama-local",name:${JSON.stringify(x.name)}})'>Importar</button></td></tr>`).join('')+'</table><div class="mut" style="font-size:12px">Si está en el mismo disco se enlaza sin ocupar espacio extra.</div>':`No hay modelos de Ollama en ${esc(r.dir)} (en este equipo).`}catch(e){$('llres').textContent=e.message}}
 async function hfToken(clear){try{const r=await api('POST','/api/hf/token',{token:clear?'':$('hftoken').value});$('hftoken').value='';$('hftok').textContent=r.set?'(configurado)':''}catch(e){alert(e.message)}}
 const secs=t=>t==null?'':t>3600?Math.round(t/3600)+' h':t>60?Math.round(t/60)+' min':t+' s';
-async function dl(){if(cur!=='mod')return;try{const j=await api('GET','/api/downloads');const sig=JSON.stringify(j.map(x=>[x.id,x.status]));
+async function dl(){if(cur!=='mod'||document.hidden)return;try{const j=await api('GET','/api/downloads');const sig=JSON.stringify(j.map(x=>[x.id,x.status]));
   $('dl').innerHTML=j.length?j.map(x=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(x.label)} <span class="${x.status==='error'?'err':'mut'}">${esc(x.status)}${x.error?': '+esc(x.error):''}</span></span><span class="mut">${gib(x.done)} / ${gib(x.total)}${x.status==='descargando'?` · ${(x.speed/2**20).toFixed(1)} MB/s · quedan ${secs(x.eta)}`:''} ${['en cola','descargando'].includes(x.status)?`<button class="sec sm" onclick="api('POST','/api/downloads/cancel',{id:'${x.id}'}).then(dl)">Cancelar</button>`:`<button class="sec sm" title="Quitar del historial" onclick="clearDl('${x.id}')">✕</button>`}</span></div><div class="bar2"><div style="width:${x.pct||0}%"></div></div></div>`).join(''):'Ninguna.';
   $('dlclear').classList.toggle('hide',!j.some(x=>!['en cola','descargando'].includes(x.status)));
   if(sig!==lastDl){lastDl=sig;models()}}catch(e){}}
@@ -715,6 +720,8 @@ async function send(){const t=$('msg').value.trim();const f=$('att').files[0];if
 const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','con','ev','sys'].includes(start)?start:'mon');
 try{setAdv(localStorage.getItem('dllm_adv')==='1')}catch(e){}
 refresh();models();initTok();setInterval(refresh,2000);setInterval(tele,2000);setInterval(dl,1500);
+// pestaña oculta: no se consulta nada; al volver, se actualiza al momento
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){refresh();tele();dl()}});
 // presencia: `dllm open` sabe así si el panel sigue abierto (y ofrece reabrirlo si se cierra)
 const CID=Math.random().toString(36).slice(2,12);
 const ping=()=>fetch('/api/ui/ping?id='+CID,{method:'POST',headers:key()?{Authorization:'Bearer '+key()}:{}}).catch(()=>{});

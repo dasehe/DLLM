@@ -316,3 +316,12 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
   usan la API, el CLI, el instalador (`Setup.install(restore=…)`) y el desinstalador (copia previa).
 - **Instalador / desinstalador:** `wizard._WebState.mode` sirve `setup.html` o `uninstall.html`; `/api/uninstall`
   solo existe en modo desinstalador.
+
+## Eficiencia (0.7.7)
+
+- **Telemetría:** el panel guarda el historial; cada 2 s pide `?since=<t de la respuesta anterior>` y el orquestador solo
+  envía muestras más nuevas (`delta: true`). Sin `since`, historial completo.
+- **HTTP del panel:** `ui.html` se lee, comprime y firma (ETag) una vez por proceso; respuestas JSON de gestión ≥ 1,4 KB
+  van con gzip si el cliente lo acepta. `/v1` nunca se comprime ni se almacena: el streaming SSE sale tal cual.
+- **Agente:** `telemetry.NvidiaStream` mantiene un `nvidia-smi -lms` y guarda la última muestra por GPU; si el proceso
+  termina o se queda sin datos, consulta puntual (y tras tres fallos, solo puntual).

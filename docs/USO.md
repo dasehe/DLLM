@@ -289,7 +289,7 @@ Si no hay modelo listo la API responde `503` con el estado actual.
 | `GET\|POST /api/nodes/scan` | `{"range": "192.168.1.0/24", "port": 8765}` (opcional) | Lanza la búsqueda / estado y `found` (`libre`, `en_cluster`, `otro`) |
 | `GET\|POST /api/nodes/bench` | `{"nodes": ["IP:8765"]}` (opcional; vacío = todos) | Lanza la medición uno a uno y en conjunto / estado y resultados |
 | `POST /api/nodes/forget` | `{"node": "IP:8765"}` | Elimina el nodo de la lista; `409` si lo usa un modelo |
-| `GET /api/telemetry` | — | Estado en tiempo real: tokens/s, peticiones y, por nodo, GPU/CPU/RAM/tráfico con historial |
+| `GET /api/telemetry[?since=t]` | — | Estado en tiempo real: tokens/s, peticiones y, por nodo, GPU/CPU/RAM/tráfico con historial |
 | `POST /api/node/limits` | `{"node": "IP:8765", "share": 33}` o `"mem_gb"`/`"threads"`/`"device"` (`""` = automático), o `{"node": …, "reset": true}` | Límites efectivos; `400` con motivo si el nodo es manual o el valor no es válido |
 | `GET /metrics` | — | Métricas Prometheus |
 | `GET /api/access` | — | Si la petición es local, si hace falta clave y (en local) el enlace para otros equipos |

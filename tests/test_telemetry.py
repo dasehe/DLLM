@@ -174,3 +174,47 @@ class TestNvidiaSmiFake(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestNvidiaStream(unittest.TestCase):
+    """Un solo nvidia-smi -lms en marcha en vez de lanzarlo cada 2 s; si muere, consulta puntual."""
+
+    def fake(self, d, body):
+        exe = d / "nvidia-smi"
+        exe.write_text("#!/bin/sh\n" + body)
+        exe.chmod(0o755)
+
+    def test_stream_persistente(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            log = d / "arranques"
+            # imita -lms: escribe una muestra cada 0,1 s mientras viva; cuenta cuántas veces se arranca
+            self.fake(d, f'echo x >> "{log}"\ncase "$*" in *-lms*) while :; do '
+                         "echo '0, RTX 3060, 50, 1000, 12288, 60, 100, 170, 40, 1800'; sleep 0.1; done;; "
+                         "*) echo '0, RTX 3060, 1, 1, 12288, 1, 1, 170, 1, 1';; esac\n")
+            st = telemetry.NvidiaStream(interval_ms=100)
+            with mock.patch.dict(os.environ, {"PATH": str(d)}):
+                st.read()
+                time.sleep(0.5)
+                for _ in range(10):
+                    g = st.read()
+                    time.sleep(0.05)
+                st.stop()
+            self.assertEqual(g[0]["util"], 50.0)                      # datos del proceso persistente
+            self.assertEqual(len(log.read_text().split()), 2)         # 1 arranque persistente + 1 puntual inicial
+        finally:
+            shutil.rmtree(d)
+
+    def test_sin_lms_cae_a_puntual(self):
+        d = Path(tempfile.mkdtemp())
+        try:
+            self.fake(d, "echo '0, RTX 3060, 7, 1000, 12288, 60, 100, 170, 40, 1800'\n")  # sale enseguida
+            st = telemetry.NvidiaStream(interval_ms=100)
+            with mock.patch.dict(os.environ, {"PATH": str(d)}):
+                for _ in range(6):
+                    g = st.read()
+                    time.sleep(0.15)
+            self.assertEqual(g[0]["util"], 7.0)
+            self.assertGreaterEqual(st.fails, 3)                      # deja de reintentar el modo persistente
+        finally:
+            shutil.rmtree(d)
