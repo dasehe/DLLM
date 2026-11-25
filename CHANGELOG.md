@@ -4,6 +4,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.3] - 2026-11-25
+
+### Corregido
+- `instalar-ubuntu.sh`: ya no aborta cuando no hay terminal (`/dev/tty`) disponible, p. ej. en ejecuciones sin TTY.
+
 ## [0.7.2] - 2026-11-25
 
 ### Cambiado

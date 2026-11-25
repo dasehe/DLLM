@@ -63,5 +63,5 @@ if [ "${#args[@]}" -eq 0 ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then ar
 echo "==> Lanzando el instalador ($PKG)"
 cd "$PKG"
 # Si se lanzó con «curl | bash», la entrada estándar es el propio script: el asistente necesita el teclado.
-[ -t 0 ] || { [ -r /dev/tty ] && exec </dev/tty; }
+if [ ! -t 0 ] && { : </dev/tty; } 2>/dev/null; then exec </dev/tty; fi
 exec ./install.sh "${args[@]}"
