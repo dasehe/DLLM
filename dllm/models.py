@@ -658,6 +658,21 @@ class Manager:
     def views(self):
         return [j.view() for j in reversed(self.jobs)]
 
+    def clear(self, jid=None):
+        """Borra del historial las descargas terminadas (completadas, canceladas o con error): una (`jid`) o todas.
+        No toca ficheros (un .part de una descarga cancelada sigue sirviendo para reanudar) ni las activas."""
+        with self.lock:
+            fin = lambda j: j.status not in ("en cola", "descargando")
+            if jid is not None:
+                j = next((x for x in self.jobs if x.id == jid), None)
+                if j is None:
+                    raise ModelError("descarga no encontrada")
+                if not fin(j):
+                    raise ModelError("esa descarga sigue activa: cancélala antes de borrarla")
+            before = len(self.jobs)
+            self.jobs = [j for j in self.jobs if not fin(j) or (jid is not None and j.id != jid)]
+            return before - len(self.jobs)
+
     # ---------------------------------------------------------- ejecutar
     def _worker(self):
         while True:

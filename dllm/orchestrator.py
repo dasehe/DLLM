@@ -1915,6 +1915,8 @@ def make_handler(cfg, cl):
                     return self._send(200, mm.views())
                 if path == "/api/downloads/cancel" and self.command == "POST":
                     return self._send(200, {"ok": mm.cancel(req.get("id"))})
+                if path == "/api/downloads/clear" and self.command == "POST":
+                    return self._send(200, {"removed": mm.clear(req.get("id"))})
                 if path == "/api/models/delete" and self.command == "POST":
                     cl.delete_model(req.get("model"))
                     return self._send(200, {"ok": True})

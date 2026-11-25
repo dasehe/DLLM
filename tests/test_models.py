@@ -142,6 +142,31 @@ class TestModels(unittest.TestCase):
         self.assertTrue(list(self.root.rglob("slow-Q4_0.gguf.part")))
         self.assertFalse(list(self.root.rglob("slow-Q4_0.gguf")))
 
+    def test_clear_download_history(self):
+        a = self.mgr.add_hf("acme/Slow-GGUF", "slow-Q4_0.gguf")["id"]
+        wait_job(self.mgr, a, until=("descargando",))
+        with self.assertRaises(models.ModelError):
+            self.mgr.clear(a)                      # activa: no se puede borrar
+        self.mgr.cancel(a)
+        wait_job(self.mgr, a)
+        with self.assertRaises(models.ModelError):
+            self.mgr.clear("no-existe")
+        self.assertEqual(self.mgr.clear(a), 1)     # terminada: se quita del historial
+        self.assertEqual(self.mgr.views(), [])
+        self.assertTrue(list(self.root.rglob("slow-Q4_0.gguf.part")))   # el .part (reanudar) se conserva
+
+    def test_clear_all_keeps_active(self):
+        a = self.mgr.add_hf("acme/Slow-GGUF", "slow-Q4_0.gguf")["id"]
+        wait_job(self.mgr, a, until=("descargando",))
+        self.mgr.jobs.append(models.Job("vieja", "hf", [], self.root))
+        self.mgr.jobs[-1].status = "error"
+        self.mgr.jobs.append(models.Job("hecha", "hf", [], self.root))
+        self.mgr.jobs[-1].status = "completada"
+        self.assertEqual(self.mgr.clear(), 2)
+        self.assertEqual([v["id"] for v in self.mgr.views()], [a])
+        self.mgr.cancel(a)
+        wait_job(self.mgr, a)
+
     def test_disk_space_checked(self):
         DU = namedtuple("DU", "total used free")
         with mock.patch.object(models.shutil, "disk_usage", return_value=DU(10, 10, 1000)):

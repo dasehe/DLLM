@@ -4,6 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.6] - 2026-11-25
+
+### Añadido
+- El historial de descargas se puede borrar: ✕ por descarga terminada y **Borrar historial** (Modelos → Descargas),
+  `POST /api/downloads/clear` (`{"id"}` opcional). No toca modelos ni los `.part` reanudables ni las descargas activas.
+
 ## [0.7.5] - 2026-11-25
 
 ### Corregido

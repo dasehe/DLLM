@@ -278,6 +278,7 @@ Si no hay modelo listo la API responde `503` con el estado actual.
 | `GET /api/hf/search?q=…` · `GET /api/hf/files?repo=…` | — | Búsqueda de modelos GGUF y ficheros de un repo |
 | `POST /api/downloads` | `{"source":"hf","repo":…,"file":…}` · `{"source":"ollama","name":"qwen2.5:7b"}` · `{"source":"ollama-local","name":…}` | `202` con la descarga |
 | `GET /api/downloads` · `POST /api/downloads/cancel` | — · `{"id": "d1"}` | Descargas y progreso · cancelar |
+| `POST /api/downloads/clear` | `{"id": "d1"}` (sin `id`: todas las terminadas) | Borra del historial las descargas terminadas (no los ficheros) |
 | `GET /api/ollama/local` | — | Modelos de la instalación local de Ollama |
 | `POST /api/models/settings` | `{"model": …, "settings": {"temperature": 0.7, …}}` (`{}` = restablecer) | Parámetros guardados |
 | `POST /api/models/delete` | `{"model": …}` | `409` si está cargado |

@@ -233,7 +233,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
       <div class="mut" style="font-size:12px;margin-top:4px">Nombres como en <a href="https://ollama.com/library" target="_blank" rel="noopener">ollama.com/library</a>. Se importan también sus parámetros por defecto. Algunos modelos nuevos o multimodales de Ollama usan un formato que llama.cpp no carga.</div>
     </div>
     <div id="p_ll" class="hide"><div id="llres" class="mut">Buscando instalación local de Ollama…</div></div>
-    <h2 style="margin-top:16px">Descargas</h2><div id="dl" class="mut">Ninguna.</div>
+    <div class="row" style="justify-content:space-between;margin-top:16px"><h2 style="margin:0">Descargas</h2><button class="sec sm hide" id="dlclear" onclick="clearDl()" title="Quita de la lista las descargas terminadas; no borra modelos ni descargas a medias">🧹 Borrar historial</button></div><div id="dl" class="mut">Ninguna.</div>
   </section>
 </div>
 
@@ -680,8 +680,10 @@ async function olLocal(){try{const r=await api('GET','/api/ollama/local');
 async function hfToken(clear){try{const r=await api('POST','/api/hf/token',{token:clear?'':$('hftoken').value});$('hftoken').value='';$('hftok').textContent=r.set?'(configurado)':''}catch(e){alert(e.message)}}
 const secs=t=>t==null?'':t>3600?Math.round(t/3600)+' h':t>60?Math.round(t/60)+' min':t+' s';
 async function dl(){if(cur!=='mod')return;try{const j=await api('GET','/api/downloads');const sig=JSON.stringify(j.map(x=>[x.id,x.status]));
-  $('dl').innerHTML=j.length?j.map(x=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(x.label)} <span class="${x.status==='error'?'err':'mut'}">${esc(x.status)}${x.error?': '+esc(x.error):''}</span></span><span class="mut">${gib(x.done)} / ${gib(x.total)}${x.status==='descargando'?` · ${(x.speed/2**20).toFixed(1)} MB/s · quedan ${secs(x.eta)}`:''} ${['en cola','descargando'].includes(x.status)?`<button class="sec sm" onclick="api('POST','/api/downloads/cancel',{id:'${x.id}'}).then(dl)">Cancelar</button>`:''}</span></div><div class="bar2"><div style="width:${x.pct||0}%"></div></div></div>`).join(''):'Ninguna.';
+  $('dl').innerHTML=j.length?j.map(x=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(x.label)} <span class="${x.status==='error'?'err':'mut'}">${esc(x.status)}${x.error?': '+esc(x.error):''}</span></span><span class="mut">${gib(x.done)} / ${gib(x.total)}${x.status==='descargando'?` · ${(x.speed/2**20).toFixed(1)} MB/s · quedan ${secs(x.eta)}`:''} ${['en cola','descargando'].includes(x.status)?`<button class="sec sm" onclick="api('POST','/api/downloads/cancel',{id:'${x.id}'}).then(dl)">Cancelar</button>`:`<button class="sec sm" title="Quitar del historial" onclick="clearDl('${x.id}')">✕</button>`}</span></div><div class="bar2"><div style="width:${x.pct||0}%"></div></div></div>`).join(''):'Ninguna.';
+  $('dlclear').classList.toggle('hide',!j.some(x=>!['en cola','descargando'].includes(x.status)));
   if(sig!==lastDl){lastDl=sig;models()}}catch(e){}}
+async function clearDl(id){try{await api('POST','/api/downloads/clear',id?{id}:{});dl()}catch(e){alert(e.message)}}
 async function initTok(){try{const r=await api('GET','/api/hf/token');$('hftok').textContent=r.set?'(configurado)':''}catch(e){}}
 
 /* ---------- chat (conversación con historial) ---------- */
