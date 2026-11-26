@@ -458,6 +458,8 @@ def build_parser():
     s.add_argument("--bin-dir", help="carpeta con llama-server")
     s.add_argument("--llama-bin")
     s.add_argument("--llama-arg", action="append", help="argumento extra para llama-server (repetible)")
+    s.add_argument("--ollama-port", type=int, default=11434,
+                   help="puerto de la API compatible con Ollama (def. 11434; 0 = desactivada)")
     s.add_argument("--no-direct-local", action="store_true",
                    help="no ejecutar sin RPC los modelos que caben en la GPU local (por defecto sí)")
     s.add_argument("--min-mbps", type=float, default=800.0, help="red mínima orquestador↔nodo (def. 800)")

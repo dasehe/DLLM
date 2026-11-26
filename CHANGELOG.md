@@ -4,6 +4,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.9.0] - 2026-11-26
+
+### Añadido
+- **API compatible con Ollama** en el puerto 11434 (`--ollama-port`, `0` = desactivada): `/api/tags`, `/api/ps`,
+  `/api/show`, `/api/version`, `/api/chat`, `/api/generate`, `/api/embed`, `/api/embeddings` y `/api/pull`, traducidas al
+  proxy `/v1` (mismo enrutado, parámetros, cola y métricas), con streaming NDJSON, imágenes, `format` y herramientas.
+  Mismas reglas de seguridad que el panel (API key fuera de loopback, origen comprobado). Pestaña **Conectar → Ollama**.
+  Probada con binarios simulados; sin probar con clientes reales de Ollama.
+
 ## [0.8.3] - 2026-11-26
 
 ### Documentación

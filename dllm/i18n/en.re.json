@@ -70,5 +70,13 @@
  [
   "^\\(rol ",
   "(role "
+ ],
+ [
+  "TU_API_KEY",
+  "YOUR_API_KEY"
+ ],
+ [
+  "NOMBRE_DEL_MODELO",
+  "MODEL_NAME"
  ]
 ]

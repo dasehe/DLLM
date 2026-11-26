@@ -135,6 +135,8 @@ def up_argv(cfg):
         argv += ["--api-key", o["api_key"]]
     if o.get("auto_sync") is False:
         argv += ["--no-auto-sync"]
+    if o.get("ollama_port") is not None:  # API compatible con Ollama (0 = desactivada)
+        argv += ["--ollama-port", str(o["ollama_port"])]
     if cfg.get("advertise_host"):
         argv += ["--advertise-host", cfg["advertise_host"]]
     if cfg["role"] == "both":  # el agente local es un nodo más

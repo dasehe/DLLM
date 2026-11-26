@@ -21,6 +21,10 @@ Settings → LLM provider → *Generic OpenAI* with the URL, the key and the mod
 3. Real check: Connect → *Test* (`POST /api/tools/test`) asks for a sample function call.
 A model without a tool template still answers chat, but the front-end must use its prompt-based agent mode.
 
+## Clients that only speak Ollama
+Use `http://IP:11434` as the Ollama URL (see [USAGE](USAGE.md#ollama-compatible-api)). Open WebUI can use either the
+OpenAI connection (`/v1`) or the Ollama one; the Connect tab has the snippet.
+
 ## Open WebUI, curl, Python
 See the snippets in the Connect tab (`openai` SDK: `base_url`, `api_key`, `model`).
 

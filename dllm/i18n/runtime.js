@@ -16,7 +16,7 @@
   document.documentElement.lang = LANG === 'es' ? 'es-ES' : 'en';
   window.setLang = function (l) { try { localStorage.setItem('dllm_lang', l); } catch (e) {} location.reload(); };
   // texto suelto para el código JS (alert, confirm, mensajes construidos a mano)
-  window.L = function (s) { return LANG === 'en' ? tr(String(s)) : s; };
+  window.L = function (s) { return LANG === 'en' ? String(s).split('\n').map(tr).join('\n') : s; };  // conserva saltos de línea
   function sel() { var s = document.getElementById('langsel'); if (s) s.value = LANG; }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sel); else sel();
   if (LANG !== 'en') return;
@@ -33,12 +33,12 @@
     var c = t.replace(/\s+/g, ' ');  // el HTML junta espacios y saltos de línea; el diccionario también
     if (c !== t && Object.prototype.hasOwnProperty.call(D, c)) return s.replace(t, D[c]);
     if (!/[a-záéíóúñ]{2}/i.test(t)) return s;
-    var lead = s.match(/^\s*/)[0], trail = s.match(/\s*$/)[0], out = c, ks = keys();
+    var lead = s.match(/^\s*/)[0], trail = s.match(/\s*$/)[0], out = /\n/.test(t) ? c : t, ks = keys();
     for (var i = 0; i < ks.length; i++) {
       if (out.indexOf(ks[i]) >= 0) out = out.split(ks[i]).join(D[ks[i]]);
     }
     for (var r = 0; r < RE.length; r++) out = out.replace(RE[r][0], RE[r][1]);
-    return out === c ? s : lead + out + trail;
+    return out === (/\n/.test(t) ? c : t) ? s : lead + out + trail;
   }
   var SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, CODE: 1, PRE: 1 };
   function skip(el) {

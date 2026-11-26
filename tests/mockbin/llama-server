@@ -104,6 +104,13 @@ class H(BaseHTTPRequestHandler):
         info = {"rpc": rpc, "ts": opt("-ts"), "ctx": opt("-c"), "echo_ok": echoes, "mmproj": opt("--mmproj"),
                 "mmproj_offload": "--no-mmproj-offload" not in args, "received": body,
                 "device": opt("--device"), "argv": args}
+        if self.path.endswith("/embeddings"):
+            inp = body.get("input")
+            n = len(inp) if isinstance(inp, list) else 1
+            return self._j(200, {"data": [{"embedding": [0.1, 0.2, 0.3], "index": i} for i in range(n)], "mock": info})
+        if self.path.endswith("/v1/completions") and not body.get("stream"):
+            return self._j(200, {"choices": [{"text": "mock", "finish_reason": "stop"}],
+                                 "usage": {"prompt_tokens": 3, "completion_tokens": 1}, "mock": info})
         if body.get("stream"):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")

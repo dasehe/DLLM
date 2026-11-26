@@ -15,6 +15,7 @@ exige demostrar que se conoce el secreto del clúster.
 | `rpc-server` | Solo escucha en `127.0.0.1`; accesible únicamente a través del proxy del agente |
 | Proxy RPC del nodo (50051) | Handshake reto-respuesta **mutuo** HMAC-SHA256 antes de reenviar un solo byte |
 | API del agente (8765) | Cada petición firmada: HMAC(hora, método, ruta, sha256 del cuerpo); ventana de 60 s; la firma se comprueba **antes** de leer el cuerpo; límite de 64 MiB |
+| API compatible con Ollama (11434) | Mismas reglas que el panel/API: loopback por defecto; expuesta solo con la API key (`Bearer`); `POST` de navegador de otro origen rechazados |
 | Origen de conexiones al nodo | `allow_ip`: por defecto el asistente solo admite la IP del orquestador (+ loopback) |
 | Descubrimiento (UDP 50999) | Beacons firmados; los no firmados se ignoran y se registran |
 | Panel/API del orquestador (8080) | Solo `127.0.0.1` por defecto; para exponerlo es **obligatoria** una API key (comparación en tiempo constante). Desde el propio equipo (127.0.0.1) no se pide. Las peticiones `POST` con cabecera `Origin` de otro sitio se rechazan (anti CSRF / DNS rebinding) |

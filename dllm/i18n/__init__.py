@@ -71,13 +71,14 @@ def tr(text, to=None):
     if not _KEYS:
         _KEYS.extend(sorted((k for k in d if len(k) >= 5 and " " in k.strip()), key=len, reverse=True))
         _RES.extend((re.compile(p), r.replace("$1", r"\1").replace("$2", r"\2")) for p, r in patterns("en"))
-    out = t
+    out = c if "\n" in t else t
+    base = out
     for k in _KEYS:
         if k in out:
             out = out.replace(k, d[k])
     for rx, rep in _RES:
         out = rx.sub(rep, out)
-    return text if out == t else text.replace(t, out)
+    return text if out == base else text.replace(t, out)
 
 
 class _TrStream:

@@ -282,6 +282,28 @@ for chunk in r:
 If no model is ready the API answers `503` with the current state. API error messages come in English by default;
 `?lang=es` or the `X-DLLM-Lang: es` header returns them in Spanish.
 
+### Ollama-compatible API
+
+For clients that only speak Ollama (Ollama CLI, Open WebUI's Ollama connection, Enchanted, libraries for `ollama`…),
+the orchestrator also serves the Ollama API on its own port, **11434** by default (`--ollama-port N`, `0` disables it;
+`ollama_port` in the orchestrator section of `config.json`). If a real Ollama already uses that port, DLLM logs a warning
+and keeps running without it: choose another port.
+
+| Ollama | What DLLM does |
+|---|---|
+| `GET /api/tags` · `GET /api/ps` · `POST /api/show` · `GET /api/version` | Loaded models (and installable ones with `--on-demand`), details, capabilities (`completion`, `tools`, `vision`, `embedding`) |
+| `POST /api/chat` · `POST /api/generate` | Translated to `/v1/chat/completions` (or `/v1/completions` with `raw`): `options` (temperature, top_p, top_k, min_p, num_predict, stop, seed, penalties), `format` (`json` or a schema), `images`, `tools`/`tool_calls` (arguments as objects). Streaming as NDJSON, like Ollama |
+| `POST /api/embed` · `POST /api/embeddings` | Translated to `/v1/embeddings` (model loaded in embeddings mode) |
+| `POST /api/pull` | Downloads the model from the Ollama registry into the DLLM models folder (same as *Add models → Ollama*), with progress |
+| `create`, `copy`, `delete`, `push`, `blobs` | `501`: manage models from the panel |
+
+Model names: the DLLM name (`ollama/qwen2.5-7b.gguf`), with or without `:latest`, or the Ollama name of a model
+downloaded with DLLM (`qwen2.5:7b`). `num_ctx` is ignored: the context is set when loading the model. Requests go through
+the same router, per-model parameters, queue and metrics as `/v1`. Security: on loopback it needs no key; if the
+orchestrator is exposed, it requires `Authorization: Bearer API_KEY` (many Ollama clients cannot send it: use them on the
+orchestrator itself or through a tunnel), and browser requests from another origin are rejected. Tested with simulated
+binaries; **not tested yet with real Ollama clients**.
+
 ### Control API
 
 | Method and path | Body | Response |

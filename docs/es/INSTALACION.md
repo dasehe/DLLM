@@ -242,6 +242,7 @@ En el rol *Ambos* el agente local solo escucha en `127.0.0.1`, así que no neces
 | Nodo | TCP 50051 | Datos del modelo (proxy RPC autenticado) | Solo la IP del orquestador |
 | Orquestador | UDP 50999 | Descubrimiento de nodos | La subred de los nodos |
 | Orquestador | TCP 8080 | Panel y API | Solo si usas `--expose`, y a quien la use |
+| Orquestador | TCP 11434 | API compatible con Ollama | Solo si usas `--expose` y clientes de Ollama desde otros equipos (el asistente no lo abre) |
 
 Ejemplo Linux (nodo, orquestador en 192.168.1.10):
 ```bash

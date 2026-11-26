@@ -15,6 +15,7 @@ knowledge of the cluster secret.
 | `rpc-server` | Listens only on `127.0.0.1`; reachable only through the agent's proxy |
 | Node RPC proxy (50051) | **Mutual** HMAC-SHA256 challenge-response handshake before forwarding a single byte |
 | Agent API (8765) | Every request signed: HMAC(time, method, path, body sha256); 60 s window; the signature is checked **before** reading the body; 64 MiB limit |
+| Ollama-compatible API (11434) | Same rules as the panel/API: loopback by default; exposed only with the API key (`Bearer`); cross-origin browser `POST`s rejected |
 | Origin of connections to the node | `allow_ip`: by default the wizard only allows the orchestrator's IP (+ loopback) |
 | Discovery (UDP 50999) | Signed beacons; unsigned ones are ignored and logged |
 | Orchestrator panel/API (8080) | Only `127.0.0.1` by default; exposing it **requires** an API key (constant-time comparison). Not asked from the computer itself (127.0.0.1). `POST` requests with an `Origin` header from another site are rejected (anti CSRF / DNS rebinding) |

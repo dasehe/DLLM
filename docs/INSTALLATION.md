@@ -244,6 +244,7 @@ In the *Both* role the local agent listens only on `127.0.0.1`, so it needs no r
 | Node | TCP 50051 | Model data (authenticated RPC proxy) | Only the orchestrator's IP |
 | Orchestrator | UDP 50999 | Node discovery | The nodes' subnet |
 | Orchestrator | TCP 8080 | Panel and API | Only if you use `--expose`, and to whoever uses it |
+| Orchestrator | TCP 11434 | Ollama-compatible API | Only if you use `--expose` and Ollama clients from other computers (the wizard does not open it) |
 
 Linux example (node, orchestrator at 192.168.1.10):
 ```bash

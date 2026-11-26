@@ -606,7 +606,7 @@ async function bkRedl(){try{const r=await api('POST','/api/backup/redownload',{m
   $('bk_redl').innerHTML=`${r.started.length?'⬇️ Descargando '+r.started.length+' (mira Modelos → Descargas). ':''}${r.manual.length?'<br>Hay que añadir a mano (Ollama o locales): '+r.manual.map(esc).join(', '):''}${r.failed.length?'<br><span class="err">Fallaron: '+r.failed.map(f=>esc(f.name+' — '+f.error)).join('; ')+'</span>':''}`}catch(e){$('bk_redl').innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
 
 /* ---------- conectar ---------- */
-let CON=null,conTab='anything';
+let CON=null,conTab='anything',OLP=0;
 async function cp(id){const el=$(id);const t=el.dataset.v||el.textContent;try{await navigator.clipboard.writeText(t)}catch(e){const r=document.createRange();r.selectNode(el);getSelection().removeAllRanges();getSelection().addRange(r)}
   const o=el.textContent;if(!el.dataset.v){el.textContent='copiado ✓';setTimeout(()=>el.textContent=o,900)}}
 function conBase(){return location.origin+'/v1'}
@@ -616,6 +616,7 @@ async function conLoad(){const base=conBase(),k=key();$('c_url').textContent=bas
   $('c_key').textContent=k?k.slice(0,4)+'…'+k.slice(-3):'(sin clave en este navegador)';$('c_keyraw').textContent=k;$('c_keyraw').dataset.v=k;
   $('c_keynote').textContent=k?'La misma que usas para entrar en este panel.':'Si el orquestador escucha solo en loopback no hace falta; si no, usa la API key (botón arriba).';
   try{const r=await api('GET','/v1/models');CON=r.data||[]}catch(e){CON=[]}
+  try{OLP=(await api('GET','/api/access')).ollama_port||0}catch(e){OLP=0}
   $('c_models').innerHTML=CON.length?CON.map(m=>{const d=m.dllm||{},c=d.capabilities||[];
     const caps=[c.includes('tools')?'<span class="pill g">🛠 herramientas</span>':'<span class="pill">sin herramientas</span>',c.includes('vision')?'<span class="pill g">👁 visión</span>':'',c.includes('embeddings')?'<span class="pill g">📐 embeddings</span>':c.includes('chat')?'<span class="pill g">💬 chat</span>':''].join(' ');
     return `<tr><td><code>${esc(m.id)}</code> <button class="sec sm" onclick="cp0('${esc(m.id)}')">Copiar</button></td><td>${esc(d.state||'')}</td><td>${caps}</td><td>${d.slot!=null&&!c.includes('embeddings')?`<button class="sec sm" onclick="testTools(${d.slot},this)">🛠 Probar</button>`:''}</td></tr>`}).join(''):'<tr><td colspan="4" class="mut">Ningún modelo cargado todavía: cárgalo en la pestaña Modelos.</td></tr>';
@@ -631,11 +632,12 @@ async function testTools(slot,btn){const o=btn.textContent;btn.disabled=true;btn
 function conSnip(){const base=conBase(),k=key()||'TU_API_KEY',m=((CON||[]).find(x=>!(x.dllm?.capabilities||[]).includes('embeddings'))||{}).id||'NOMBRE_DEL_MODELO';
   const T={anything:['AnythingLLM',`Ajustes → Proveedor de LLM → <b>Generic OpenAI</b>\n\n  Base URL:        ${base}\n  API Key:         ${k}\n  Chat Model Name: ${m}\n  Token context window: el contexto con el que cargaste el modelo\n  Max tokens:      p. ej. 4096\n\nPara embeddings (RAG): Ajustes → Embedder → Generic OpenAI con la misma URL y un modelo cargado en «modo embeddings».\nAgentes/herramientas: usa un modelo marcado 🛠; AnythingLLM le dará sus @agent skills.`],
    owui:['Open WebUI',`Ajustes de administrador → Conexiones → <b>API de OpenAI</b> → ＋\n\n  URL:  ${base}\n  Clave: ${k}\n\nLos modelos aparecen solos. Herramientas: en el chat, ajustes avanzados del modelo → «Function Calling» = <b>Native</b>\n(con modelos 🛠 va mejor que «Default»).`],
+   ollama:['Ollama',OLP?`API compatible con Ollama (para clientes que solo hablan Ollama):\n\n  URL:  ${location.protocol}//${location.hostname}:${OLP}\n\nOpen WebUI → Conexiones → <b>Ollama</b> → esa URL · Ollama CLI: OLLAMA_HOST=${location.hostname}:${OLP} ollama run ${m}\nFuera de este equipo exige la API key (Authorization: Bearer ${k}).\n\ncurl ${location.protocol}//${location.hostname}:${OLP}/api/chat \\\n  -d '{"model":"${m}","messages":[{"role":"user","content":"Hola"}]}'`:`API compatible con Ollama desactivada (--ollama-port 0) o puerto ocupado: mira Registros.`],
    curl:['curl',`curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${k}" -H "Content-Type: application/json" \\\n  -d '{"model":"${m}","messages":[{"role":"user","content":"Hola"}]}'`],
    py:['Python (openai)',`from openai import OpenAI\nc = OpenAI(base_url="${base}", api_key="${k}")\nr = c.chat.completions.create(model="${m}", messages=[{"role":"user","content":"Hola"}])\nprint(r.choices[0].message.content)`],
    tools:['Herramientas',`curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${k}" -H "Content-Type: application/json" \\\n  -d '{"model":"${m}","messages":[{"role":"user","content":"¿Qué tiempo hace en Madrid?"}],\n       "tools":[{"type":"function","function":{"name":"get_weather","description":"Tiempo actual",\n         "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]}'\n\nLa respuesta trae choices[0].message.tool_calls. Tu aplicación ejecuta la función y vuelve a llamar\ncon un mensaje {"role":"tool","tool_call_id":…,"content":…}. DLLM no ejecuta herramientas: las ejecuta el front-end.`]};
   $('c_tabs').innerHTML=Object.entries(T).map(([id,v])=>`<button class="sec ${id===conTab?'on':''}" onclick="conTab='${id}';conSnip()">${v[0]}</button>`).join('');
-  $('c_snip').innerHTML=`<pre id="c_code" style="max-height:none;background:var(--track);padding:12px;border-radius:9px">${T[conTab][1].replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/&lt;b>/g,'<b>').replace(/&lt;\/b>/g,'</b>')}</pre><div class="row" style="margin-top:6px"><button class="sec sm" onclick="cpSnip()">Copiar</button></div>`}
+  $('c_snip').innerHTML=`<pre id="c_code" style="max-height:none;background:var(--track);padding:12px;border-radius:9px">${(window.L||String)(T[conTab][1]).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/&lt;b>/g,'<b>').replace(/&lt;\/b>/g,'</b>')}</pre><div class="row" style="margin-top:6px"><button class="sec sm" onclick="cpSnip()">Copiar</button></div>`}
 function cpSnip(){const t=$('c_code').innerText;try{navigator.clipboard.writeText(t)}catch(e){}}
 
 /* ---------- registros ---------- */

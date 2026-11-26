@@ -22,6 +22,10 @@ insignia 🛠 (herramientas).
 3. Comprobación real: Conectar → *Probar* (`POST /api/tools/test`) pide una llamada de función de ejemplo.
 Un modelo sin plantilla de herramientas seguirá respondiendo a chat, pero el front-end deberá usar su modo de agente por prompt.
 
+## Clientes que solo hablan Ollama
+Usa `http://IP:11434` como URL de Ollama (ver [USO](USO.md#api-compatible-con-ollama)). Open WebUI puede usar la
+conexión OpenAI (`/v1`) o la de Ollama; la pestaña Conectar tiene el fragmento.
+
 ## Open WebUI, curl, Python
 Ver los fragmentos de la pestaña Conectar (`openai` SDK: `base_url`, `api_key`, `model`).
 

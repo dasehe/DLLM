@@ -244,6 +244,7 @@ Node `bw`: NVIDIA GPU 300 GB/s by default; CPU measured with a single-thread `me
 | Port | Proto | Where | Who connects |
 |---|---|---|---|
 | 8080 | TCP | Orchestrator | Users / apps (loopback only unless `--expose`) |
+| 11434 | TCP | Orchestrator | Ollama-compatible API (`dllm/ollama_api.py`, translates to `/v1`; `--ollama-port 0` disables it) |
 | 50999 | UDP | Orchestrator | Node beacons |
 | 8765 | TCP | Node | Orchestrator (control API) |
 | 50051 | TCP | Node | Orchestrator (model data) |

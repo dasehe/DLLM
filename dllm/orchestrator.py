@@ -1893,6 +1893,7 @@ def make_handler(cfg, cl):
                 if path == "/api/access":
                     local = self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
                     out = {"local": local, "key_required": bool(cfg.api_key) and not local,
+                           "ollama_port": getattr(cfg, "ollama_port", 0),
                            "exposed": cfg.host not in ("127.0.0.1", "localhost", "::1")}
                     if local and cfg.api_key:
                         out["lan_url"] = f"http://{config.lan_ip()}:{cfg.port}/#key={cfg.api_key}"
@@ -2131,6 +2132,16 @@ def run(cfg):
         threading.Thread(target=fn, daemon=True).start()
     threading.Thread(target=reg.beacon_loop, args=(cfg.beacon_port,), daemon=True).start()
 
+    oport = getattr(cfg, "ollama_port", 0)
+    if oport:  # API compatible con Ollama en su propio puerto (mismas reglas: fuera de loopback, API key)
+        from . import ollama_api
+        try:
+            osrv = FastHTTPServer((cfg.host, oport), ollama_api.make_handler(cfg, cl))
+            threading.Thread(target=osrv.serve_forever, daemon=True).start()
+            log(f"API compatible con Ollama en http://{cfg.host}:{oport}")
+        except OSError as e:
+            cl.event(f"API compatible con Ollama desactivada: no se puede abrir el puerto {oport} ({e}); "
+                     "¿hay un Ollama real usándolo? Usa --ollama-port con otro puerto", level="warn")
     srv = FastHTTPServer((cfg.host, cfg.port), make_handler(cfg, cl))
     srv.daemon_threads = True
     log(legal_notice().replace("\n", " · "))

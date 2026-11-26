@@ -237,6 +237,7 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 | Puerto | Proto | Dónde | Quién se conecta |
 |---|---|---|---|
 | 8080 | TCP | Orquestador | Usuarios / aplicaciones (solo loopback salvo `--expose`) |
+| 11434 | TCP | Orquestador | API compatible con Ollama (`dllm/ollama_api.py`, traduce a `/v1`; `--ollama-port 0` la desactiva) |
 | 50999 | UDP | Orquestador | Beacons de los nodos |
 | 8765 | TCP | Nodo | Orquestador (API de control) |
 | 50051 | TCP | Nodo | Orquestador (datos del modelo) |

@@ -7,7 +7,7 @@ network** (laptops, old desktops, mini-PCs, Macs…), with or without a GPU.
 
 DLLM is the *control plane* on top of the [`llama.cpp`](https://github.com/ggml-org/llama.cpp) engine (`rpc-server` +
 `llama-server`): it discovers the computers, measures the network, decides which part of the model goes to each one,
-loads it, serves an OpenAI-compatible API and a web panel, and recovers on its own if a computer drops. The panel
+loads it, serves an OpenAI-compatible API (and an Ollama-compatible one on port 11434) and a web panel, and recovers on its own if a computer drops. The panel
 includes a **real-time monitor** of every node (GPU usage, VRAM, temperature, power, CPU, RAM, traffic, tokens/s) for
 NVIDIA, AMD, Intel and Apple, and lets you configure each node (layers, memory, device) and each model (context, K/V
 cache, flash attention, temperature…), like LM Studio. From the panel you **download models from Hugging Face and

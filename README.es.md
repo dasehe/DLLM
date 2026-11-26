@@ -7,7 +7,7 @@
 
 DLLM es el *plano de control* sobre el motor [`llama.cpp`](https://github.com/ggml-org/llama.cpp) (`rpc-server` +
 `llama-server`): descubre los equipos, mide la red, decide qué parte del modelo va a cada uno, lo carga, ofrece una
-API compatible con OpenAI y un panel web, y se recupera solo si un equipo se cae. El panel incluye un **monitor en tiempo real** de cada nodo (uso de GPU, VRAM, temperatura,
+API compatible con OpenAI (y otra compatible con Ollama en el puerto 11434) y un panel web, y se recupera solo si un equipo se cae. El panel incluye un **monitor en tiempo real** de cada nodo (uso de GPU, VRAM, temperatura,
 consumo, CPU, RAM, tráfico, tokens/s) para NVIDIA, AMD, Intel y Apple, y permite configurar cada nodo (capas,
 memoria, dispositivo) y cada modelo (contexto, caché K/V, flash attention, temperatura…), como en LM Studio. Desde el
 panel se **descargan modelos de Hugging Face y Ollama** (también los

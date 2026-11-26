@@ -269,6 +269,28 @@ for chunk in r:
 
 Si no hay modelo listo la API responde `503` con el estado actual.
 
+### API compatible con Ollama
+
+Para clientes que solo hablan Ollama (Ollama CLI, la conexión Ollama de Open WebUI, Enchanted, bibliotecas de
+`ollama`…), el orquestador también sirve la API de Ollama en su propio puerto, **11434** por defecto (`--ollama-port N`,
+`0` la desactiva; `ollama_port` en la sección del orquestador de `config.json`). Si un Ollama real ya usa ese puerto, DLLM
+lo avisa en Registros y sigue sin ella: elige otro puerto.
+
+| Ollama | Qué hace DLLM |
+|---|---|
+| `GET /api/tags` · `GET /api/ps` · `POST /api/show` · `GET /api/version` | Modelos cargados (y los instalables con `--on-demand`), detalles, capacidades (`completion`, `tools`, `vision`, `embedding`) |
+| `POST /api/chat` · `POST /api/generate` | Se traducen a `/v1/chat/completions` (o `/v1/completions` con `raw`): `options` (temperature, top_p, top_k, min_p, num_predict, stop, seed, penalizaciones), `format` (`json` o un esquema), `images`, `tools`/`tool_calls` (argumentos como objetos). Streaming en NDJSON, como Ollama |
+| `POST /api/embed` · `POST /api/embeddings` | Se traducen a `/v1/embeddings` (modelo cargado en modo embeddings) |
+| `POST /api/pull` | Descarga el modelo del registro de Ollama a la carpeta de modelos de DLLM (igual que *Añadir modelos → Ollama*), con progreso |
+| `create`, `copy`, `delete`, `push`, `blobs` | `501`: gestiona los modelos desde el panel |
+
+Nombres de modelo: el de DLLM (`ollama/qwen2.5-7b.gguf`), con o sin `:latest`, o el nombre de Ollama de un modelo
+descargado con DLLM (`qwen2.5:7b`). `num_ctx` se ignora: el contexto se fija al cargar el modelo. Las peticiones pasan
+por el mismo enrutador, parámetros por modelo, cola y métricas que `/v1`. Seguridad: en loopback no pide clave; si el
+orquestador está expuesto, exige `Authorization: Bearer API_KEY` (muchos clientes de Ollama no pueden enviarla: úsalos en
+el propio orquestador o por un túnel), y rechaza peticiones de navegador de otro origen. Probado con binarios
+simulados; **sin probar aún con clientes reales de Ollama**.
+
 ### API de control
 
 | Método y ruta | Cuerpo | Respuesta |
