@@ -18,6 +18,8 @@ knowledge of the cluster secret.
 | Ollama-compatible API (11434) | Same rules as the panel/API: loopback by default; exposed only with the API key (`Bearer`); cross-origin browser `POST`s rejected |
 | Origin of connections to the node | `allow_ip`: by default the wizard only allows the orchestrator's IP (+ loopback) |
 | Discovery (UDP 50999) | Signed beacons; unsigned ones are ignored and logged |
+| Panel users | Sign-in always required (also locally); roles/groups/users with per-route permissions; PBKDF2-HMAC-SHA256 passwords; `HttpOnly` + `SameSite=Strict` session cookie (12 h sliding); 5 failed logins per IP → 5 min block; logins recorded in Logs. `admin`/`admin` if no password was set at install (warned at every login) |
+| API keys | One or more per user, inheriting its permissions; stored as SHA-256, shown once, revocable. The terminal uses a local token (600, loopback only) |
 | Orchestrator panel/API (8080) | Only `127.0.0.1` by default; exposing it **requires** an API key (constant-time comparison). Not asked from the computer itself (127.0.0.1). `POST` requests with an `Origin` header from another site are rejected (anti CSRF / DNS rebinding) |
 | Join code in the panel | `GET /api/join-code` is only served to clients on the orchestrator itself (the front-ends' API key is not enough) and each request is logged |
 | Pairing nodes without a code | Diffie-Hellman (2048-bit MODP group, RFC 3526) + 6-digit verification code compared by eye and accepted **on the node**; the secret travels encrypted and authenticated (HMAC-SHA256, encrypt-then-MAC). Only while the node has no secret; one request at a time, expires in 5 min, max. 10/min |
@@ -49,11 +51,11 @@ knowledge of the cluster secret.
 - **A compromised node** knows the secret: it can impersonate another node or the orchestrator to the other nodes (if
   they have no `allow_ip`). Rotate the secret if you lose control of a computer.
 - The **join code** carries the secret in clear (base64). Whoever has it can join the cluster.
-- No user authentication in the panel beyond the shared API key. Any process on the orchestrator itself reaches the
-  panel without a key (as with any service on 127.0.0.1); a local reverse proxy publishing it on the network would
-  inherit that access: give it its own authentication.
-- The "for other computers" link (`…/#key=…`) contains the API key: treat it like a password. The key goes after `#`
-  (it does not travel to the server or end up in logs) and the panel removes it from the address bar once saved.
+- **Default credentials**: if no password was set at install, `admin`/`admin` works (also from the network when the
+  orchestrator is exposed) until changed; the panel warns at every login. Change it right after installing.
+- Sessions live in memory: restarting the orchestrator signs everyone out.
+- `/v1` and the Ollama API accept requests without a key from the orchestrator itself (local apps); any local process can
+  use them, as with any service on 127.0.0.1. Management (`/api/*`) always requires a session, a key or the local token.
 - Pairing without a code: security depends on **comparing the code** in the panel and on the node. If it is accepted
   without looking, a malicious computer on the network that claims first could take the node (not the cluster secret).
   Announcements from unpaired nodes are not signed (they only reveal name and port).

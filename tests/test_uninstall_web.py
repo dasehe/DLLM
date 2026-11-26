@@ -167,7 +167,7 @@ class RestoreInInstaller(unittest.TestCase):
                 s = wizard.Setup()
                 res = s.install({"role": "orchestrator", "name": "nueva", "install_dir": str(t / "DLLM"),
                                  "bin_dir": os.path.join(HERE, "mockbin"), "autostart": False, "firewall": False,
-                                 "restore": r})
+                                 "restore": r, "admin_password": "clave-admin-123"})
                 cfg = json.loads((new / "config.json").read_text())
                 self.assertEqual(cfg["secret"], SECRET)  # secreto del clúster recuperado
                 self.assertEqual(cfg["orchestrator"]["api_key"], "api-key-vieja")
@@ -175,6 +175,10 @@ class RestoreInInstaller(unittest.TestCase):
                 self.assertEqual(cfg["install_dir"], str(t / "DLLM"))
                 self.assertEqual(res["api_key"], "api-key-vieja")
                 self.assertTrue((new / "models.json").exists() and (new / "nodes.json").exists())
+                from dllm import users
+                um = users.Users(new / "users.json")
+                self.assertTrue(um.authenticate("admin", "clave-admin-123"))  # contraseña de admin del instalador
+                self.assertFalse(um.is_default_password("admin"))
 
     def test_copia_en_nodo_rechazada(self):
         with tempfile.TemporaryDirectory() as t:

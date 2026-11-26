@@ -260,6 +260,14 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 - Código de unión `DLLM1-<base64url(json)>-<crc32>`: `secret`, `orch` (IP), `beacon` (puerto), `tag` (build
   llama.cpp), `name`. El CRC detecta errores al copiar, no aporta seguridad.
 
+## Usuarios y permisos
+
+`dllm/users.py` guarda roles → permisos, grupos → roles y usuarios → grupos en `~/.dllm/users.json` (600), con contraseñas
+PBKDF2-HMAC-SHA256 y API keys guardadas como SHA-256. El manejador resuelve quién pide (cookie de sesión, token local desde
+loopback o API key de un usuario) y `perm_for(método, ruta)` da el permiso que necesita cada ruta; `/v1` desde loopback sin
+credenciales se permite (aplicaciones locales). Las sesiones viven en memoria. `DLLM_INSECURE_NO_LOGIN=1` desactiva el
+login solo para tests y solo con el orquestador en loopback.
+
 ## Límites
 
 - **No acelera un stream**: más nodos = modelos mayores, no más tokens/s.

@@ -34,6 +34,7 @@ equipos** que da el asistente o el botón **API key** del panel en el orquestado
 | **Conectar** | URL, clave y fragmentos para front-ends; prueba de herramientas (ver [Conectar](#conectar-front-ends-y-herramientas)) |
 | **Registros** | Qué ha pasado, dónde y por qué: eventos con nivel, modelo y nodo, filtros y búsqueda, último fallo con la causa (ver [Registros](#registros)) |
 | **Sistema** | Copia de seguridad y restauración (ver [Copia de seguridad](#copia-de-seguridad-y-recuperación)) |
+| **Usuarios** | Usuarios, grupos, roles y API keys (ver [Usuarios](#usuarios-grupos-y-roles)) |
 
 ### Pestaña Modelos
 
@@ -80,6 +81,31 @@ Fuentes: `nvidia-smi`, el `sysfs` del driver amdgpu, los contadores del Administ
 `ioreg`. Windows no ofrece temperatura ni consumo de GPUs AMD/Intel sin el software propietario del fabricante, por
 eso aparecen como «—». El **tráfico RPC** mide los datos que pasan por el nodo: si sube mientras generas, ese nodo está
 trabajando. Las gráficas guardan los últimos ~5 minutos.
+
+### Usuarios, grupos y roles
+
+El panel pide siempre **iniciar sesión** (también en el propio orquestador). El instalador pide la **contraseña del
+administrador** (usuario `admin`); si se deja vacía, el usuario es `admin` con contraseña `admin` y el panel avisa en cada
+inicio de sesión hasta cambiarla (*👤 → Cambiar contraseña*). Los inicios con la contraseña por defecto quedan en
+*Registros*.
+
+- Los **roles** son conjuntos de permisos: `view` (panel, monitor, registros), `chat` (chat del panel y APIs `/v1`/Ollama),
+  `models`, `nodes`, `system` (copias, código de unión, ajustes), `users` (gestionar usuarios, grupos, roles y claves) y
+  `audit`. Predefinidos: *administrator* (todo), *operator* (view, chat, models, nodes), *user* (view, chat), *viewer*
+  (view).
+- Los **grupos** tienen roles (*administrators*, *operators*, *users*); los **usuarios** pertenecen a grupos. Todo se crea y
+  edita en la pestaña **👥 Usuarios** (con el permiso `users`).
+- `admin` no se puede borrar, desactivar ni sacar de *administrators*, y el rol *administrator* conserva siempre todos los
+  permisos: nadie puede quedarse fuera.
+- Las **API keys pertenecen a un usuario** y heredan sus permisos: *👤 → Mis API keys* (cada usuario) o la pestaña Usuarios.
+  Se muestran una sola vez y se guardan como hash. La API key anterior de `config.json` pasa a ser una clave de `admin`.
+- Las aplicaciones del propio orquestador (AnythingLLM local…) pueden seguir usando `/v1` y la API Ollama sin clave; desde
+  la red necesitan una clave con el permiso `chat`.
+- La terminal (`dllm status`, `load`…) en el propio orquestador usa un token local (`~/.dllm/local.token`, permisos 600,
+  solo aceptado desde 127.0.0.1).
+- 5 inicios de sesión fallidos desde una IP la bloquean 5 minutos. Contraseñas: PBKDF2-HMAC-SHA256; sesiones: token
+  aleatorio en una cookie `HttpOnly`, `SameSite=Strict`, caducidad deslizante de 12 h. Los usuarios viajan en las copias
+  (`users.json`).
 
 ### Añadir, buscar, medir y eliminar nodos
 

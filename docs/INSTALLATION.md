@@ -91,9 +91,12 @@ Open the wizard (table in the README) and:
    the wizard that can also create folders). Below you see the disk's free space: a 7B model takes ~5 GB and a 32B one
    ~20 GB. The folder is created if it does not exist. The configuration and the cluster secret stay separately in
    `~/.dllm`, with restricted permissions.
-3. Tick *Allow using the API from other computers* only if you will use it from outside the orchestrator itself: a
-   mandatory **API key** will be generated.
-4. Press **Install**. The wizard:
+3. Set the **administrator password** (user `admin`) you will use to sign in to the panel. If you leave it empty, it is
+   `admin`/`admin` and the panel will warn at every login until you change it. When reinstalling, empty = keep the
+   current one. Unattended: `DLLM_ADMIN_PASSWORD=…`.
+4. Tick *Allow using the API from other computers* only if you will use it from outside the orchestrator itself: a
+   mandatory **API key** will be generated (it becomes a key of the `admin` user).
+5. Press **Install**. The wizard:
    - downloads the latest official llama.cpp version that publishes packages for every system (so any node finds its
      own of the same version) and verifies its **sha256**;
    - stores the configuration in `~/.dllm/config.json` (permissions 600, contains the cluster secret);
@@ -102,7 +105,7 @@ Open the wizard (table in the README) and:
    - on Windows, opens **only** the required ports in the firewall, limited to your network (asks for administrator
      permission once; see [Firewall](#firewall));
    - checks that the orchestrator responds.
-5. Copy the **join code** `DLLM1-…` shown at the end. You can see it again in the panel (**Nodes → 🔑 Join code**, only
+6. Copy the **join code** `DLLM1-…` shown at the end. You can see it again in the panel (**Nodes → 🔑 Join code**, only
    on the orchestrator itself) or with `dllm join-code`.
 
 > The join code contains the **cluster secret**: treat it like a password and do not paste it in public chats.

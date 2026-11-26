@@ -125,8 +125,8 @@ de magnitud, un 70B cuantizado en 3–4 equipos domésticos ronda **1–2 tokens
 
 ## Seguridad en una línea
 
-Los equipos se autentican con un secreto compartido (HMAC) y los nodos solo aceptan al orquestador, pero **el tráfico
-no va cifrado**: úsalo en una red de confianza, una VLAN dedicada o sobre WireGuard. Ver [SEGURIDAD](docs/es/SEGURIDAD.md).
+El panel pide **iniciar sesión** (usuarios, grupos y roles; API keys por usuario). Los equipos se autentican con un
+secreto compartido (HMAC) y los nodos solo aceptan al orquestador, pero **el tráfico no va cifrado**: úsalo en una red de confianza, una VLAN dedicada o sobre WireGuard. Ver [SEGURIDAD](docs/es/SEGURIDAD.md).
 
 ## Licencia y autoría
 

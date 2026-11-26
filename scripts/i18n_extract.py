@@ -138,7 +138,7 @@ def extract(text):
 
 PY_SP = re.compile(r"[áéíóúñ¿¡]|\b(el|la|los|las|de|del|no|un|una|con|sin|para|por|que|se|nodo|nodos|modelo|modelos|"
                    r"equipo|carga|falta|puerto|hay|está|usa|ya|sobre|desde|hasta|cada|este|esta|todo|solo|inferencia|"
-                   r"distribuida|nuevo|nueva|otro|otra|cuando|como|pero|puede|son|es)\b", re.I)
+                   r"distribuida|nuevo|nueva|otro|otra|cuando|como|pero|puede|son|es|y)\b", re.I)
 PY_SKIP = {"dllm/legal_notice.py"}  # el aviso legal va en los dos idiomas tal cual
 
 
@@ -161,7 +161,7 @@ def extract_py(text):
             for line in n.value.split("\n"):
                 s = line.strip()
                 if len(s) >= 3 and " " in s and PY_SP.search(s) and not re.fullmatch(r"[\w./\-]+", s) \
-                        and not re.search(r"^[-\w]+=|%\(|\{\w*\}|^<|^\w+\(|\\[sdw]|\$\w+=|^Copyright \(C\)", s):
+                        and not re.search(r"^[-\w]+=|%\(|\{\w*\}|^<|^\w+\(|\\[sdw]|\$\w+=|^Copyright \(C\)|%[a-zA-Z]", s):
                     found.add(s)
     return found
 

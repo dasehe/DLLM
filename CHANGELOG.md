@@ -4,6 +4,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.10.0] - 2026-11-26
+
+### Añadido
+- **Usuarios, grupos y roles** en el panel: inicio de sesión siempre (también en local), permisos por ruta (`view`, `chat`,
+  `models`, `nodes`, `system`, `users`, `audit`), roles predefinidos (*administrator, operator, user, viewer*) editables,
+  grupos con roles y usuarios en grupos; pestaña **👥 Usuarios** y menú **👤** (cambiar contraseña, mis API keys, salir).
+  `admin` no se puede borrar ni perder el rol de administrador.
+- **Contraseña del administrador en el instalador** (y `DLLM_ADMIN_PASSWORD` en desatendido); vacía = `admin`/`admin`
+  con aviso en cada inicio de sesión. Al reinstalar, vacía conserva la actual.
+- **API keys por usuario** con sus permisos (hash SHA-256, se muestran una vez, revocables); la API key anterior pasa a
+  `admin`. `/v1` y la API Ollama siguen sin clave desde el propio equipo; desde la red exigen una clave con `chat`.
+- Token local para la terminal (`~/.dllm/local.token`), bloqueo de 5 min tras 5 inicios fallidos por IP, inicios de
+  sesión en Registros, usuarios incluidos en las copias de seguridad.
+
+### Cambiado
+- El enlace «para otros equipos» ya no lleva la API key (`#key=`): se entra con usuario y contraseña.
+
 ## [0.9.1] - 2026-11-26
 
 ### Cambiado (rendimiento)

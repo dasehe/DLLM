@@ -25,8 +25,9 @@ Este paquete es **el mismo en todos los equipos**. El asistente te pregunta qué
 | macOS | Doble clic en **Install-DLLM.command** (si lo bloquea: clic derecho → Abrir) |
 | Linux | `./install.sh` (en terminal sin escritorio abre el asistente de texto; fuerza con `--tui` o `--gui`) |
 
-1. **En el equipo principal** → elige *Orquestador* (o *Ambos* si también quieres que preste su CPU/GPU).
-   Al terminar te muestra un **código de unión** (`DLLM1-…`) y la dirección del panel.
+1. **En el equipo principal** → elige *Orquestador* (o *Ambos* si también quieres que preste su CPU/GPU) y pon la
+   **contraseña del administrador** (usuario `admin`; vacía = `admin`/`admin`, cámbiala luego). Al terminar te muestra un
+   **código de unión** (`DLLM1-…`) y la dirección del panel.
 2. **En cada equipo que quieras sumar** → abre el mismo asistente, elige *Nodo*, pega el código y elige cuánto
    comparte: *Automático* (lo gestiona el orquestador desde su panel) o *Limitar desde este equipo* (p. ej. 33 %).
 3. Abre el panel del orquestador, comprueba que ves los nodos, añade un modelo en **Añadir modelos** (Hugging Face u

@@ -26,8 +26,9 @@ English by default; switch to Spanish (Spain) with the selector at the top of th
 | macOS | Double-click **Install-DLLM.command** (if it is blocked: right-click → Open) |
 | Linux | `./install.sh` (in a terminal without a desktop it opens the text wizard; force with `--tui` or `--gui`) |
 
-1. **On the main computer** → choose *Orchestrator* (or *Both* if you also want it to lend its CPU/GPU). At the end it
-   shows a **join code** (`DLLM1-…`) and the panel address.
+1. **On the main computer** → choose *Orchestrator* (or *Both* if you also want it to lend its CPU/GPU) and set the
+   **administrator password** (user `admin`; empty = `admin`/`admin`, change it later). At the end it shows a **join
+   code** (`DLLM1-…`) and the panel address.
 2. **On every computer you want to add** → open the same wizard, choose *Node*, paste the code and choose how much it
    shares: *Automatic* (managed by the orchestrator from its panel) or *Limit from this computer* (e.g. 33 %).
 3. Open the orchestrator's panel, check that you see the nodes, add a model in **Add models** (Hugging Face or Ollama),

@@ -88,12 +88,39 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
 <header>
   <div class="top"><div class="logo">DLLM <span>·</span> Distributed LLM</div>
     <span id="state" class="badge">…</span><span id="model" class="mut"></span><span id="toks" class="badge hide"></span>
-    <span style="flex:1"></span><label class="advsw" title="Muestra todos los parámetros técnicos (reparto, caché, muestreo, versiones…)"><input type="checkbox" id="advsw" onchange="setAdv(this.checked)"> Modo avanzado</label><button class="sec sm" onclick="setKey()">API key</button><select id="langsel" class="langsel notr" title="Language / Idioma" onchange="setLang(this.value)"><option value="en">English</option><option value="es">Español (España)</option></select></div>
+    <span style="flex:1"></span><label class="advsw" title="Muestra todos los parámetros técnicos (reparto, caché, muestreo, versiones…)"><input type="checkbox" id="advsw" onchange="setAdv(this.checked)"> Modo avanzado</label><button class="sec sm notr" id="userbtn" onclick="userMenu()" title="Mi cuenta">👤</button><select id="langsel" class="langsel notr" title="Language / Idioma" onchange="setLang(this.value)"><option value="en">English</option><option value="es">Español (España)</option></select></div>
   <nav id="nav">
     <button data-t="mon" class="on">📊 Monitor</button><button data-t="nod">🖥️ Nodos</button><button data-t="mod">🧠 Modelos</button>
-    <button data-t="chat">💬 Chat</button><button data-t="con">🔌 Conectar</button><button data-t="ev">📜 Registros</button><button data-t="sys">⚙️ Sistema</button>
+    <button data-t="chat">💬 Chat</button><button data-t="con">🔌 Conectar</button><button data-t="ev">📜 Registros</button><button data-t="sys">⚙️ Sistema</button><button data-t="usr" class="hide" id="nav_usr">👥 Usuarios</button>
   </nav>
 </header>
+<div id="pwwarn" class="slowbox hide" style="max-width:1240px;margin:8px auto">⚠️ <b>Estás usando la contraseña por defecto de admin.</b> Cualquiera que la conozca puede administrar DLLM. <button class="sm" onclick="userMenu()">Cambiar contraseña</button></div>
+<div id="login" class="hide" style="position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px">
+  <form class="card" style="width:min(380px,100%)" onsubmit="doLogin(event)">
+    <div class="logo" style="margin-bottom:10px">DLLM <span>·</span> Distributed LLM</div>
+    <h3 style="margin:0 0 8px">Iniciar sesión</h3>
+    <div class="form" style="grid-template-columns:1fr"><label>Usuario<input id="lg_user" autocomplete="username" value="admin"></label>
+    <label>Contraseña<input id="lg_pw" type="password" autocomplete="current-password"></label></div>
+    <div class="row" style="margin-top:12px;justify-content:space-between"><span id="lg_err" class="err"></span><button type="submit">Entrar</button></div>
+    <div class="mut" style="font-size:12px;margin-top:10px">Si no creaste una contraseña al instalar, el usuario es <b>admin</b> y la contraseña <b>admin</b> (cámbiala después).</div>
+  </form>
+</div>
+<div id="acct" class="hide" style="position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;overflow:auto">
+  <div class="card" style="width:min(560px,100%)">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Mi cuenta · <span id="ac_user" class="notr"></span></h3><button class="sec sm" onclick="$('acct').classList.add('hide')">Cerrar</button></div>
+    <h3>Cambiar contraseña</h3>
+    <div class="form"><label>Contraseña actual<input id="ac_old" type="password" autocomplete="current-password"></label>
+      <label>Nueva contraseña (mín. 8)<input id="ac_new" type="password" autocomplete="new-password"></label>
+      <label>Repite la nueva<input id="ac_new2" type="password" autocomplete="new-password"></label></div>
+    <div class="row" style="margin-top:8px"><button onclick="chPw()">Guardar contraseña</button><span id="ac_msg"></span></div>
+    <h3>Mis API keys</h3>
+    <div class="mut" style="font-size:12px">Para AnythingLLM, Open WebUI, Ollama o scripts: <code>Authorization: Bearer &lt;clave&gt;</code>. Tienen tus permisos. La clave solo se muestra al crearla.</div>
+    <div id="ac_keys" class="notr" style="margin:8px 0"></div>
+    <div class="tool"><input id="ac_kname" placeholder="Nombre, p. ej. anythingllm" style="flex:1"><button class="sec" onclick="newKey()">＋ Crear clave</button></div>
+    <div id="ac_newkey"></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="sec" onclick="logout()">Cerrar sesión</button></div>
+  </div>
+</div>
 <main>
 
 <!-- ============================== MONITOR ============================== -->
@@ -280,6 +307,27 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
 </div>
 
 <!-- ============================== SISTEMA ============================== -->
+<div id="t-usr" class="tab hide">
+  <section><h2>Usuarios</h2>
+    <div class="mut">Los <b>roles</b> agrupan permisos, los <b>grupos</b> tienen roles y los <b>usuarios</b> pertenecen a grupos. <b>admin</b> no se puede borrar ni perder el rol de administrador.</div>
+    <table style="margin-top:10px"><thead><tr><th>Usuario</th><th>Grupos</th><th>Permisos</th><th>Estado</th><th></th></tr></thead><tbody id="u_users"></tbody></table>
+    <div class="tool" style="margin-top:8px"><input id="u_name" placeholder="nuevo usuario"><input id="u_pw" type="password" placeholder="contraseña (mín. 8)" autocomplete="new-password"><select id="u_grp" class="notr"></select><button onclick="uCreate()">＋ Crear usuario</button></div>
+  </section>
+  <section><h2>Grupos</h2>
+    <table><thead><tr><th>Grupo</th><th>Roles</th><th></th></tr></thead><tbody id="u_groups"></tbody></table>
+    <div class="tool" style="margin-top:8px"><input id="g_name" placeholder="nuevo grupo"><button class="sec" onclick="gSet($('g_name').value,[])">＋ Crear grupo</button></div>
+  </section>
+  <section><h2>Roles</h2>
+    <table><thead><tr><th>Rol</th><th>Permisos</th><th></th></tr></thead><tbody id="u_roles"></tbody></table>
+    <div class="tool" style="margin-top:8px"><input id="r_name" placeholder="nuevo rol"><button class="sec" onclick="rSet($('r_name').value,['view'])">＋ Crear rol</button></div>
+    <div class="mut" id="u_perminfo" style="font-size:12px;margin-top:6px"></div>
+  </section>
+  <section><h2>API keys</h2>
+    <table><thead><tr><th>Usuario</th><th>Nombre</th><th>Inicio</th><th>Último uso</th><th></th></tr></thead><tbody id="u_keys"></tbody></table>
+  </section>
+  <div id="u_msg"></div>
+</div>
+
 <div id="t-sys" class="tab hide">
   <section><h2>Copia de seguridad</h2>
     <div class="mut">Un solo fichero con <b>toda la configuración</b>: secreto del clúster (los nodos vuelven a conectar solos), API key, parámetros de cada modelo, ajustes de nodos, nodos añadidos por IP, token de Hugging Face y la lista de modelos instalados (los modelos en sí no se incluyen: pesan demasiado; se pueden volver a descargar).</div>
@@ -344,14 +392,9 @@ let S=null,T=null,M=[],msel=null,lastDl='',editing=null,cur='mon',hist=[];
 // enlace «para otros equipos» (…/#key=…): guarda la clave en este navegador y la quita de la barra de direcciones
 (function(){const m=location.hash.match(/key=([\w-]+)/);if(m){try{localStorage.setItem('dllm_key',m[1])}catch(e){}history.replaceState(null,'',location.pathname)}})();
 function key(){try{return localStorage.getItem('dllm_key')||''}catch(e){return ''}}
-async function setKey(){
-  try{const a=await (await fetch('/api/access',{headers:{Authorization:'Bearer '+key()}})).json();
-    if(a.local){if(a.lan_url)prompt('En este equipo el panel no pide clave. Enlace para abrirlo desde otro equipo (cópialo):',a.lan_url);
-      else alert(a.exposed?'El panel no tiene API key.':'El panel solo es accesible desde este equipo y no pide clave.');return}}catch(e){}
-  const k=prompt('API key de este orquestador (vacío = ninguna)',key());if(k!==null){try{localStorage.setItem('dllm_key',k)}catch(e){}}}
 async function api(method,path,body){const h={'Content-Type':'application/json','X-DLLM-Lang':window.DLLM_LANG||'en'};if(key())h['Authorization']='Bearer '+key();
   const r=await fetch(path,{method,headers:h,body:body?JSON.stringify(body):undefined});
-  if(r.status===401){setKey();throw new Error('API key requerida')}
+  if(r.status===401&&!path.startsWith('/api/login')){showLogin();throw new Error('inicia sesión')}
   const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||j.error||r.status);return j}
 function spark(id,vals,max,color){const el=typeof id==='string'?$(id):id;if(!el)return;const v=vals.filter(x=>x!=null);
   if(v.length<2){el.innerHTML='';return}const W=300,H=34,mx=max||Math.max(...v,1e-9);
@@ -368,7 +411,7 @@ const mbps=b=>b==null?na:(b>=1e6?(b/1e6).toFixed(1)+' MB/s':(b/1e3).toFixed(0)+'
 function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   document.querySelectorAll('.tab').forEach(d=>d.classList.toggle('hide',d.id!=='t-'+t));
   try{history.replaceState(null,'','#'+t)}catch(e){}
-  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad();if(t==='con')conLoad();if(t==='sys')sysLoad()}
+  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad();if(t==='con')conLoad();if(t==='sys')sysLoad();if(t==='usr')uLoad()}
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 /* ---------- estado general ---------- */
@@ -732,9 +775,57 @@ async function send(){const t=$('msg').value.trim();const f=$('att').files[0];if
   catch(e){out.textContent='Error: '+e.message;hist.pop()}}
 
 /* ---------- arranque ---------- */
-const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','con','ev','sys'].includes(start)?start:'mon');
-try{setAdv(localStorage.getItem('dllm_adv')==='1')}catch(e){}
-refresh();models();initTok();setInterval(refresh,2000);setInterval(tele,2000);setInterval(dl,1500);
+let ME=null,BOOTED=false;
+function applyMe(m){ME=m;$('userbtn').textContent='👤 '+m.user;$('pwwarn').classList.toggle('hide',!m.default_pw);
+  $('nav_usr').classList.toggle('hide',!m.perms.includes('users'));
+  document.querySelector('#nav button[data-t="sys"]').classList.toggle('hide',!m.perms.includes('system'))}
+function showLogin(){$('login').classList.remove('hide');setTimeout(()=>$('lg_pw').focus(),50)}
+async function doLogin(ev){ev.preventDefault();$('lg_err').textContent='';
+  try{const m=await api('POST','/api/login',{user:$('lg_user').value.trim(),password:$('lg_pw').value});$('lg_pw').value='';
+    $('login').classList.add('hide');applyMe(m);boot()}catch(e){$('lg_err').textContent=e.message}}
+async function logout(){try{await api('POST','/api/logout',{})}catch(e){}location.reload()}
+async function userMenu(){if(!ME)return showLogin();$('ac_user').textContent=ME.user;$('ac_msg').textContent='';$('ac_newkey').innerHTML='';$('acct').classList.remove('hide');myKeys()}
+async function chPw(){const n=$('ac_new').value;if(n!==$('ac_new2').value){$('ac_msg').className='err';$('ac_msg').textContent='Las contraseñas no coinciden';return}
+  try{applyMe(await api('POST','/api/me/password',{old:$('ac_old').value,new:n}));$('ac_msg').className='ok';$('ac_msg').textContent='Contraseña cambiada.';['ac_old','ac_new','ac_new2'].forEach(i=>$(i).value='')}
+  catch(e){$('ac_msg').className='err';$('ac_msg').textContent=e.message}}
+const when=t=>t?new Date(t*1000).toLocaleString():'—';
+async function myKeys(){try{const k=await api('GET','/api/me/keys');const e=Object.entries(k);
+  $('ac_keys').innerHTML=e.length?'<table>'+e.map(([id,x])=>`<tr><td>${esc(x.name)}</td><td><code>${esc(x.prefix)}…</code></td><td class="mut">${when(x.last_used)}</td><td><button class="sec sm" onclick="delMyKey('${id}')">Revocar</button></td></tr>`).join('')+'</table>':'<span class="mut">Ninguna.</span>'}catch(e){}}
+async function newKey(){try{const r=await api('POST','/api/me/keys',{name:$('ac_kname').value});$('ac_kname').value='';
+  $('ac_newkey').innerHTML=`<div class="slowbox">🔑 Cópiala ahora, no se volverá a mostrar: <code id="nk" class="notr" data-v="${esc(r.key)}">${esc(r.key)}</code> <button class="sm" onclick="cp('nk')">📋 Copiar</button></div>`;myKeys()}catch(e){alert(e.message)}}
+async function delMyKey(id){if(!confirm('¿Revocar esta clave? Las aplicaciones que la usen dejarán de funcionar.'))return;try{await api('POST','/api/me/keys',{delete:id});myKeys()}catch(e){alert(e.message)}}
+/* ---------- usuarios, grupos y roles ---------- */
+let U=null;
+async function uLoad(){try{U=await api('GET','/api/users')}catch(e){$('u_msg').innerHTML='<span class="err">'+esc(e.message)+'</span>';return}
+  const G=Object.keys(U.groups),R=Object.keys(U.roles);
+  $('u_grp').innerHTML=G.map(g=>`<option value="${esc(g)}"${g==='users'?' selected':''}>${esc(g)}</option>`).join('');
+  $('u_users').innerHTML=Object.entries(U.users).map(([n,u])=>`<tr><td><b class="notr">${esc(n)}</b>${u.default_pw?' <span class="pill" style="background:var(--warn)">contraseña por defecto</span>':''}</td>
+    <td>${G.map(g=>`<label class="notr" style="display:inline;margin-right:8px"><input type="checkbox" style="width:auto" ${u.groups.includes(g)?'checked':''} ${n==='admin'&&g==='administrators'?'disabled':''} onchange="uGroups('${esc(n)}',this)" data-g="${esc(g)}"> ${esc(g)}</label>`).join('')}</td>
+    <td class="mut notr" style="font-size:12px">${u.perms.join(', ')}</td><td>${u.disabled?'<span class="pill" data-en="disabled">desactivado</span>':'<span class="pill g" data-en="active">activo</span>'}</td>
+    <td>${n==='admin'?`<button class="sec sm" onclick="uPw('${esc(n)}')">Contraseña</button>`:`<button class="sec sm" onclick="uPw('${esc(n)}')">Contraseña</button> <button class="sec sm" onclick="uDis('${esc(n)}',${!u.disabled})">${u.disabled?'Activar':'Desactivar'}</button> <button class="sec sm" onclick="uDel('${esc(n)}')">🗑️</button>`} <button class="sec sm" onclick="uKey('${esc(n)}')">＋ API key</button></td></tr>`).join('');
+  $('u_groups').innerHTML=Object.entries(U.groups).map(([g,rs])=>`<tr><td><b class="notr">${esc(g)}</b></td><td>${R.map(r=>`<label class="notr" style="display:inline;margin-right:8px"><input type="checkbox" style="width:auto" ${rs.includes(r)?'checked':''} ${g==='administrators'&&r==='administrator'?'disabled':''} onchange="gToggle('${esc(g)}','${esc(r)}',this.checked)"> ${esc(r)}</label>`).join('')}</td><td>${g==='administrators'?'':`<button class="sec sm" onclick="gDel('${esc(g)}')">🗑️</button>`}</td></tr>`).join('');
+  $('u_roles').innerHTML=Object.entries(U.roles).map(([r,ps])=>`<tr><td><b class="notr">${esc(r)}</b></td><td>${U.perms.map(p=>`<label class="notr" style="display:inline;margin-right:8px" title="${esc(U.perm_info[p])}"><input type="checkbox" style="width:auto" ${ps.includes(p)?'checked':''} ${r==='administrator'?'disabled':''} onchange="rToggle('${esc(r)}','${p}',this.checked)"> ${p}</label>`).join('')}</td><td>${r==='administrator'?'':`<button class="sec sm" onclick="rDel('${esc(r)}')">🗑️</button>`}</td></tr>`).join('');
+  $('u_perminfo').innerHTML=U.perms.map(p=>`<b class="notr">${p}</b>: ${esc(U.perm_info[p])}`).join(' · ');
+  $('u_keys').innerHTML=Object.entries(U.keys).map(([id,k])=>`<tr><td class="notr">${esc(k.user)}</td><td>${esc(k.name)}</td><td><code class="notr">${esc(k.prefix)}…</code></td><td class="mut">${when(k.last_used)}</td><td><button class="sec sm" onclick="kDel('${id}')">Revocar</button></td></tr>`).join('')||'<tr><td colspan="5" class="mut">Ninguna.</td></tr>'}
+async function uPost(path,body,okmsg){try{U=await api('POST',path,body);$('u_msg').innerHTML=okmsg?'<span class="ok">'+esc(okmsg)+'</span>':'';uLoad();return true}catch(e){$('u_msg').innerHTML='<span class="err">'+esc(e.message)+'</span>';uLoad();return false}}
+async function uCreate(){if(await uPost('/api/users/create',{name:$('u_name').value.trim(),password:$('u_pw').value,groups:[$('u_grp').value]},'Usuario creado.')){$('u_name').value='';$('u_pw').value=''}}
+function uGroups(n,el){const gs=[...el.closest('td').querySelectorAll('input')].filter(i=>i.checked).map(i=>i.dataset.g);uPost('/api/users/update',{name:n,groups:gs})}
+function uPw(n){const p=prompt('Nueva contraseña para '+n+' (mín. 8)');if(p)uPost('/api/users/update',{name:n,password:p},'Contraseña cambiada.')}
+function uDis(n,d){uPost('/api/users/update',{name:n,disabled:d})}
+function uDel(n){if(confirm('¿Borrar el usuario '+n+' y sus API keys?'))uPost('/api/users/delete',{name:n})}
+async function uKey(n){const l=prompt('Nombre de la clave para '+n,'clave');if(l===null)return;try{const r=await api('POST','/api/keys/create',{user:n,label:l});prompt('Cópiala ahora, no se volverá a mostrar:',r.key);uLoad()}catch(e){alert(e.message)}}
+function kDel(id){if(confirm('¿Revocar esta clave?'))uPost('/api/keys/delete',{id})}
+function gSet(n,roles){n=(n||'').trim();if(n)uPost('/api/groups/set',{name:n,roles}).then(ok=>{if(ok)$('g_name').value=''})}
+function gToggle(g,r,on){const rs=new Set(U.groups[g]);on?rs.add(r):rs.delete(r);uPost('/api/groups/set',{name:g,roles:[...rs]})}
+function gDel(g){if(confirm('¿Borrar el grupo '+g+'?'))uPost('/api/groups/delete',{name:g})}
+function rSet(n,perms){n=(n||'').trim();if(n)uPost('/api/roles/set',{name:n,perms}).then(ok=>{if(ok)$('r_name').value=''})}
+function rToggle(r,p,on){const ps=new Set(U.roles[r]);on?ps.add(p):ps.delete(p);uPost('/api/roles/set',{name:r,perms:[...ps]})}
+function rDel(r){if(confirm('¿Borrar el rol '+r+'?'))uPost('/api/roles/delete',{name:r})}
+function boot(){if(BOOTED)return;BOOTED=true;
+  const start=(location.hash||'#mon').slice(1);show(['mon','nod','mod','chat','con','ev','sys','usr'].includes(start)?start:'mon');
+  try{setAdv(localStorage.getItem('dllm_adv')==='1')}catch(e){}
+  refresh();models();initTok();setInterval(refresh,2000);setInterval(tele,2000);setInterval(dl,1500)}
+api('GET','/api/me').then(m=>{applyMe(m);boot()}).catch(()=>showLogin());
 // pestaña oculta: no se consulta nada; al volver, se actualiza al momento
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){refresh();tele();dl()}});
 // presencia: `dllm open` sabe así si el panel sigue abierto (y ofrece reabrirlo si se cierra)

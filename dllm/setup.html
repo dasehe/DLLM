@@ -72,6 +72,9 @@ details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inl
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button type="button" class="sec" onclick="$('fb').classList.add('hide')">Cancelar</button><button type="button" onclick="fbPick()">Usar esta carpeta</button></div>
     </div>
   <div id="f_orch" class="hide">
+    <label>Contraseña del administrador (usuario <b>admin</b>)<input id="admpw" type="password" autocomplete="new-password" placeholder="mín. 8 caracteres"></label>
+    <label>Repite la contraseña<input id="admpw2" type="password" autocomplete="new-password"></label>
+    <div class="mut" style="font-size:12px;margin-bottom:6px">Con ella entrarás al panel. Si la dejas vacía, el usuario será <b>admin</b> con contraseña <b>admin</b> y el panel te lo recordará en cada inicio de sesión hasta que la cambies. Al reinstalar, vacío = conservar la actual.</div>
     <label><input type="checkbox" id="expose" style="width:auto"> Permitir usar la API desde otros equipos de la red (se creará una API key)</label></div>
   <div id="f_share" class="hide"><label>¿Cuánto comparte este equipo?</label>
     <div class="box" style="margin-top:0">
@@ -170,7 +173,7 @@ async function install(){
     bin_dir:$('bindir').value||null,install_dir:$('idir').value,firewall:$('fw').checked};
   if(D.keep_models&&$('idir').value===D.keep_models)o.models_dir=D.keep_models;
   if(role!=='orchestrator'){o.limits_mode=lm();if(lm()==='manual'){o.share=+$('share').value;o.mem_gb=$('mem').value||null;o.threads=$('threads').value||null}}
-  if(role==='node'){o.join_code=$('join').value;o.orch_ip=$('orchip').value.trim()||null;o.restrict_ip=$('restrict').checked}else{o.expose=$('expose').checked;o.advertise_host=$('adv').value||null;if(REST)o.restore=REST}
+  if(role==='node'){o.join_code=$('join').value;o.orch_ip=$('orchip').value.trim()||null;o.restrict_ip=$('restrict').checked}else{if($('admpw').value!==$('admpw2').value){alert('Las contraseñas no coinciden');return}if($('admpw').value&&$('admpw').value.length<8){alert('La contraseña debe tener al menos 8 caracteres');return}o.admin_password=$('admpw').value||null;o.expose=$('expose').checked;o.advertise_host=$('adv').value||null;if(REST)o.restore=REST}
   try{await api('POST','/api/install',o)}catch(e){$('e2').textContent=e.message;return}
   since=0;$('log').innerHTML='';$('e3').textContent='';$('back3').classList.add('hide');go(3);poll=setInterval(tick,700);tick()
 }

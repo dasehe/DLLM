@@ -10,7 +10,7 @@ documentación en `README.md` + `README.es.md` y `docs/` + `docs/es/`). Comentar
 
 - Todo el trabajo se integra en `main` de `dasehe/dllm`; las versiones se publican desde aquí.
 - **Cada cambio visible actualiza la documentación en el mismo commit**, en inglés y en español: `README.md`/`README.es.md`,
-  el documento afectado de `docs/` y `docs/es/`, y la sección de la versión en `CHANGELOG.md`. Si cambia la instalación, también `packaging/LEEME-INSTALAR.md`.
+  el documento afectado de `docs/` y `docs/es/`, y la sección de la versión en `CHANGELOG.md`. Si cambia la instalación, también `packaging/README-INSTALL.md` y `packaging/LEEME-INSTALAR.md`.
 - Antes de hacer commit: `python -m unittest discover -s tests` en verde. Añade tests para el comportamiento nuevo.
 - `dllm/` usa solo la biblioteca estándar (Python ≥ 3.9). No añadir dependencias.
 - Seguridad: nada escucha fuera de loopback sin autenticación; `rpc-server` nunca se expone directamente.

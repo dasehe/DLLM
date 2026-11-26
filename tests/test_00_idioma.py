@@ -11,3 +11,7 @@ os.environ["DLLM_LANG"] = "es"
 class Idioma(unittest.TestCase):
     def test_idioma_de_los_tests(self):
         self.assertEqual(os.environ["DLLM_LANG"], "es")
+
+# Los tests anteriores a los usuarios hablan con el panel sin iniciar sesión: se desactiva el login solo para ellos
+# (la variable solo surte efecto con el orquestador en loopback). test_users.py prueba el login de verdad.
+os.environ["DLLM_INSECURE_NO_LOGIN"] = "1"

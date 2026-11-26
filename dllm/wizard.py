@@ -24,7 +24,8 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, auth, backup, config, devices, discovery, hw, i18n, installer, legal_notice, limits, presence
+from . import (__version__, auth, backup, config, devices, discovery, hw, i18n, installer, legal_notice, limits, presence,
+               users)
 from .util import FastHTTPServer
 
 ROLES = ("orchestrator", "node", "both")
@@ -263,6 +264,14 @@ class Setup:
                     self.emit(2, "ok", "copia restaurada: " + ", ".join(acts), label="Restauración")
                     cfg = config.load() or cfg
                     o_ = cfg["orchestrator"]
+                if role != "node":  # usuarios: contraseña de admin tras restaurar (vacía = admin/admin o la de la copia)
+                    um_path = config.home() / "users.json"
+                    fresh = not um_path.exists()
+                    um = users.Users(um_path)
+                    if o.get("admin_password"):
+                        um.init_admin(str(o["admin_password"]))
+                    elif fresh:
+                        um.init_admin(None)
             self.emit(2, "ok", str(config.path()))
 
             # 3 · programa
@@ -619,6 +628,17 @@ def run_tui(a):
         print("\nCarpeta de DLLM: aquí se guardan llama.cpp" + ("" if o["role"] == "node" else " y los modelos (models)"))
         o["install_dir"] = _ask("Carpeta", d["default_install_dir"])
     if o["role"] != "node":
+        if os.environ.get("DLLM_ADMIN_PASSWORD"):  # instalación desatendida
+            o["admin_password"] = os.environ["DLLM_ADMIN_PASSWORD"]
+        elif not a.yes:
+            import getpass
+            pw = getpass.getpass(i18n.tr("Contraseña del administrador del panel (usuario admin; vacía = admin/admin): "))
+            if pw:
+                if len(pw) < 8:
+                    sys.exit("la contraseña debe tener al menos 8 caracteres")
+                if getpass.getpass(i18n.tr("Repite la contraseña: ")) != pw:
+                    sys.exit("las contraseñas no coinciden")
+                o["admin_password"] = pw
         if not a.yes and not o["expose"]:
             o["expose"] = _yn("¿Permitir usar la API desde otros equipos de la red? (se creará una API key)", False)
     o["backend"] = o["backend"] or d["suggested_backend"]
@@ -724,8 +744,9 @@ def _orch_nodes():
         return {"nodes": []}
     o = cfg["orchestrator"]
     req = urllib.request.Request(f"http://127.0.0.1:{o['port']}/api/state")
-    if o.get("api_key"):
-        req.add_header("Authorization", f"Bearer {o['api_key']}")
+    tok = users.read_local_token() or o.get("api_key")
+    if tok:
+        req.add_header("Authorization", f"Bearer {tok}")
     try:
         with urllib.request.urlopen(req, timeout=3) as r:
             st = json.load(r)

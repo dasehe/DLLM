@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import backup, discovery, engine, eventlog, i18n
+from . import backup, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -277,6 +277,8 @@ class Cluster:
     """Un SLOT de modelo: un llama-server y, en cada nodo que use, su propio rpc-server y su propio túnel HMAC.
     El slot 0 (el «principal») además hace de coordinador: crea y reúne los demás (`self.slots`) y comparte con
     ellos el registro de nodos, el gestor de modelos y el libro de memoria (`ledger`)."""
+    users = None        # usuarios y permisos (users.Users), lo asigna run()
+    local_token = None  # token local de la terminal (users.write_local_token)
 
     def __init__(self, cfg, reg, slot=0, parent=None, pinned=True):
         self.cfg, self.reg = cfg, reg
@@ -1514,6 +1516,10 @@ class Cluster:
             raise ValueError("restaurar sustituye la configuración actual: confirma la operación (confirm: true)")
         man, files = backup.open_backup(self._decode_backup(data), passphrase)
         actions, safety = backup.restore(files, config.home())
+        if self.users is not None and "users.json" in files:  # usuarios restaurados: se aplican ya
+            fresh = users.Users(config.home() / "users.json")
+            with self.users.lock:
+                self.users.data = fresh.data
         for x in json.loads(files.get("nodes_added.json") or b"[]"):
             try:
                 self.reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)
@@ -1795,7 +1801,38 @@ def extract_model(body, ctype=""):
         return None
 
 
+LOOP = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+_PERM_PREFIX = (  # (prefijo, permiso); el primero que encaja manda
+    ("/api/users", "users"), ("/api/groups", "users"), ("/api/roles", "users"), ("/api/keys", "users"),
+    ("/api/backup", "system"), ("/api/join-code", "system"),
+    ("/api/node", "nodes"), ("/api/pair", "nodes"),
+    ("/api/load", "models"), ("/api/unload", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
+    ("/api/hf/token", "models"), ("/api/tools/test", "models"), ("/api/ollama/", "models"),
+    ("/v1/", "chat"),
+)
+_VIEW = ("/api/state", "/api/telemetry", "/api/events", "/api/resources", "/api/models", "/api/downloads",
+         "/api/plan", "/api/hf/", "/api/access", "/api/ui/clients", "/api/me", "/metrics")
+
+
+def perm_for(method, path):
+    """Permiso necesario para una ruta (control de acceso por roles)."""
+    if path == "/api/downloads" and method == "POST":
+        return "models"
+    for pre, perm in _PERM_PREFIX:
+        if path.startswith(pre):
+            return perm
+    if any(path == v or (v.endswith("/") and path.startswith(v)) for v in _VIEW):
+        return "view"
+    return "system"  # cualquier otra ruta de gestión: el permiso más restrictivo habitual
+
+
 def make_handler(cfg, cl):
+    UM = cl.users
+    no_login = os.environ.get("DLLM_INSECURE_NO_LOGIN") == "1" and cfg.host in ("127.0.0.1", "localhost", "::1")
+    if no_login:
+        log("AVISO: DLLM_INSECURE_NO_LOGIN=1: el panel no pide usuario (solo para pruebas; solo en loopback)")
+    fails = {}  # ip → [marcas de tiempo de inicios de sesión fallidos]
+
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "dllm"
@@ -1824,11 +1861,130 @@ def make_handler(cfg, cl):
             self.end_headers()
             self.wfile.write(body)
 
-        def _authed(self):
-            """Sin clave desde este mismo equipo (el navegador del orquestador); desde la red, API key."""
-            if not cfg.api_key or self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
-                return True
-            return hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + cfg.api_key)
+        def _cookie(self, name):
+            for part in (self.headers.get("Cookie") or "").split(";"):
+                k, _, v = part.strip().partition("=")
+                if k == name:
+                    return v
+            return None
+
+        def _principal(self):
+            """(usuario, permisos) de quien pide: sesión del panel (cookie), token local de la terminal (solo
+            127.0.0.1), API key de un usuario, o (None, ∅)."""
+            ip = self.client_address[0]
+            if no_login and ip in LOOP:
+                return users.ADMIN, set(users.PERMS)
+            u = UM.session_user(self._cookie("dllm_session"))
+            if u:
+                return u, UM.perms_of(u)
+            authz = self.headers.get("Authorization", "")
+            if authz.startswith("Bearer "):
+                tok = authz[7:].strip()
+                if ip in LOOP and cl.local_token and hmac.compare_digest(tok, cl.local_token):
+                    return users.ADMIN, set(users.PERMS)
+                u, _ = UM.key_user(tok)
+                if u:
+                    return u, UM.perms_of(u)
+            return None, set()
+
+        def _me(self, user):
+            return {"user": user, "perms": sorted(UM.perms_of(user)), "default_pw": UM.is_default_password(user)}
+
+        def _auth_routes(self, path):
+            """/api/login, /api/logout, /api/me y /api/me/*: van antes del control de permisos."""
+            ip = self.client_address[0]
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 65536:
+                return self._send(413, {"error": "petición demasiado grande"})
+            try:
+                req = json.loads(self.rfile.read(n)) if n else {}
+            except ValueError:
+                return self._send(400, {"error": "el cuerpo debe ser JSON"})
+            if path == "/api/login" and self.command == "POST":
+                now = time.time()
+                fl = [t for t in fails.get(ip, []) if now - t < 300]
+                if len(fl) >= 5:
+                    return self._send(429, {"error": "demasiados intentos fallidos: espera 5 minutos"},
+                                      headers={"Retry-After": "300"})
+                user, pw = str(req.get("user") or ""), str(req.get("password") or "")
+                if not UM.authenticate(user, pw):
+                    fails[ip] = fl + [now]
+                    cl.event(f"inicio de sesión fallido de «{user[:64]}» desde {ip}", level="warn", kind="security")
+                    return self._send(401, {"error": "usuario o contraseña incorrectos"})
+                fails.pop(ip, None)
+                tok = UM.new_session(user, ip)
+                if UM.is_default_password(user):
+                    cl.event(f"«{user}» ha iniciado sesión con la contraseña por defecto desde {ip}: cámbiala",
+                             level="warn", kind="security")
+                else:
+                    cl.event(f"«{user}» ha iniciado sesión desde {ip}", kind="security")
+                return self._send(200, self._me(user), headers={
+                    "Set-Cookie": f"dllm_session={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age={users.SESSION_TTL}"})
+            if path == "/api/logout" and self.command == "POST":
+                UM.end_session(self._cookie("dllm_session"))
+                return self._send(200, {"ok": True},
+                                  headers={"Set-Cookie": "dllm_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"})
+            user, _ = self._principal()
+            if not user:
+                return self._send(401, {"error": "inicia sesión o usa una API key", "login": True})
+            if path == "/api/me":
+                return self._send(200, self._me(user))
+            try:
+                if path == "/api/me/password" and self.command == "POST":
+                    if not UM.authenticate(user, str(req.get("old") or "")):
+                        return self._send(400, {"error": "la contraseña actual no es correcta"})
+                    UM.set_password(user, str(req.get("new") or ""))
+                    cl.event(f"«{user}» ha cambiado su contraseña", kind="security")
+                    return self._send(200, self._me(user))
+                if path == "/api/me/keys":
+                    if self.command == "POST" and req.get("delete"):
+                        UM.delete_key(str(req["delete"]), user=user)
+                        cl.event(f"«{user}» ha revocado una API key", kind="security")
+                    elif self.command == "POST":
+                        kid, key = UM.create_key(user, req.get("name"))
+                        cl.event(f"«{user}» ha creado la API key «{UM.data['keys'][kid]['name']}»", kind="security")
+                        return self._send(200, {"id": kid, "key": key})
+                    v = UM.view()["keys"]
+                    return self._send(200, {k: x for k, x in v.items() if x["user"] == user})
+            except users.UserError as e:
+                return self._send(400, {"error": str(e)})
+            return self._send(404, {"error": "ruta no encontrada"})
+
+        def _users_routes(self, path, req, actor):
+            try:
+                if path == "/api/users" and self.command == "GET":
+                    return self._send(200, UM.view())
+                if self.command != "POST":
+                    return self._send(405, {"error": "método no permitido"})
+                name = str(req.get("name") or "")
+                if path == "/api/users/create":
+                    UM.create_user(name, str(req.get("password") or ""), req.get("groups") or [])
+                elif path == "/api/users/update":
+                    UM.update_user(name, req.get("groups"), req.get("disabled"))
+                    if req.get("password"):
+                        UM.set_password(name, str(req["password"]))
+                elif path == "/api/users/delete":
+                    UM.delete_user(name)
+                elif path == "/api/groups/set":
+                    UM.set_group(name, req.get("roles") or [])
+                elif path == "/api/groups/delete":
+                    UM.delete_group(name)
+                elif path == "/api/roles/set":
+                    UM.set_role(name, req.get("perms") or [])
+                elif path == "/api/roles/delete":
+                    UM.delete_role(name)
+                elif path == "/api/keys/create":
+                    kid, key = UM.create_key(str(req.get("user") or actor), req.get("label") or req.get("name"))
+                    cl.event(f"«{actor}» ha creado una API key para «{req.get('user') or actor}»", kind="security")
+                    return self._send(200, {"id": kid, "key": key})
+                elif path == "/api/keys/delete":
+                    UM.delete_key(str(req.get("id") or ""))
+                else:
+                    return self._send(404, {"error": "ruta no encontrada"})
+                cl.event(f"«{actor}»: {path.rsplit('/api/', 1)[1]} {name}".strip(), kind="security")
+                return self._send(200, UM.view())
+            except users.UserError as e:
+                return self._send(400, {"error": str(e)})
 
         def _same_origin(self):
             """Contra CSRF / DNS rebinding: una web ajena abierta en el navegador no puede mandar órdenes al panel."""
@@ -1863,9 +2019,21 @@ def make_handler(cfg, cl):
                     return self._send(403, {"error": "IP no permitida"})
                 if self.command == "POST" and not self._same_origin():
                     return self._send(403, {"error": "origen no permitido"})
-                if not self._authed():
+                if path in ("/api/ui/ping", "/api/ui/bye") and self.command == "POST":
+                    cid = (parse_qs(urlparse(self.path).query).get("id") or [""])[0]
+                    (cl.presence.touch if path.endswith("ping") else cl.presence.bye)(cid)
+                    return self._send(200, {"ok": True})
+                if path in ("/api/login", "/api/logout", "/api/me") or path.startswith("/api/me/"):
+                    return self._auth_routes(path)
+                actor, perms = self._principal()
+                need = perm_for(self.command, path)
+                if path.startswith("/v1/") and actor is None and ip in LOOP:
+                    pass  # aplicaciones de este mismo equipo (AnythingLLM local…): sin clave, como antes
+                elif need not in perms:
                     self.close_connection = True
-                    return self._send(401, {"error": "API key requerida (Authorization: Bearer ...)"})
+                    if actor is None:
+                        return self._send(401, {"error": "inicia sesión o usa una API key", "login": True})
+                    return self._send(403, {"error": f"tu usuario no tiene permiso para esto ({need})"})
                 body = b""
                 if self.command == "POST":
                     n = int(self.headers.get("Content-Length") or 0)
@@ -1878,10 +2046,8 @@ def make_handler(cfg, cl):
                 req = json.loads(body) if body else {}
                 q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
                 mm = cl.models
-                if path in ("/api/ui/ping", "/api/ui/bye") and self.command == "POST":
-                    cid = (parse_qs(urlparse(self.path).query).get("id") or [""])[0]
-                    (cl.presence.touch if path.endswith("ping") else cl.presence.bye)(cid)
-                    return self._send(200, {"ok": True})
+                if path.startswith(("/api/users", "/api/groups", "/api/roles", "/api/keys")):
+                    return self._users_routes(path, req, actor)
                 if path == "/api/join-code":
                     # lleva el secreto del clúster: la API key de los front-ends no basta, solo desde este equipo
                     if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
@@ -1899,11 +2065,11 @@ def make_handler(cfg, cl):
                         return self._send(400, {"error": str(e)})
                 if path == "/api/access":
                     local = self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
-                    out = {"local": local, "key_required": bool(cfg.api_key) and not local,
+                    out = {"local": local, "key_required": False, "login": True,
                            "ollama_port": getattr(cfg, "ollama_port", 0),
                            "exposed": cfg.host not in ("127.0.0.1", "localhost", "::1")}
-                    if local and cfg.api_key:
-                        out["lan_url"] = f"http://{config.lan_ip()}:{cfg.port}/#key={cfg.api_key}"
+                    if local and out["exposed"]:
+                        out["lan_url"] = f"http://{config.lan_ip()}:{cfg.port}/"
                     return self._send(200, out)
                 if path == "/api/state":
                     return self._send(200, cl.snapshot())
@@ -2130,6 +2296,10 @@ def run(cfg):
         h, _, p = n.partition(":")
         reg.add(h, int(p or 8765), static=True)
     cl = Cluster(cfg, reg)
+    cl.users = users.Users(config.home() / "users.json")
+    if cfg.api_key and not cl.users.key_user(cfg.api_key)[0]:  # la API key de siempre pasa a ser de admin
+        cl.users.create_key(users.ADMIN, "clave de config.json", key=cfg.api_key)
+    cl.local_token = users.write_local_token(config.home())
     for x in cl.added_nodes():  # nodos añadidos a mano en otras sesiones
         try:
             reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)

@@ -18,6 +18,8 @@ exige demostrar que se conoce el secreto del clúster.
 | API compatible con Ollama (11434) | Mismas reglas que el panel/API: loopback por defecto; expuesta solo con la API key (`Bearer`); `POST` de navegador de otro origen rechazados |
 | Origen de conexiones al nodo | `allow_ip`: por defecto el asistente solo admite la IP del orquestador (+ loopback) |
 | Descubrimiento (UDP 50999) | Beacons firmados; los no firmados se ignoran y se registran |
+| Usuarios del panel | Inicio de sesión siempre (también en local); roles/grupos/usuarios con permisos por ruta; contraseñas PBKDF2-HMAC-SHA256; cookie de sesión `HttpOnly` + `SameSite=Strict` (12 h deslizantes); 5 fallos por IP → bloqueo 5 min; inicios registrados. `admin`/`admin` si no se puso contraseña al instalar (aviso en cada inicio) |
+| API keys | Una o varias por usuario, con sus permisos; guardadas como SHA-256, se muestran una vez, revocables. La terminal usa un token local (600, solo loopback) |
 | Panel/API del orquestador (8080) | Solo `127.0.0.1` por defecto; para exponerlo es **obligatoria** una API key (comparación en tiempo constante). Desde el propio equipo (127.0.0.1) no se pide. Las peticiones `POST` con cabecera `Origin` de otro sitio se rechazan (anti CSRF / DNS rebinding) |
 | Emparejamiento de nodos sin código | Diffie-Hellman (grupo MODP de 2048 bits, RFC 3526) + código de verificación de 6 cifras que se compara a ojo y se acepta **en el nodo**; el secreto viaja cifrado y autenticado (HMAC-SHA256, encrypt-then-MAC). Solo mientras el nodo no tiene secreto; una solicitud a la vez, caduca en 5 min, máx. 10/min |
 | Modelos | Las rutas se resuelven dentro de la carpeta de modelos (sin `../`) |
@@ -47,11 +49,12 @@ exige demostrar que se conoce el secreto del clúster.
 - **Un nodo comprometido** conoce el secreto: puede hacerse pasar por otro nodo o por el orquestador ante los demás
   nodos (si no tienen `allow_ip`). Rota el secreto si pierdes el control de un equipo.
 - El **código de unión** lleva el secreto en claro (base64). Quien lo tenga puede unirse al clúster.
-- Sin autenticación de usuarios en el panel más allá de la API key compartida. Cualquier proceso del propio
-  orquestador accede al panel sin clave (como con cualquier servicio en 127.0.0.1); un proxy inverso local que lo
-  publique en la red heredaría ese acceso: ponle su propia autenticación.
-- El enlace «para otros equipos» (`…/#key=…`) contiene la API key: trátalo como una contraseña. La clave va tras `#`
-  (no viaja al servidor ni queda en registros) y el panel la borra de la barra de direcciones al guardarla.
+- **Credenciales por defecto**: si no se puso contraseña al instalar, `admin`/`admin` funciona (también desde la red si el
+  orquestador está expuesto) hasta cambiarla; el panel avisa en cada inicio de sesión. Cámbiala nada más instalar.
+- Las sesiones viven en memoria: reiniciar el orquestador cierra todas.
+- `/v1` y la API Ollama aceptan peticiones sin clave desde el propio orquestador (aplicaciones locales); cualquier
+  proceso local puede usarlas, como con cualquier servicio en 127.0.0.1. La gestión (`/api/*`) exige siempre sesión, clave
+  o el token local.
 - Emparejamiento sin código: la seguridad depende de **comparar el código** en el panel y en el nodo. Si se acepta sin
   mirarlo, un equipo malicioso de la red que reclame antes podría quedarse con el nodo (no con el secreto del
   clúster). Los anuncios de nodos sin emparejar no van firmados (solo revelan nombre y puerto).

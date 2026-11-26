@@ -92,9 +92,12 @@ Abre el asistente (tabla del README) y:
    (o, si no hay escritorio, un explorador dentro del asistente que también permite crear carpetas). Debajo verás el
    espacio libre del disco: un modelo de 7B ocupa ~5 GB y uno de 32B ~20 GB. La carpeta se crea si no existe. La
    configuración y el secreto del clúster se quedan aparte, en `~/.dllm`, con permisos restringidos.
-3. Marca *Permitir usar la API desde otros equipos* solo si la vas a usar desde fuera del propio orquestador: se
+3. Pon la **contraseña del administrador** (usuario `admin`) con la que entrarás al panel. Si la dejas vacía, será
+   `admin`/`admin` y el panel avisará en cada inicio de sesión hasta que la cambies. Al reinstalar, vacío = conservar la
+   actual. Desatendido: `DLLM_ADMIN_PASSWORD=…`.
+4. Marca *Permitir usar la API desde otros equipos* solo si la vas a usar desde fuera del propio orquestador: se
    generará una **API key** obligatoria.
-4. Pulsa **Instalar**. El asistente:
+5. Pulsa **Instalar**. El asistente:
    - descarga la versión oficial más reciente de llama.cpp que publica paquetes para todos los sistemas (así
      cualquier nodo encontrará el suyo de la misma versión) y verifica su **sha256**;
    - guarda la configuración en `~/.dllm/config.json` (permisos 600, contiene el secreto del clúster);
@@ -103,7 +106,7 @@ Abre el asistente (tabla del README) y:
    - en Windows, abre en el cortafuegos **solo** los puertos necesarios y limitados a tu red (pide permiso de
      administrador una vez; ver [Cortafuegos](#cortafuegos));
    - comprueba que el orquestador responde.
-5. Copia el **código de unión** `DLLM1-…` que aparece al final. Puedes volver a verlo con `dllm join-code`.
+6. Copia el **código de unión** `DLLM1-…` que aparece al final. Puedes volver a verlo con `dllm join-code` o en el panel (Nodos → 🔑 Código de unión).
 
 > El código de unión contiene el **secreto del clúster**: trátalo como una contraseña y no lo pegues en chats públicos.
 

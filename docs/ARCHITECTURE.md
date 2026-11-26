@@ -288,6 +288,14 @@ Node `bw`: NVIDIA GPU 300 GB/s by default; CPU measured with a single-thread `me
 - **Languages:** the pages are written in Spanish and translated in the browser with `dllm/i18n/en.json` (English by
   default); the terminal and API errors are translated in Python with the same dictionary (`dllm/i18n/__init__.py`).
 
+## Users and permissions
+
+`dllm/users.py` keeps roles → permissions, groups → roles and users → groups in `~/.dllm/users.json` (600), with
+PBKDF2-HMAC-SHA256 passwords and API keys stored as SHA-256. The handler resolves the principal (session cookie, local
+token from loopback, or a user's API key) and `perm_for(method, path)` gives the permission each route needs; `/v1` from
+loopback without credentials is allowed (local apps). Sessions are kept in memory. `DLLM_INSECURE_NO_LOGIN=1` disables
+the login only for tests and only with the orchestrator on loopback.
+
 ## Limits
 
 - **It does not speed up a stream**: more nodes = larger models, not more tokens/s.

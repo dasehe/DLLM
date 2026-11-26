@@ -35,6 +35,7 @@ model, live tokens/s, the **Advanced mode** switch and the **language selector**
 | **Connect** | URL, key and snippets for front-ends; tool test (see [Connect](#connecting-front-ends-and-tools)) |
 | **Logs** | What happened, where and why: events with level, model and node, filters and search, last failure with its cause (see [Logs](#logs)) |
 | **System** | Backup and restore (see [Backup](#backup-and-recovery)) |
+| **Users** | Users, groups, roles and API keys (see [Users](#users-groups-and-roles)) |
 
 ### Models tab
 
@@ -86,6 +87,28 @@ software, so they show as "—". **RPC traffic** measures the data going through
 generate, that node is working. Charts keep the last ~5 minutes; the panel only receives new samples each time
 (`/api/telemetry?since=`) and stops polling while its tab is hidden. If a node has a GPU that llama.cpp does not use, a
 warning explains it (see [TROUBLESHOOTING](TROUBLESHOOTING.md)).
+
+### Users, groups and roles
+
+The panel always asks to **sign in** (also on the orchestrator itself). The installer asks for the **administrator
+password** (user `admin`); if it is left empty, the user is `admin` with password `admin` and the panel warns at every
+login until it is changed (*👤 → Change password*). Logins with the default password are recorded in *Logs*.
+
+- **Roles** are sets of permissions: `view` (panel, monitor, logs), `chat` (panel chat and `/v1`/Ollama APIs), `models`,
+  `nodes`, `system` (backups, join code, settings), `users` (manage users, groups, roles and keys) and `audit`.
+  Predefined: *administrator* (everything), *operator* (view, chat, models, nodes), *user* (view, chat), *viewer* (view).
+- **Groups** have roles (*administrators*, *operators*, *users*); **users** belong to groups. Everything can be created
+  and edited in the **👥 Users** tab (with the `users` permission).
+- `admin` cannot be deleted, disabled or removed from *administrators*, and the *administrator* role always keeps every
+  permission, so nobody can lock themselves out.
+- **API keys belong to a user** and inherit their permissions: *👤 → My API keys* (each user) or the Users tab. They are
+  shown only once and stored as a hash. The previous API key in `config.json` becomes an `admin` key.
+- Apps on the orchestrator itself (AnythingLLM local…) can still use `/v1` and the Ollama API without a key; from the
+  network they need a key with the `chat` permission.
+- The terminal (`dllm status`, `load`…) on the orchestrator itself uses a local token (`~/.dllm/local.token`, permissions
+  600, only accepted from 127.0.0.1).
+- 5 failed logins from the same IP block logins from it for 5 minutes. Passwords: PBKDF2-HMAC-SHA256; sessions: random
+  token in an `HttpOnly`, `SameSite=Strict` cookie, 12 h sliding expiry. Users travel in backups (`users.json`).
 
 ### Adding, searching, measuring and deleting nodes
 

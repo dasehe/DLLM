@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -22,6 +23,9 @@ def _sigterm(*_):
 # ---------------------------------------------------------------- cliente API
 def _api(args, method, path, body=None):
     key = args.api_key or os.environ.get("DLLM_API_KEY")
+    if not key and urllib.parse.urlparse(args.url).hostname in ("127.0.0.1", "localhost", "::1"):
+        from . import users
+        key = users.read_local_token()  # orquestador de este equipo: token local (equivale a admin)
     if not key:
         cfg = config.load()
         key = ((cfg or {}).get("orchestrator") or {}).get("api_key")
@@ -135,8 +139,10 @@ def cmd_run(a):
 def _local_json(port, path, timeout=3):
     import http.client
     try:
+        from . import users
+        tok = users.read_local_token()
         c = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
-        c.request("GET", path)
+        c.request("GET", path, headers={"Authorization": f"Bearer {tok}"} if tok else {})
         r = c.getresponse()
         data = r.read()
         c.close()

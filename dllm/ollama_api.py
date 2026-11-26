@@ -188,10 +188,15 @@ def make_handler(cfg, cl):
             self.wfile.flush()
 
         def _authed(self):
-            if not cfg.api_key or self.client_address[0] in LOOPBACK:
+            """Desde este equipo, sin clave (como Ollama); desde la red, API key de un usuario con permiso «chat»."""
+            if self.client_address[0] in LOOPBACK:
                 return True
-            import hmac
-            return hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + cfg.api_key)
+            authz = self.headers.get("Authorization", "")
+            um = getattr(cl, "users", None)
+            if not um or not authz.startswith("Bearer "):
+                return False
+            user, _ = um.key_user(authz[7:].strip())
+            return bool(user) and "chat" in um.perms_of(user)
 
         def _same_origin(self):
             origin = self.headers.get("Origin")

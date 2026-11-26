@@ -135,14 +135,14 @@ class E2E(unittest.TestCase):
 
     # ------------------------------------------------------------ tests (en orden)
     def test_1_security(self):
-        self.assertEqual(self.req("GET", "/api/state", key=None)[0], 200)   # en el propio equipo, sin clave
+        self.assertEqual(self.req("GET", "/api/state", key=None)[0], 401)   # el panel pide iniciar sesión
         if LAN.startswith("127."):
             self.skipTest("sin IP de red para simular otro equipo")
         self.assertEqual(self.req("GET", "/api/state", key=None, remote=True)[0], 401)
         self.assertEqual(self.req("GET", "/api/state", key="mala", remote=True)[0], 401)
         self.assertEqual(self.req("GET", "/api/state", remote=True)[0], 200)
-        st, a = self.req("GET", "/api/access", key=None)
-        self.assertTrue(a["local"] and a["lan_url"].endswith("#key=" + KEY))
+        st, a = self.req("GET", "/api/access")
+        self.assertTrue(a["local"] and a["lan_url"].endswith("/") and KEY not in a["lan_url"])  # la clave ya no viaja
         self.assertNotIn("lan_url", self.req("GET", "/api/access", remote=True)[1])
         # una web ajena abierta en el navegador no puede dar órdenes (CSRF)
         st, _ = self.req("POST", "/api/unload", {}, key=None, headers={"Origin": "http://evil.example"})
