@@ -22,6 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _proc  # noqa: E402
 from dllm import discovery, orchestrator, scheduler  # noqa: E402
 from make_gguf import write_gguf  # noqa: E402
 from ports import free_port  # noqa: E402
@@ -230,10 +232,10 @@ class NodesAdminE2E(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for sig in (signal.SIGTERM, signal.SIGKILL):
+        for sig in (signal.SIGTERM, _proc.SIGKILL):
             for p in cls.procs:
                 try:
-                    os.killpg(p.pid, sig)
+                    _proc.killpg(p.pid, sig)
                 except (ProcessLookupError, PermissionError):
                     pass
             time.sleep(1)

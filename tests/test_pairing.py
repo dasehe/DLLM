@@ -16,6 +16,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _proc  # noqa: E402
 from dllm import pairing  # noqa: E402
 from ports import free_port  # noqa: E402
 
@@ -105,7 +107,7 @@ class TestPairingE2E(unittest.TestCase):
     def tearDownClass(cls):
         for p in cls.procs:
             try:
-                os.killpg(p.pid, signal.SIGKILL)
+                _proc.killpg(p.pid, _proc.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
         shutil.rmtree(cls.tmp, ignore_errors=True)

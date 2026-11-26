@@ -184,8 +184,13 @@ def force_rmtree(path, attempts=4):
     path = Path(path)
 
     def onerr(func, p, exc):
+        # sin permiso de escritura en la carpeta padre no se puede borrar nada dentro (Unix): se devuelve a los dos
+        for q in (os.path.dirname(p), p):
+            try:
+                os.chmod(q, stat.S_IRWXU if os.path.isdir(q) else stat.S_IWRITE | stat.S_IREAD)
+            except OSError:
+                pass
         try:
-            os.chmod(p, stat.S_IWRITE | stat.S_IREAD)
             func(p)
         except OSError:
             pass

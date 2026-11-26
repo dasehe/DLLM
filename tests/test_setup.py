@@ -31,6 +31,8 @@ sys.path.insert(0, str(HERE))
 from dllm import config, hw, installer, wizard  # noqa: E402
 from make_gguf import write_gguf  # noqa: E402
 from ports import free_port  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _proc  # noqa: E402
 
 GiB = 1 << 30
 ASSETS = [{"name": n, "url": "x", "size": 1, "sha256": None} for n in [
@@ -545,9 +547,9 @@ class TestInstallE2E(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         for p in cls.procs:
-            for sig in (signal.SIGTERM, signal.SIGKILL):
+            for sig in (signal.SIGTERM, _proc.SIGKILL):
                 try:
-                    os.killpg(p.pid, sig)
+                    _proc.killpg(p.pid, sig)
                 except (ProcessLookupError, PermissionError):
                     pass
                 time.sleep(0.5)

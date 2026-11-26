@@ -472,6 +472,7 @@ class Cluster:
                           "backend": i.get("backend"), "device_desc": i.get("device_desc"), "gpu_warning": i.get("gpu_warning"), "cores": i.get("cores"),
                           "threads": i.get("threads"), "cap_bytes": i.get("cap_bytes"),
                           "settings": self.node_settings(n.name), "now": i.get("telemetry") or {},
+                          "models": self.node_models(n),
                           "hist": [compact(t) for t in newer(list(n.hist))],
                           "hist_cols": ["t", "gpu_util", "vram_used", "power", "temp", "cpu", "rpc_bps"]})
         lh = list(self.llama_hist)

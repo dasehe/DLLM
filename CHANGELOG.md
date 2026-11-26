@@ -4,6 +4,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.8.2] - 2026-11-26
+
+### Corregido
+- Monitor mostraba «Sin modelos cargados» en todos los nodos: la telemetría no incluía los modelos de cada nodo
+  (Nodos sí). Ahora `/api/telemetry` (también con `?since=`) lleva `nodes[].models`.
+- `force_rmtree` no borraba carpetas de solo lectura sin ser root (Linux/macOS): ahora devuelve también el permiso de la
+  carpeta padre. Probado como usuario sin privilegios.
+- Tests portables: los procesos de prueba se terminan con `taskkill /T` en Windows (no existe `os.killpg`/`SIGKILL`) y se
+  omiten allí los que usan binarios simulados de shell. Sin probar en Windows ni macOS.
+
 ## [0.8.1] - 2026-11-26
 
 ### Añadido

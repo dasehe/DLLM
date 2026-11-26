@@ -30,8 +30,10 @@ Ver `docs/DESARROLLO.md#publicar-una-versión`: versión en `dllm/__init__.py` y
 ## Comprobar
 
 **Tests siempre en local** antes de cada versión (`python -m unittest discover -s tests`, más la prueba en navegador de lo
-que cambie en las páginas). GitHub Actions no tiene facturación: no lanzar workflows de tests ni dar por buena una versión
-por la CI; la CI de GitHub queda solo manual y no se usa.
+que cambie en las páginas). El propietario no quiere ejecuciones de GitHub Actions (salen en rojo por falta de facturación
+en su cuenta): no lanzar workflows de tests. Ojo: ejecuciones anteriores sí corrieron y fallaron por los propios tests en
+Windows/macOS, así que un rojo **no** se ignora por defecto. Al informar, decir en qué sistema y Python se probó (aquí:
+Linux); Windows y macOS solo los puede probar el propietario.
 
 - Tests: `python -m unittest discover -s tests -v`
 - Paquete: `python scripts/build_package.py --out dist`

@@ -176,6 +176,7 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
+@unittest.skipIf(os.name == "nt", "el nvidia-smi simulado es un script de shell")
 class TestNvidiaStream(unittest.TestCase):
     """Un solo nvidia-smi -lms en marcha en vez de lanzarlo cada 2 s; si muere, consulta puntual."""
 

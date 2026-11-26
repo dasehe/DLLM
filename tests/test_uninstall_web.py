@@ -142,6 +142,7 @@ class UninstallWeb(unittest.TestCase):
 
 
 class RestoreInInstaller(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "los binarios simulados de llama.cpp son scripts sin .exe")
     def test_restaurar_en_instalacion_nueva(self):
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)

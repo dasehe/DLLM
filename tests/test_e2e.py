@@ -21,6 +21,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _proc  # noqa: E402
 from make_gguf import write_gguf  # noqa: E402
 from ports import free_port  # noqa: E402
 
@@ -80,13 +82,13 @@ class E2E(unittest.TestCase):
     def tearDownClass(cls):
         for p in cls.procs.values():
             try:
-                os.killpg(p.pid, signal.SIGTERM)
+                _proc.killpg(p.pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
                 pass
         time.sleep(1)
         for p in cls.procs.values():
             try:
-                os.killpg(p.pid, signal.SIGKILL)
+                _proc.killpg(p.pid, _proc.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
         if not getattr(cls, "_cleaned", False):
@@ -229,7 +231,7 @@ class E2E(unittest.TestCase):
     def test_5_recovery_when_node_dies(self):
         before = self.state()["recoveries"]
         victim = self.procs["n3"]
-        os.killpg(victim.pid, signal.SIGKILL)  # mata agente y su rpc-server
+        _proc.killpg(victim.pid, _proc.SIGKILL)  # mata agente y su rpc-server
         self.wait(lambda: self.state()["recoveries"] > before, 30, "detectar caída")
         self.wait(lambda: self.state()["state"] in ("READY", "ERROR"), 60, "recuperación")
         s = self.state()

@@ -17,6 +17,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _proc  # noqa: E402
 from make_gguf import write_gguf  # noqa: E402
 from ports import free_port  # noqa: E402
 
@@ -65,10 +67,10 @@ class DirectLocalGpu(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for sig in (signal.SIGTERM, signal.SIGKILL):
+        for sig in (signal.SIGTERM, _proc.SIGKILL):
             for p in cls.procs:
                 try:
-                    os.killpg(p.pid, sig)
+                    _proc.killpg(p.pid, sig)
                 except (ProcessLookupError, PermissionError):
                     pass
             time.sleep(1)
@@ -184,6 +186,12 @@ class DirectLocalGpu(unittest.TestCase):
         self._load0()
         self.ready(0)
         self.assertEqual(self.chat("small.gguf")["rpc"], [])
+        # Monitor (telemetría) muestra el modelo en su nodo, igual que Nodos, también en modo incremental
+        st, t = self.api("GET", "/api/telemetry")
+        gpu = next(n for n in t["nodes"] if n["name"] == "gpu")
+        self.assertEqual([m["model"] for m in gpu["models"]], ["small.gguf"])
+        st, t2 = self.api("GET", f"/api/telemetry?since={t['t']}")
+        self.assertEqual([m["model"] for m in next(n for n in t2["nodes"] if n["name"] == "gpu")["models"]], ["small.gguf"])
         self._unload0()
         st, r = self.api("POST", "/api/models/settings", {"model": "small.gguf", "settings": {"local_gpu": "x"}})
         self.assertEqual(st, 400)
