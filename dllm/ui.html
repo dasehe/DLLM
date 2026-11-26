@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<!--I18N-->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DLLM</title>
 <style>
@@ -80,13 +81,14 @@ nav button.on{font-weight:600}
 .advsw{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);cursor:pointer;user-select:none}.advsw input{padding:0;width:auto}
 footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-align:center}
 @media(max-width:600px){.m{grid-template-columns:80px 1fr auto}.msg{max-width:92%}}
+.langsel{width:auto;padding:3px 6px;font-size:12px;margin-left:6px}
 </style>
 </head>
 <body>
 <header>
   <div class="top"><div class="logo">DLLM <span>·</span> Distributed LLM</div>
     <span id="state" class="badge">…</span><span id="model" class="mut"></span><span id="toks" class="badge hide"></span>
-    <span style="flex:1"></span><label class="advsw" title="Muestra todos los parámetros técnicos (reparto, caché, muestreo, versiones…)"><input type="checkbox" id="advsw" onchange="setAdv(this.checked)"> Modo avanzado</label><button class="sec sm" onclick="setKey()">API key</button></div>
+    <span style="flex:1"></span><label class="advsw" title="Muestra todos los parámetros técnicos (reparto, caché, muestreo, versiones…)"><input type="checkbox" id="advsw" onchange="setAdv(this.checked)"> Modo avanzado</label><button class="sec sm" onclick="setKey()">API key</button><select id="langsel" class="langsel notr" title="Language / Idioma" onchange="setLang(this.value)"><option value="en">English</option><option value="es">Español (España)</option></select></div>
   <nav id="nav">
     <button data-t="mon" class="on">📊 Monitor</button><button data-t="nod">🖥️ Nodos</button><button data-t="mod">🧠 Modelos</button>
     <button data-t="chat">💬 Chat</button><button data-t="con">🔌 Conectar</button><button data-t="ev">📜 Registros</button><button data-t="sys">⚙️ Sistema</button>
@@ -246,7 +248,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
 <!-- ============================== CHAT ============================== -->
 <div id="t-chat" class="tab hide">
   <section><div class="row" style="justify-content:space-between"><h2 style="margin:0">Chat de prueba</h2><button class="sec sm" onclick="newChat()">Nueva conversación</button></div>
-    <div id="chat" class="chat" style="margin-top:10px"><div class="mut">Disponible cuando el estado sea READY. Se aplican los parámetros del modelo.</div></div>
+    <div id="chat" class="chat notr" style="margin-top:10px"><div class="mut">Disponible cuando el estado sea READY. Se aplican los parámetros del modelo.</div></div>
     <div class="row" style="margin-top:10px"><input id="msg" style="flex:1;min-width:200px" placeholder="Escribe un mensaje" onkeydown="if(event.key==='Enter')send()">
       <input type="file" id="att" accept="image/*,audio/wav,audio/mpeg,.wav,.mp3" class="hide" onchange="attName()">
       <button class="sec hide" id="attb" onclick="$('att').click()" title="Adjuntar imagen o audio">📎 Adjuntar</button><button onclick="send()">Enviar</button></div>
@@ -563,7 +565,7 @@ function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||
   const nm=id=>{const n=(S.nodes||[]).find(x=>x.id===id);return n?n.name:id};
   $('slotlist').innerHTML=sl.length?sl.map(x=>{const m=x.metrics||{},busy=x.state==='LOADING'||x.state==='RECOVERING',gone=x.state==='UNLOADING';
     const tt=x.state==='READY'&&x.model?`<button class="sec sm" onclick="testTools(${x.slot},this)" title="Comprueba que el modelo llama a una herramienta de ejemplo">🛠 Probar</button> `:'';
-    const act=gone?'<span class="mut">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:tt+(x.slot===0?`<button class="sec sm" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`);
+    const act=gone?'<span class="mut" data-en="unloading…">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:tt+(x.slot===0?`<button class="sec sm" data-en="Unload" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`);
     const perf=m.requests?`${m.requests} peticiones${m.errors?` · <span class="err">${m.errors} con error</span>`:''}<br><span class="mut">media ${m.avg_ms==null?'—':Math.round(m.avg_ms)+' ms'} · p95 ${m.p95_ms==null?'—':Math.round(m.p95_ms)+' ms'}${m.tok_s?` · ${m.tok_s} tok/s`:''}</span>`:'<span class="mut">sin peticiones</span>';
     return `<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${x.model?esc(x.model):'<span class="mut">(vacío)</span>'}<br><span class="mut">ctx ${x.ctx||'—'} · ${esc(x.policy||'auto')}${x.llama_port?' · puerto '+x.llama_port:''}</span></td>
     <td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.recoveries?` <span class="mut">recuperado ${x.recoveries}×</span>`:''}${x.error?`<br><span class="err">${esc(x.error)}</span><br><a href="#ev" onclick="evFocus(${x.slot});return false">Ver registro</a>`:''}</td>

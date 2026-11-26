@@ -88,6 +88,18 @@ cambios en `[Sin publicar]` más de lo necesario: cada commit que cambia el comp
 Versionado semántico: cambios incompatibles en configuración, código de unión o protocolo del agente → versión menor
 mientras estemos en 0.x, y documentarlo en el CHANGELOG con instrucciones de actualización.
 
+## Idiomas (inglés por defecto, Español de España opcional)
+
+Las páginas (`ui.html`, `setup.html`, `uninstall.html`) se escriben en español y se muestran en **inglés por defecto**: el
+servidor inserta en el marcador `<!--I18N-->` el diccionario `dllm/i18n/en.json` (español → inglés), las expresiones de
+`dllm/i18n/en.re.json` (textos con valores, p. ej. «6.0 GiB libres») y `dllm/i18n/runtime.js`, que traduce el DOM y los
+`alert/confirm`. El usuario elige idioma con el selector de la cabecera (se recuerda en el navegador; `?lang=es` también).
+
+- **Cada texto visible nuevo necesita su entrada en `en.json`**: `python scripts/i18n_extract.py --json` lista los que faltan
+  y `tests/test_i18n.py` falla si queda alguno.
+- Textos ambiguos: `data-en="Unload"` en el elemento fija la traducción (p. ej. «Descargar» = descargar / sacar de memoria).
+- Contenido del usuario (chat, código): `class="notr"`, no se traduce.
+
 ## Licencia en el código
 
 - Todo fichero de código empieza por:

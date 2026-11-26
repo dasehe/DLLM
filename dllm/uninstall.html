@@ -3,6 +3,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<!--I18N-->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Desinstalar DLLM</title>
 <style>
@@ -19,10 +20,12 @@ input[type=text],input[type=password]{width:100%;padding:8px 10px;border-radius:
 button{font:inherit;padding:10px 20px;border-radius:7px;border:0;background:var(--ac);color:#fff;cursor:pointer}button.sec{background:var(--bd);color:var(--fg)}button:disabled{opacity:.5}
 .row{display:flex;gap:10px;margin-top:20px;justify-content:space-between;align-items:center}.box{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;margin:10px 0}
 .err{color:var(--ac)}.ok{color:var(--ok)}.hide{display:none}details{margin-top:12px}summary{cursor:pointer;color:var(--mut)}pre{font:12px monospace;white-space:pre-wrap;word-break:break-all;margin:6px 0}
+.langsel{width:auto;padding:3px 6px;font-size:12px}
 </style>
 </head>
 <body>
 <main>
+<div style="float:right"><select id="langsel" class="langsel notr" title="Language / Idioma" onchange="setLang(this.value)"><option value="en">English</option><option value="es">Español (España)</option></select></div>
 <div class="hero"><h1>Desinstalar DLLM</h1><div class="mut" id="sub">Comprobando qué hay instalado…</div></div>
 
 <section id="v_none" class="hide"><div class="box"><b>DLLM no está instalado en este equipo.</b>

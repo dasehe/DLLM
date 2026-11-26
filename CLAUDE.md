@@ -1,13 +1,16 @@
 # Instrucciones para trabajar en este repositorio
 
 DLLM (Distributed LLM): orquestador de inferencia distribuida sobre llama.cpp RPC. Propietario: David Serrano.
-Idioma del proyecto: **español** (código comentado, mensajes, documentación, commits).
+**Idiomas:** todo lo que ve el usuario (panel, instaladores, desinstalador, terminal, mensajes de la API y documentación)
+está **en inglés por defecto con opción Español (España)**. Cada versión nueva mantiene los dos idiomas al día: ninguna
+cadena visible ni documento nuevo se publica solo en un idioma (textos de interfaz en los diccionarios de `dllm/i18n/`;
+documentación en `README.md` + `README.es.md` y `docs/` + `docs/es/`). Comentarios del código y commits: español.
 
 ## Reglas
 
 - Todo el trabajo se integra en `main` de `dasehe/dllm`; las versiones se publican desde aquí.
-- **Cada cambio visible actualiza la documentación en el mismo commit**: `README.md`, el documento afectado de
-  `docs/` y la sección `[Sin publicar]` de `CHANGELOG.md`. Si cambia la instalación, también `packaging/LEEME-INSTALAR.md`.
+- **Cada cambio visible actualiza la documentación en el mismo commit**, en inglés y en español: `README.md`/`README.es.md`,
+  el documento afectado de `docs/` y `docs/es/`, y la sección de la versión en `CHANGELOG.md`. Si cambia la instalación, también `packaging/LEEME-INSTALAR.md`.
 - Antes de hacer commit: `python -m unittest discover -s tests` en verde. Añade tests para el comportamiento nuevo.
 - `dllm/` usa solo la biblioteca estándar (Python ≥ 3.9). No añadir dependencias.
 - Seguridad: nada escucha fuera de loopback sin autenticación; `rpc-server` nunca se expone directamente.
@@ -25,6 +28,10 @@ Ver `docs/DESARROLLO.md#publicar-una-versión`: versión en `dllm/__init__.py` y
 `release.yml` construye y publica. Desde las sesiones de Claude el proxy de git no deja subir etiquetas: usar el botón.
 
 ## Comprobar
+
+**Tests siempre en local** antes de cada versión (`python -m unittest discover -s tests`, más la prueba en navegador de lo
+que cambie en las páginas). GitHub Actions no tiene facturación: no lanzar workflows de tests ni dar por buena una versión
+por la CI; la CI de GitHub queda solo manual y no se usa.
 
 - Tests: `python -m unittest discover -s tests -v`
 - Paquete: `python scripts/build_package.py --out dist`

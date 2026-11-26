@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<!--I18N-->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Instalar DLLM</title>
 <style>
@@ -22,10 +23,12 @@ button{font:inherit;padding:9px 18px;border-radius:7px;border:0;background:var(-
 details{margin-top:14px}summary{cursor:pointer;color:var(--mut)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.up{background:var(--ok)}
 .ic{font-size:20px;margin-right:4px}.card{transition:border-color .15s,transform .15s}.card:hover{transform:translateY(-1px)}button{transition:opacity .15s}button:hover:not(:disabled){opacity:.88}
 .steps+.lbl{display:flex;margin:-12px 0 10px;font-size:12px;color:var(--mut)}.lbl span{flex:1}
+.langsel{width:auto;padding:3px 6px;font-size:12px}
 </style>
 </head>
 <body>
 <main>
+<div style="float:right"><select id="langsel" class="langsel notr" title="Language / Idioma" onchange="setLang(this.value)"><option value="en">English</option><option value="es">Español (España)</option></select></div>
 <h1>Instalar DLLM</h1>
 <div class="mut" id="sub">Detectando tu equipo…</div>
 <div class="steps"><div id="s1" class="on"></div><div id="s2"></div><div id="s3"></div><div id="s4"></div></div>

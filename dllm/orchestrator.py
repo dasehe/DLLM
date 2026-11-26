@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import backup, discovery, engine, eventlog
+from . import backup, discovery, engine, eventlog, i18n
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -2095,7 +2095,7 @@ _UI = []
 def _ui_page():
     """Panel (90 KB) leído, comprimido y con ETag una sola vez; el navegador lo revalida con 304."""
     if not _UI:
-        html = pkgutil.get_data("dllm", "ui.html")  # funciona también dentro del .pyz
+        html = i18n.inject(pkgutil.get_data("dllm", "ui.html").decode("utf-8")).encode("utf-8")  # también en .pyz
         _UI.extend([html, gzip.compress(html, 9), '"%s"' % hashlib.sha256(html).hexdigest()[:16]])
     return _UI
 

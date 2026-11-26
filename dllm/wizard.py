@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, auth, backup, config, devices, discovery, hw, installer, legal_notice, limits, presence
+from . import __version__, auth, backup, config, devices, discovery, hw, i18n, installer, legal_notice, limits, presence
 from .util import FastHTTPServer
 
 ROLES = ("orchestrator", "node", "both")
@@ -774,7 +774,7 @@ def _make_web_handler(st):
             try:
                 if path == "/":
                     page = "uninstall.html" if st.mode == "uninstall" else "setup.html"
-                    html = pkgutil.get_data("dllm", page).decode().replace("__TOKEN__", st.token)
+                    html = i18n.inject(pkgutil.get_data("dllm", page).decode("utf-8")).replace("__TOKEN__", st.token)
                     return self._send(200, raw=html.encode(), ctype="text/html; charset=utf-8")
                 if path == "/api/detect":
                     return self._send(200, sp.detect())

@@ -4,6 +4,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.8.0] - 2026-11-26
+
+### Añadido
+- **Interfaz en inglés por defecto con opción Español (España)**: panel, instalador y desinstalador traducidos, selector
+  de idioma en la cabecera (se recuerda; `?lang=es|en`). Diccionario `dllm/i18n/en.json` + expresiones para textos con
+  valores; `scripts/i18n_extract.py` y `tests/test_i18n.py` garantizan que ningún texto visible queda sin traducir.
+- Pendiente para las próximas versiones: mensajes generados por el servidor (eventos, errores, terminal) y la
+  documentación en inglés.
+
 ## [0.7.10] - 2026-11-26
 
 ### Añadido

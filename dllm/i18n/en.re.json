@@ -1,0 +1,74 @@
+[
+ [
+  "^de (\\d[\\d.,]*\\s*(?:[KMGT]i?B|GB|MB))",
+  "of $1"
+ ],
+ [
+  " de (\\d[\\d.,]*\\s*(?:[KMGT]i?B|GB|MB))",
+  " of $1"
+ ],
+ [
+  "(\\d[\\d.,]*\\s*(?:[KMGT]i?B|GB|MB)) libres",
+  "$1 free"
+ ],
+ [
+  "^libres?$",
+  "free"
+ ],
+ [
+  "^libre ",
+  "free "
+ ],
+ [
+  "^(\\d+) en uso",
+  "$1 in use"
+ ],
+ [
+  "(\\d+(?:/\\d+)?) hilos",
+  "$1 threads"
+ ],
+ [
+  "\\((\\d+) aportados\\)",
+  "($1 contributed)"
+ ],
+ [
+  "(\\d+) capas",
+  "$1 layers"
+ ],
+ [
+  "^Aporta ",
+  "Contributes "
+ ],
+ [
+  "^disponible$",
+  "available"
+ ],
+ [
+  "^ocupado$",
+  "busy"
+ ],
+ [
+  "^Ninguna\\.$",
+  "None."
+ ],
+ [
+  "^Ninguno\\.$",
+  "None."
+ ],
+ [
+  "^Cuant\\.$",
+  "Quant."
+ ],
+ [
+  "^Configuración ",
+  "Configuration "
+ ],
+ [
+  "^rol ",
+  "role "
+ ],
+ [
+  "^\\(rol ",
+  "(role "
+ ]
+]
