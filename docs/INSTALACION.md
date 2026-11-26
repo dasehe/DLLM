@@ -43,16 +43,25 @@ SHA256SUMS             sumas de comprobación
 
 > Cómo generar el paquete: ver [DESARROLLO](DESARROLLO.md#construir-el-paquete).
 
-### Ubuntu / Debian en una sola línea
+### Instalar con una sola orden
 
+**Linux y macOS** (terminal):
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/instalar-ubuntu.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.sh)
+```
+**Windows** (PowerShell, no hace falta abrirla como administrador):
+```powershell
+irm https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.ps1 | iex
 ```
 
-Instala git/python3/unzip si faltan, descarga el repositorio en `~/dllm-src` (variable `DLLM_SRC`), construye el paquete y
-lanza el instalador (`--tui` automático por SSH; cualquier opción se pasa a `install.sh`). También puedes descargar el
-script y ejecutarlo: `bash instalar-ubuntu.sh`. Si el repositorio vuelve a ser privado, exporta antes `GH_TOKEN` (token de
-lectura; solo se usa en cada orden de git y no se guarda) y añade a `curl` la cabecera `-H "Authorization: token $GH_TOKEN"`.
+Los dos instalan Python 3 si falta (gestor de paquetes de la distribución / `brew` / `winget`), descargan el código de la
+rama `main` como archivo comprimido (no hace falta git) en `~/dllm-src` (`%USERPROFILE%\dllm-src` en Windows), construyen el
+paquete y abren el asistente. En Linux por SSH se usa el asistente de texto (`--tui`). Variables: `DLLM_SRC` (carpeta),
+`DLLM_REF` (rama o etiqueta, p. ej. `v0.8.0`), `DLLM_LANG` (`en`/`es`), `GH_TOKEN` (solo si el repositorio fuese privado; se
+envía en una cabecera y no se guarda). Para actualizar, vuelve a ejecutar la misma orden. `scripts/instalar-ubuntu.sh` sigue
+funcionando y redirige a `install.sh`.
+
+> Revisa el script antes de ejecutarlo si lo prefieres: `curl -fsSL …/install.sh | less` o `irm …/install.ps1`.
 
 ### Desde el repositorio (Ubuntu / Debian)
 

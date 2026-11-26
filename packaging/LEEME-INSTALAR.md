@@ -10,6 +10,11 @@ Este paquete es **el mismo en todos los equipos**. El asistente te pregunta qué
 - **Windows 11:** si está activo el *Control inteligente de aplicaciones*, bloquea llama.cpp (sus DLL no van
   firmadas). Desactívalo en Seguridad de Windows → Control de aplicaciones y navegador antes de instalar.
 
+## Con una sola orden (sin descargar el paquete)
+
+- Linux/macOS: `bash <(curl -fsSL https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.sh)`
+- Windows (PowerShell): `irm https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.ps1 | iex`
+
 ## En 3 pasos
 
 | Sistema | Cómo abrir el asistente |

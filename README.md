@@ -37,6 +37,15 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
 
 ## Instalación en 3 pasos
 
+**Instalar con una sola orden** (descarga todo lo necesario y abre el asistente):
+
+| Sistema | Orden |
+|---|---|
+| Linux (Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, Alpine) y macOS — terminal | `bash <(curl -fsSL https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.sh)` |
+| Windows — PowerShell | `irm https://raw.githubusercontent.com/dasehe/DLLM/main/scripts/install.ps1 \| iex` |
+
+O a mano:
+
 1. **Consigue el paquete** `dllm-package-<versión>.zip` (se genera con `python scripts/build_package.py`, o desde
    [Releases](https://github.com/dasehe/dllm/releases) cuando haya una publicada) y descomprímelo en cada equipo (es el
    mismo para todos).
@@ -53,7 +62,7 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
 | macOS | Doble clic en `Install-DLLM.command` (si se bloquea: clic derecho → Abrir) |
 | Linux | `./install.sh` (navegador si hay escritorio; terminal por SSH) |
 
-**Linux por comandos desde GitHub:** ver [Instalación](docs/INSTALACION.md#desde-el-repositorio-ubuntu--debian).
+Detalles y opciones: [Instalación](docs/INSTALACION.md#instalar-con-una-sola-orden).
 
 El asistente elige el backend más rápido para cada equipo (**CUDA** en NVIDIA, también en Linux; Vulkan en AMD/Intel;
 Metal en Mac; CPU) y, si falla, prueba el siguiente. Después abre el panel con el acceso directo **DLLM**: en el propio

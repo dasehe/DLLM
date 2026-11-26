@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.10] - 2026-11-26
+
+### Añadido
+- Instalación con una sola orden para todos los sistemas: `scripts/install.sh` (Linux: apt/dnf/yum/pacman/zypper/apk, y
+  macOS con brew) y `scripts/install.ps1` (Windows PowerShell 5.1/7, Python con winget). Descargan el código sin git,
+  construyen el paquete y abren el asistente; mensajes en inglés o español según el sistema (`DLLM_LANG`).
+  `instalar-ubuntu.sh` redirige al nuevo script.
+
 ## [0.7.9] - 2026-11-26
 
 ### Añadido
