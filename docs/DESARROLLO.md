@@ -21,7 +21,7 @@ packaging/            lanzadores y LEEME del paquete distribuible
 scripts/              build_package.py, build-llamacpp.sh, ejemplo de unidad systemd
 tests/                unittest + binarios simulados (mockbin/) + generador de GGUF falsos
 docs/                 documentación
-.github/workflows/    tests.yml (CI) · release.yml (publicación)
+.github/workflows/    tests.yml (CI, manual) · release.yml (publicación)
 ```
 
 ## Entorno
@@ -54,8 +54,9 @@ python -m unittest discover -s tests -v
 | `test_e2e.py` | 3 agentes + orquestador: reparto, túneles, API, streaming, autenticación, recuperación, métricas (POSIX) |
 | `test_setup.py` | Selección de paquetes, extracción segura, sha256, servicios, código de unión, asistente web, instalación completa con el `.pyz` (Linux) |
 
-La CI ejecuta la batería en Linux, macOS y Windows con Python 3.9 y 3.13 en cada push a `main` y en cada PR, y
-genera el paquete como artefacto.
+La tabla recoge los principales; el resto están en `tests/`. Los tests se ejecutan **en local** antes de cada commit.
+El workflow `tests` (Linux, macOS y Windows con Python 3.9 y 3.13, y paquete como artefacto) es **solo manual**:
+**Actions → tests → Run workflow**. No se lanza en push ni en pull requests.
 
 Variables útiles: `DLLM_HOME` (carpeta de configuración), `DLLM_BIN_DIR`, `DLLM_RELEASE_FILE` (JSON con formato de
 la API de releases de GitHub, para instalar sin Internet o en tests).
@@ -73,7 +74,7 @@ Empaqueta `dllm/` en un `dllm.pyz` (zipapp) y añade los lanzadores de `packagin
 2. Añade la sección `## [X.Y.Z] - AAAA-MM-DD` en `CHANGELOG.md` (es el texto de la release).
 3. Actualiza la documentación afectada.
 4. `python -m unittest discover -s tests` en verde.
-5. Commit y push a `main`; espera a que la CI (`tests`) esté en verde.
+5. Commit y push a `main`.
 6. En GitHub: **Actions → release → Run workflow** (rama `main`). El workflow toma la versión de `dllm/__init__.py`,
    comprueba que no exista ya esa release, pasa los tests, construye el paquete y crea la etiqueta `vX.Y.Z` y la
    release con el `.zip`, `SHA256SUMS` y la sección del CHANGELOG como notas.

@@ -23,8 +23,9 @@ El scheduler excluye los nodos con menos de **800 Mbps** medidos (Wi-Fi suele qu
 
 ## 2. Descargar el paquete
 
-Descarga `dllm-package-<versión>.zip` de [Releases](https://github.com/dasehe/dllm/releases), compruébalo si quieres
-contra `SHA256SUMS` y descomprímelo. Contenido:
+Genera `dllm-package-<versión>.zip` con `python scripts/build_package.py` (o descárgalo de
+[Releases](https://github.com/dasehe/dllm/releases) cuando haya una publicada), compruébalo si quieres contra
+`SHA256SUMS` y descomprímelo. Contenido:
 
 ```
 dllm.pyz               el programa completo (un solo archivo)
@@ -40,7 +41,7 @@ LEEME-INSTALAR.md      resumen de estas instrucciones
 SHA256SUMS             sumas de comprobación
 ```
 
-> También puedes generar el paquete tú mismo: `python scripts/build_package.py` (ver [DESARROLLO](DESARROLLO.md)).
+> Cómo generar el paquete: ver [DESARROLLO](DESARROLLO.md#construir-el-paquete).
 
 ### Ubuntu / Debian en una sola línea
 
@@ -146,8 +147,6 @@ falta un runtime), **prueba el siguiente** (CUDA → Vulkan → CPU) y lo indica
 tiene varias, usa la de más memoria (la integrada se descarta si hay una dedicada). El asistente muestra al terminar
 qué GPU ha detectado.
 
-| Sistema | Hardware | Backend | Notas |
-|---|---|---|---|
 | Sistema | Hardware | Backend sugerido | Alternativas |
 |---|---|---|---|
 | Windows / Linux (x64 y ARM64) | NVIDIA, driver con CUDA ≥ 12.4 | `cuda` (12.x o 13.x según el driver, con su runtime) | `vulkan`, `cpu` |

@@ -34,7 +34,7 @@ fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prue
 | «DLLM necesita Python 3.9…» | Python ausente o antiguo | Acepta instalarlo o descárgalo de python.org (en Windows marca *Add to PATH*) |
 | macOS: «no se puede abrir porque es de un desarrollador no identificado» | Gatekeeper | Clic derecho → Abrir, o `xattr -dr com.apple.quarantine CARPETA` |
 | «no se pudo consultar las releases de llama.cpp» | Sin Internet, proxy o límite de la API de GitHub (60/h por IP) | Reintenta más tarde o usa `--bin-dir` con llama.cpp descargado a mano |
-| «… La versión bNNNN la fija el orquestador … no publicó ese paquete» | El orquestador se instaló con una versión de llama.cpp incompleta (DLLM ≤ 0.3.0). Actualiza DLLM en el orquestador, vuelve a ejecutar su asistente y usa el nuevo código de unión en los nodos (los ya instalados se actualizan solos) |
+| «… La versión bNNNN la fija el orquestador … no publicó ese paquete» | El orquestador se instaló con una versión de llama.cpp incompleta (DLLM ≤ 0.3.0) | Actualiza DLLM en el orquestador, vuelve a ejecutar su asistente y usa el nuevo código de unión en los nodos (los ya instalados se actualizan solos) |
 | «no hay paquete de llama.cpp para …» | Combinación sistema/backend sin binario oficial (p. ej. CUDA en Linux) | Otro backend o compilar con `build-llamacpp.sh` + `--bin-dir` |
 | «el paquete descargado no contiene llama-server y rpc-server» | DLLM < 0.3.3: llama.cpp renombró `rpc-server` a `ggml-rpc-server` | Actualiza DLLM a 0.3.3 o posterior. Si persiste, esa build no incluye RPC: compila con `build-llamacpp.sh` (activa `GGML_RPC=ON`) |
 | El selector de carpetas no aparece (está detrás de otras ventanas) | DLLM < 0.3.3 en Windows | Actualiza DLLM; o minimiza el navegador para verlo |
@@ -70,8 +70,8 @@ fallo del driver de la GPU de una falta de memoria de cómputo (en ese caso prue
 ## Un nodo tiene GPU pero Monitor dice «sin GPU» (aviso «llama.cpp no la usa»)
 
 `nvidia-smi` ve la GPU, pero el `rpc-server` instalado es solo CPU (o al arrancarlo faltaba el driver/Vulkan), así que no puede
-prestarla: el nodo se anuncia como CPU/RAM y muestra el aviso. En el nodo, actualiza llama.cpp con CUDA o Vulkan (Sistema →
-Actualizar llama.cpp) o instala el driver; el agente vuelve a detectar los dispositivos cada minuto, sin reiniciar. Comprueba con
+prestarla: el nodo se anuncia como CPU/RAM y muestra el aviso. En el nodo, vuelve a ejecutar el asistente eligiendo
+CUDA o Vulkan, o instala el driver; el agente vuelve a detectar los dispositivos cada minuto, sin reiniciar. Comprueba con
 `rpc-server --list-devices` y `python3 ~/.dllm/dllm.pyz doctor`.
 
 ## Un nodo sale excluido del reparto
@@ -85,7 +85,7 @@ Actualizar llama.cpp) o instala el driver; el agente vuelve a detectar los dispo
 | `build distinta y la actualización falló: …` | Sin Internet en el nodo, o no hay paquete para su sistema/backend: instala esa build a mano con `--bin-dir`, o reinstala el nodo con el código actual |
 | `build distinta (…): reinstala el nodo…` | El nodo tiene la actualización automática desactivada: reinstálalo con el código de unión actual |
 | `rpc-server no instalado` | Reinstala el nodo |
-| `memoria libre insuficiente` | El nodo aporta muy poco: súbelo con **Ajustar** en el panel (nodo automático) o en el propio nodo (manual) |
+| `memoria libre insuficiente` | El nodo aporta muy poco: súbelo con **Configurar** en el panel (nodo automático) o en el propio nodo (manual) |
 | `sin respuesta` | Ver sección anterior |
 
 ## El nodo no presta la GPU que esperaba
@@ -109,7 +109,7 @@ Actualizar llama.cpp) o instala el driver; el agente vuelve a detectar los dispo
 
 | Mensaje | Solución |
 |---|---|
-| `no cabe: necesito X GiB … aportan Y GiB` | Más nodos, que los nodos aporten más (**Ajustar**), un modelo más cuantizado o menos `--ctx` (el mensaje indica el contexto máximo que cabe) |
+| `no cabe: necesito X GiB … aportan Y GiB` | Más nodos, que los nodos aporten más (**Configurar**), un modelo más cuantizado o menos `--ctx` (el mensaje indica el contexto máximo que cabe) |
 | El panel dice «el nodo fija sus límites localmente» | Ese nodo está en modo manual: cámbialo en el propio nodo con el asistente |
 | «recortado al máximo» junto a la memoria de un nodo | Se pidió más de lo que tiene el equipo (total − reserva); se usa el máximo posible |
 | `llama-server terminó: … failed to allocate` | La estimación se quedó corta: baja `--ctx` o la memoria ofrecida en algún nodo |
@@ -117,7 +117,7 @@ Actualizar llama.cpp) o instala el driver; el agente vuelve a detectar los dispo
 | `las capas fijadas (X) superan las del modelo` · `N capas necesitan X GiB y aporta Y` | Revisa **Capas fijas** en *Nodos → Configurar* (vacío = automático) |
 | `la caché V cuantizada requiere flash attention` | En los parámetros del modelo, pon flash attention en `auto` u `on`, o la caché V en `f16` |
 | `los nodos exponen N dispositivos y se esperaban M` | Algún nodo expone varias GPUs (agente antiguo o `--rpc-arg -d …`): actualiza el agente o fija `--device` |
-| `aviso: … se le asignan X GiB y su dispositivo tiene Y GiB libres` | Otro programa usa esa GPU: ciérralo o baja lo que aporta el nodo con **Ajustar** |
+| `aviso: … se le asignan X GiB y su dispositivo tiene Y GiB libres` | Otro programa usa esa GPU: ciérralo o baja lo que aporta el nodo con **Configurar** |
 | `túnel → … falló` en eventos | El agente no acepta la conexión: secreto, `allow_ip` o cortafuegos del puerto 50051 |
 | Reparto absurdo (todo a un nodo lento) | Las estimaciones de ancho de banda no reflejan tu hardware: fija `--bw-gbps` por nodo |
 

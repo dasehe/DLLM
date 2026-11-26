@@ -31,7 +31,7 @@ No se aceptan commits sin `Signed-off-by` ni código copiado de proyectos con li
 1. Abre un *issue* describiendo el problema o la propuesta antes de cambios grandes.
 2. Crea una rama desde `main`, haz tus cambios y abre un *pull request* hacia `main`.
 3. Requisitos del PR:
-   - `python -m unittest discover -s tests` en verde (la CI lo comprueba en Linux, macOS y Windows).
+   - `python -m unittest discover -s tests` en verde, ejecutado en local (no hay CI automática).
    - Tests nuevos para el comportamiento nuevo.
    - Documentación actualizada en el mismo PR: `README.md`, el documento afectado de `docs/` y la sección
      `[Sin publicar]` de `CHANGELOG.md`.

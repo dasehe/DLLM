@@ -4,6 +4,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.8] - 2026-11-26
+
+### Cambiado
+- La CI (`tests`) pasa a ser solo manual: no se lanza en push ni en pull requests. Se quita su insignia del README.
+
+### Documentación
+- Capturas del panel rehechas con la interfaz actual de DLLM (datos simulados).
+- Revisión de textos obsoletos o incorrectos: estado y obtención del paquete, pestañas del panel, botón *Configurar*,
+  enrutado por `model`, tablas mal formadas, límites y hoja de ruta.
+
 ## [0.7.7] - 2026-11-25
 
 ### Cambiado (rendimiento)
@@ -133,10 +143,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 ## [0.6.0] - 2026-11-15
 
 ### Cambiado (incompatible)
-- **LLMM pasa a llamarse DLLM (Distributed LLM)**: paquete `dllm/`, comando `dllm`, `dllm.pyz`, carpeta `~/.dllm`,
+- **El proyecto adopta el nombre DLLM (Distributed LLM)**: paquete `dllm/`, comando `dllm`, `dllm.pyz`, carpeta `~/.dllm`,
   variables `DLLM_*`, métricas `dllm_*`, servicio `dllm-agent`, lanzadores `*-DLLM.*`, código de unión `DLLM1-…`,
   cabeceras `DLLM-*` y marcas de los protocolos de emparejamiento y handshake. Repositorio: `dasehe/dllm`.
-- **No hay compatibilidad con 0.5.x**: hay que desinstalar LLMM y reinstalar DLLM en todos los equipos y volver a
+- **No hay compatibilidad con 0.5.x**: hay que desinstalar la versión anterior y reinstalar DLLM en todos los equipos y volver a
   emparejar los nodos. Los modelos y llama.cpp de la carpeta antigua pueden moverse a `~/DLLM` (o usar `--bin-dir`).
 
 ## [0.5.1] - 2026-11-15

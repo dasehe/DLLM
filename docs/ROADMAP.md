@@ -1,6 +1,7 @@
 # Hoja de ruta y pendientes
 
-Estado: 0.6.0 (primera versión de DLLM, empaquetada en zip; aún sin release publicada en GitHub). Lo de aquí es intención, no compromiso.
+Estado: serie 0.7.x (la versión actual está en `dllm/__init__.py`; sin releases publicadas en GitHub). Lo de aquí es
+intención, no compromiso.
 
 ## 0.5.0 (hecho; incluido en 0.6.0)
 - **Fase 1** (hecha): sonda de enlace por el canal autenticado, tiers de red y reparto con penalización por saltos.
@@ -18,7 +19,7 @@ Estado: 0.6.0 (primera versión de DLLM, empaquetada en zip; aún sin release pu
 3. **Planificación dual en el ledger**: *Model-Split* (repartido por RPC entre nodos, para LLM grandes) y
    *Task-Routing / Task Affinity* (fijado a un único nodo y GPU óptimos, para embeddings, audio o imagen), de modo que
    GPUs distintas atiendan modalidades distintas en paralelo.
-4. **Gestor de binarios parametrizable por motor** (pendiente, v0.6.0): la descarga y sincronización de builds `bNNNN` se generaliza para
+4. **Gestor de binarios parametrizable por motor** (pendiente): la descarga y sincronización de builds `bNNNN` se generaliza para
    poder gestionar otros binarios C/C++ junto a llama.cpp.
 
 ## Visión v0.6.0 / v1.0: orquestador multimodal distribuido
@@ -36,13 +37,12 @@ HMAC. Cada motor entra como un driver nuevo:
   otra) y cola por lotes; el driver de voz (`WhisperCppDriver`) con política `cpu_only` o GPU dedicada.
 
 ## Otros pendientes
-- Panel: mostrar slots, ledger y selector de slot/fijado en *Modelos* (hoy solo API y CLI).
-- Métricas de tok/s y recuperación ante caída por slot en el panel; el enrutado no reintenta si un slot muere a mitad.
-- Añadir el fichero `LICENSE` (texto completo de GNU AGPL v3.0).
+- El enrutado no reintenta si un slot muere a mitad.
 - Calibrar `TIER1_MBPS` con mediciones reales (la sonda usa un solo flujo TCP en Python).
 - Investigar el test intermitente `test_1_full_cluster_from_installer`.
 - Limpiar avisos F de ruff en tests (imports sin usar).
 - Probar en entornos reales: Windows (acceso directo, consola oculta, cortafuegos con UAC), CUDA en Linux, macOS,
   anuncio por broadcast entre equipos.
 - Decidir si el panel puede abrirse sin clave también desde la LAN (hoy contradice la regla de seguridad).
-- Recuperar la CI de GitHub Actions (facturación) y publicar la release 0.6.0.
+- Corregir los tests que fallaban en la CI (Linux y Windows; en macOS se agotaba el tiempo).
+- Publicar la primera release.

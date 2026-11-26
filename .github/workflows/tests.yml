@@ -1,9 +1,8 @@
 name: tests
 
+# Solo manual (Actions → tests → Run workflow): no se lanza en push ni en pull requests.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

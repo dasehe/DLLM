@@ -87,7 +87,7 @@ Módulo `dllm/limits.py`. Cada nodo ofrece **memoria** (RAM, o VRAM si usa GPU N
 
 | Modo (se elige al instalar el nodo) | Quién decide | Panel del orquestador |
 |---|---|---|
-| **Automático** (por defecto) | El orquestador. Empieza con el valor recomendado | Botón **Ajustar** en el nodo |
+| **Automático** (por defecto) | El orquestador. Empieza con el valor recomendado | Botón **Configurar** en el nodo |
 | **Manual** | El propio nodo (asistente o `--share/--mem-gb/--threads`) | Solo lectura («fijado en el nodo») |
 
 Valores (prioridad: valor exacto > porcentaje > recomendado):
@@ -271,7 +271,8 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
   para su motor propio no los carga llama.cpp.
 - La integración con Hugging Face y Ollama está probada contra servidores simulados que reproducen sus APIs; no se ha
   probado aún contra los servicios reales.
-- Validado solo con binarios simulados; pendiente de prueba con llama.cpp real y GPU.
+- Probado con llama.cpp real solo en un clúster de 2 equipos Windows (AMD Vulkan + NVIDIA); el resto, con binarios
+  simulados (ver el estado en el [README](../README.md)).
 
 
 ## Destinos por modelo, recursos y registros (0.6.0)

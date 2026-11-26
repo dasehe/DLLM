@@ -28,4 +28,5 @@ Ver `docs/DESARROLLO.md#publicar-una-versión`: versión en `dllm/__init__.py` y
 
 - Tests: `python -m unittest discover -s tests -v`
 - Paquete: `python scripts/build_package.py --out dist`
-- CI: `.github/workflows/tests.yml` (Linux/macOS/Windows).
+- CI: `.github/workflows/tests.yml` (Linux/macOS/Windows), **solo manual**. No hay tests automáticos al subir: no
+  esperar a la CI ni volver a activar disparadores `push`/`pull_request` sin pedirlo el propietario.

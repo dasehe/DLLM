@@ -29,7 +29,9 @@ equipos** que da el asistente o el botón **API key** del panel en el orquestado
 | **Nodos** | Tarjetas de nodo (modelos cargados, red, aporte), **Añadir por IP**, **Buscar en la red**, **Medir la red**, **Eliminar**, y **Configurar** cada uno (ver [Configurar cada nodo](#configurar-cada-nodo)); **Equipos esperando unirse** para reclamar los instalados sin código ([INSTALACION](INSTALACION.md#unir-un-nodo-sin-código-reclamarlo-desde-el-orquestador)) |
 | **Modelos** | Recursos del clúster, cargar o **simular** un modelo eligiendo nodos y GPU/CPU, modelos en memoria, parámetros de cada modelo, añadir desde Hugging Face u Ollama (ver [Modelos](#pestaña-modelos)) |
 | **Chat** | Conversación de prueba (con historial) contra el modelo cargado; adjunta imagen/audio si es multimodal |
+| **Conectar** | URL, clave y fragmentos para front-ends; prueba de herramientas (ver [Conectar](#conectar-front-ends-y-herramientas)) |
 | **Registros** | Qué ha pasado, dónde y por qué: eventos con nivel, modelo y nodo, filtros y búsqueda, último fallo con la causa (ver [Registros](#registros)) |
+| **Sistema** | Copia de seguridad y restauración (ver [Copia de seguridad](#copia-de-seguridad-y-recuperación)) |
 
 ### Pestaña Modelos
 
@@ -91,7 +93,7 @@ Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, to
 
 ### Configurar cada nodo
 
-![Configurar un nodo (datos simulados)](img/nodos.png)
+![Configurar un nodo (modo avanzado, datos simulados)](img/nodos.png)
 
 **Nodos → Configurar**:
 
@@ -138,7 +140,7 @@ empaquetados para el motor propio de Ollama no los carga llama.cpp. En ese caso,
 
 ### Parámetros por modelo
 
-![Parámetros de un modelo](img/modelo-parametros.png)
+![Parámetros de un modelo (modo avanzado, datos simulados)](img/modelo-parametros.png)
 
 Botón **Parámetros** (con ● si tiene alguno guardado). Vacío = valor por defecto de llama.cpp.
 
@@ -231,7 +233,7 @@ con la memoria que aportan los nodos, con tope en el que admite el modelo. Empie
 
 Cada nodo comparte memoria (RAM, o VRAM si usa GPU NVIDIA) e hilos de CPU. Al instalarlo se elige:
 
-- **Automático (recomendado):** lo gestiona el orquestador. En el panel, botón **Ajustar** del nodo:
+- **Automático (recomendado):** lo gestiona el orquestador. En el panel, botón **Configurar** del nodo:
   - *Porcentaje del equipo:* p. ej. 33 % de un equipo con 16 GiB y 12 hilos → ~5,3 GiB y 4 hilos.
   - *Memoria / hilos exactos:* tienen prioridad sobre el porcentaje.
   - *Usar recomendado:* RAM: hasta el 75 % (sin pasar de la libre menos 1 GiB). VRAM de GPU: la libre menos 1 GiB
@@ -246,7 +248,8 @@ se aplica al recargar el modelo (**Descargar** → **Cargar**).
 ## API compatible con OpenAI
 
 Base: `http://127.0.0.1:8080/v1`. DLLM reenvía a `llama-server`, así que vale cualquier cliente de OpenAI
-(Open WebUI, LibreChat, Continue, LangChain…). El nombre de `model` en la petición se ignora: responde el cargado.
+(Open WebUI, LibreChat, Continue, LangChain…). El campo `model` elige entre los modelos cargados; si falta o no
+coincide con ninguno, responde el principal (ver [Varios modelos](#varios-modelos-a-la-vez)).
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
@@ -341,7 +344,7 @@ no se puede identificar la GPU, usa el reparto RPC de siempre.
 
 | Nivel | Dónde | Efecto |
 |---|---|---|
-| Modelo | Modelos → Ajustes → *GPU local directa* (`local_gpu`) | `auto` (por defecto): según el host · `off`: **nunca** directo, siempre RPC aunque quepa · `on`: **obliga**; si no es posible (destino en CPU, nodo remoto, GPU no visible) la carga falla con el motivo |
+| Modelo | Modelos → Parámetros → *GPU local directa* (`local_gpu`) | `auto` (por defecto): según el host · `off`: **nunca** directo, siempre RPC aunque quepa · `on`: **obliga**; si no es posible (destino en CPU, nodo remoto, GPU no visible) la carga falla con el motivo |
 | Host | Nodos → Configurar → *Permitir ejecución directa* (`direct_local`, API `/api/node/settings`) | Desmarcado: ese equipo nunca ejecuta en directo (los modelos con `auto` irán por RPC). El valor por defecto es permitido |
 | Global | `--no-direct-local` al arrancar | Desactiva el directo para todos los modelos en `auto` |
 

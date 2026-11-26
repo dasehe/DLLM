@@ -1,7 +1,5 @@
 # DLLM · Distributed LLM
 
-[![tests](https://github.com/dasehe/dllm/actions/workflows/tests.yml/badge.svg)](https://github.com/dasehe/dllm/actions/workflows/tests.yml)
-
 **Ejecuta modelos de lenguaje que no caben en un solo equipo repartiéndolos entre varios ordenadores de tu red**
 (portátiles, sobremesas viejos, mini-PCs, Macs…), con o sin GPU.
 
@@ -29,7 +27,7 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
    └──────────────────┘     LAN ≥ 1 Gbps       └──────────────┘
 ```
 
-> **Estado: demo funcional (v0.6.0).** Probado en un clúster real de 2 equipos Windows (AMD Vulkan + NVIDIA) con
+> **Estado: demo funcional.** Probado en un clúster real de 2 equipos Windows (AMD Vulkan + NVIDIA) con
 > llama.cpp real y un modelo de 31B repartido. El resto (Linux, macOS, CUDA en Linux, varios modelos a la vez,
 > `--on-demand`, políticas de dispositivo) solo se ha probado con binarios simulados. **Problema conocido:** enviar una
 > imagen a un modelo multimodal grande repartido entre nodos puede reiniciar el modelo (en investigación). Si lo
@@ -39,8 +37,9 @@ memoria sume el clúster, **más contexto** puede usar el modelo.
 
 ## Instalación en 3 pasos
 
-1. **Descarga** `dllm-package-<versión>.zip` de [Releases](https://github.com/dasehe/dllm/releases) y descomprímelo en
-   cada equipo (es el mismo paquete para todos).
+1. **Consigue el paquete** `dllm-package-<versión>.zip` (se genera con `python scripts/build_package.py`, o desde
+   [Releases](https://github.com/dasehe/dllm/releases) cuando haya una publicada) y descomprímelo en cada equipo (es el
+   mismo para todos).
 2. **En el equipo principal** abre el asistente y elige **Orquestador** (o **Ambos** si también quieres que preste su
    CPU/GPU). Al terminar verás la dirección del panel y un **código de unión** `DLLM1-…`.
 3. **En cada equipo que quieras sumar** abre el asistente, elige **Nodo**, pega el código y decide cuánto comparte
