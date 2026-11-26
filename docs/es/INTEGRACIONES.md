@@ -1,5 +1,7 @@
 # Integraciones: front-ends y herramientas
 
+[English](../INTEGRATIONS.md) · **Español**
+
 DLLM expone la API de OpenAI en `http://<orquestador>:8080/v1`. Se prueba y configura desde la pestaña **Conectar** del
 panel, que rellena estos datos con tu URL y clave.
 

@@ -47,9 +47,9 @@ No se aceptan commits sin `Signed-off-by` ni código copiado de proyectos con li
 - `dllm/` usa **solo la biblioteca estándar** de Python ≥ 3.9: sin dependencias externas.
 - Seguridad primero: nada escucha fuera de loopback sin autenticación; `rpc-server` nunca se expone.
 - Mensajes al usuario y documentación en **español**, claros y con la acción a tomar.
-- Más detalles en [docs/DESARROLLO.md](docs/DESARROLLO.md).
+- Más detalles en [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) ([español](docs/es/DESARROLLO.md)).
 
 ## Seguridad
 
 No publiques vulnerabilidades en *issues*: contacta directamente con el propietario del repositorio
-(ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md)).
+(ver [docs/SECURITY.md](docs/SECURITY.md)).

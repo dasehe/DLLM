@@ -1,5 +1,7 @@
 # Desarrollo
 
+[English](../DEVELOPMENT.md) · **Español**
+
 ## Estructura
 
 ```
@@ -20,7 +22,7 @@ dllm/                 paquete Python (solo biblioteca estándar)
 packaging/            lanzadores y LEEME del paquete distribuible
 scripts/              build_package.py, build-llamacpp.sh, ejemplo de unidad systemd
 tests/                unittest + binarios simulados (mockbin/) + generador de GGUF falsos
-docs/                 documentación
+docs/                 documentación en inglés · docs/es/ en español
 .github/workflows/    tests.yml (CI, manual) · release.yml (publicación)
 ```
 
@@ -72,7 +74,7 @@ Empaqueta `dllm/` en un `dllm.pyz` (zipapp) y añade los lanzadores de `packagin
 
 1. Actualiza la versión en `dllm/__init__.py` **y** `pyproject.toml`.
 2. Añade la sección `## [X.Y.Z] - AAAA-MM-DD` en `CHANGELOG.md` (es el texto de la release).
-3. Actualiza la documentación afectada.
+3. Actualiza la documentación afectada **en inglés y en español** (`docs/` y `docs/es/`, `README.md` y `README.es.md`).
 4. `python -m unittest discover -s tests` en verde.
 5. Commit y push a `main`.
 6. En GitHub: **Actions → release → Run workflow** (rama `main`). El workflow toma la versión de `dllm/__init__.py`,
@@ -102,6 +104,7 @@ servidor inserta en el marcador `<!--I18N-->` el diccionario `dllm/i18n/en.json`
 - Python: los mensajes se escriben en español y `dllm/i18n` los traduce al salir (terminal: `install_terminal()` envuelve
   stdout/stderr y la ayuda de argparse; API: `tr_error()` según `X-DLLM-Lang`/`?lang=`). Idioma: `--lang`, `DLLM_LANG`,
   `lang` de `config.json`, inglés por defecto. Los tests fijan `DLLM_LANG=es` (`tests/test_00_idioma.py`).
+- Documentación: inglés en `README.md` y `docs/`, español en `README.es.md` y `docs/es/`; ambas en el mismo commit.
 
 ## Licencia en el código
 
@@ -114,11 +117,11 @@ servidor inserta en el marcador `<!--I18N-->` el diccionario `dllm/i18n/en.json`
 - Los avisos legales que muestran las interfaces salen de `dllm/__init__.py` (`ATTRIBUTION`, `COPYRIGHT`,
   `SOURCE_URL`, `legal_notice()`) y del pie de `ui.html`/`setup.html`. No los elimines: la sección 7.b de la
   licencia exige conservar la atribución, y la 13 ofrecer el código fuente a quien use el servicio por red.
-- Commits firmados con `git commit -s` (DCO). Ver [CONTRIBUTING.md](../CONTRIBUTING.md).
+- Commits firmados con `git commit -s` (DCO). Ver [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## Convenciones
 
 - Sin dependencias externas en `dllm/` (debe funcionar con un Python recién instalado).
-- Mensajes al usuario en español, claros y con la acción a tomar.
+- Mensajes al usuario claros y con la acción a tomar (fuente en español, traducidos con `dllm/i18n`).
 - Cualquier entrada de red se valida antes de usarse; ninguna escucha fuera de loopback sin autenticación.
-- Cada cambio visible actualiza `docs/` y `CHANGELOG.md` en el mismo commit.
+- Cada cambio visible actualiza `docs/`, `docs/es/` y `CHANGELOG.md` en el mismo commit.

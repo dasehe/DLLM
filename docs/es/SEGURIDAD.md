@@ -1,5 +1,7 @@
 # Seguridad
 
+[English](../SECURITY.md) · **Español**
+
 ## Por qué importa
 
 `rpc-server` de llama.cpp **no tiene autenticación**: cualquiera que alcance su puerto puede reservar memoria y

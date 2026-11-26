@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.8.3] - 2026-11-26
+
+### Documentación
+- **Documentación en inglés por defecto con versión en español**: `README.md` (inglés) + `README.es.md`; `docs/`
+  (ARCHITECTURE, DEVELOPMENT, INSTALLATION, INTEGRATIONS, ROADMAP, SECURITY, TROUBLESHOOTING, USAGE) + `docs/es/` con los
+  documentos en español, enlazados entre sí. El paquete incluye `README-INSTALL.md` además de `LEEME-INSTALAR.md`.
+  `tests/test_docs.py` comprueba los pares y que los enlaces relativos existen.
+
 ## [0.8.2] - 2026-11-26
 
 ### Corregido

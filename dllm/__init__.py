@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 David Serrano Hernando y colaboradores de DLLM
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 # Avisos legales apropiados (GNU AGPL v3, secciones 5.d, 7.b y 13). Ver NOTICE.
 # Quien distribuya una versión modificada debe conservar ATTRIBUTION y apuntar SOURCE_URL a su propio código.

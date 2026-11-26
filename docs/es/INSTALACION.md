@@ -1,5 +1,7 @@
 # Instalación
 
+[English](../INSTALLATION.md) · **Español**
+
 El **mismo paquete** sirve para todos los equipos; el asistente pregunta qué papel tendrá cada uno.
 
 | Rol | Qué hace | Cuántos |

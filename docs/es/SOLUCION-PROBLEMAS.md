@@ -1,5 +1,7 @@
 # Solución de problemas
 
+[English](../TROUBLESHOOTING.md) · **Español**
+
 Primero, en el equipo afectado:
 
 ```bash

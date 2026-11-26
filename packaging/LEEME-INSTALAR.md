@@ -1,5 +1,7 @@
 # Instalar DLLM
 
+[English: README-INSTALL.md](README-INSTALL.md)
+
 Este paquete es **el mismo en todos los equipos**. El asistente te pregunta qué papel tendrá cada uno.
 
 ## Antes de empezar
@@ -57,7 +59,8 @@ dllm uninstall [--purge] # desinstalar (con --purge borra también configuració
 - El tráfico entre nodos va **autenticado pero sin cifrar**: úsalo en una red de confianza o una VPN.
 
 ## Más información
-Documentación completa (uso, API, seguridad, solución de problemas): https://github.com/dasehe/dllm/tree/main/docs
+Documentación completa en español (uso, API, seguridad, solución de problemas): https://github.com/dasehe/dllm/tree/main/docs/es ·
+English: `README-INSTALL.md` y https://github.com/dasehe/dllm/tree/main/docs
 
 ## Licencia
 DLLM — idea original y desarrollo inicial de David Serrano Hernando. Software libre bajo GNU AGPL-3.0-or-later

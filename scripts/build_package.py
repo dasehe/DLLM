@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 from dllm import __version__  # noqa: E402
 
 LEGAL = ("LICENSE", "NOTICE", "AUTHORS.md")
-LAUNCHERS = {"install.sh": 0o755, "Install-DLLM.command": 0o755, "Install-DLLM.bat": 0o644, "LEEME-INSTALAR.md": 0o644,
+LAUNCHERS = {"install.sh": 0o755, "Install-DLLM.command": 0o755, "Install-DLLM.bat": 0o644, "LEEME-INSTALAR.md": 0o644, "README-INSTALL.md": 0o644,
              "uninstall.sh": 0o755, "Uninstall-DLLM.command": 0o755, "Uninstall-DLLM.bat": 0o644,
              "Open-DLLM.bat": 0o644}
 

@@ -1,5 +1,7 @@
 # Uso
 
+[English](../USAGE.md) · **Español**
+
 ## El comando `dllm`
 
 Tras instalar, el programa está en `~/.dllm/dllm.pyz`. Para escribir solo `dllm`, crea un alias:
@@ -59,7 +61,7 @@ reinicios.
 
 ### Monitor
 
-![Monitor (datos simulados)](img/monitor.png)
+![Monitor (datos simulados)](../img/monitor.png)
 
 Arriba: estado, **tokens/s** de generación con su gráfica, peticiones en curso (y uso del contexto si llama.cpp lo
 publica) y nodos activos con la VRAM total en uso. Debajo, una tarjeta por nodo con su GPU, actualizada cada 2–3 s:
@@ -93,7 +95,7 @@ Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, to
 
 ### Configurar cada nodo
 
-![Configurar un nodo (modo avanzado, datos simulados)](img/nodos.png)
+![Configurar un nodo (modo avanzado, datos simulados)](../img/nodos.png)
 
 **Nodos → Configurar**:
 
@@ -140,7 +142,7 @@ empaquetados para el motor propio de Ollama no los carga llama.cpp. En ese caso,
 
 ### Parámetros por modelo
 
-![Parámetros de un modelo (modo avanzado, datos simulados)](img/modelo-parametros.png)
+![Parámetros de un modelo (modo avanzado, datos simulados)](../img/modelo-parametros.png)
 
 Botón **Parámetros** (con ● si tiene alguno guardado). Vacío = valor por defecto de llama.cpp.
 

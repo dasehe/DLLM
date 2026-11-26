@@ -1,5 +1,7 @@
 # Arquitectura
 
+[English](../ARCHITECTURE.md) · **Español**
+
 ## Componentes
 
 ```
@@ -272,7 +274,7 @@ un solo flujo TCP en Python; un enlace de 2,5 GbE puede quedar por debajo de `TI
 - La integración con Hugging Face y Ollama está probada contra servidores simulados que reproducen sus APIs; no se ha
   probado aún contra los servicios reales.
 - Probado con llama.cpp real solo en un clúster de 2 equipos Windows (AMD Vulkan + NVIDIA); el resto, con binarios
-  simulados (ver el estado en el [README](../README.md)).
+  simulados (ver el estado en el [README](../../README.es.md)).
 
 
 ## Destinos por modelo, recursos y registros (0.6.0)

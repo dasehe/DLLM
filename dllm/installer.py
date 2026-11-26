@@ -353,7 +353,7 @@ WIN_BLOCKED = {0xC0E90002: "sac", 0xC0000428: "firma", 0xC000007B: "imagen", 0xC
 SAC_HINT = ("Windows lo ha bloqueado: el «Control inteligente de aplicaciones» (Smart App Control) no deja cargar las "
             "DLL sin firmar de llama.cpp (error 0xc0e90002). Desactívalo en Seguridad de Windows → Control de "
             "aplicaciones y navegador → Configuración de Control inteligente de aplicaciones → Desactivado, y vuelve a "
-            "instalar. Ver docs/SOLUCION-PROBLEMAS.md")
+            "instalar. Ver docs/TROUBLESHOOTING.md")
 
 
 # Errores de Win32 (OSError.winerror) al lanzar un ejecutable que una directiva de control de aplicaciones bloquea
