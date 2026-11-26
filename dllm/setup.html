@@ -123,7 +123,7 @@ software libre bajo <a href="https://www.gnu.org/licenses/agpl-3.0.html" target=
 const T='__TOKEN__';let D=null,role=null,since=0,poll=null;
 const $=id=>document.getElementById(id);
 const gib=b=>((b||0)/2**30).toFixed(1)+' GiB';
-async function api(m,p,b){const r=await fetch(p+(p.includes('?')?'&':'?')+'t='+T,{method:m,headers:{'Content-Type':'application/json','X-Setup-Token':T},body:b?JSON.stringify(b):undefined});
+async function api(m,p,b){const r=await fetch(p+(p.includes('?')?'&':'?')+'t='+T,{method:m,headers:{'Content-Type':'application/json','X-Setup-Token':T,'X-DLLM-Lang':window.DLLM_LANG||'en'},body:b?JSON.stringify(b):undefined});
   const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
 function go(n){['p1','p2','p3','p4'].forEach((p,i)=>$(p).classList.toggle('hide',i!==n-1));
   [1,2,3,4].forEach(i=>$('s'+i).classList.toggle('on',i<=n))}

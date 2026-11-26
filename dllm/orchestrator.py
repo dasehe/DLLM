@@ -1796,6 +1796,8 @@ def make_handler(cfg, cl):
             pass
 
         def _send(self, code, obj=None, raw=None, ctype="application/json", headers=None, gz=None):
+            if raw is None and code >= 400:
+                obj = i18n.tr_error(obj, i18n.request_lang(self.headers, urlparse(self.path).query))
             body = raw if raw is not None else json.dumps(obj, separators=(",", ":")).encode()
             # panel y API de gestión: gzip si el cliente lo acepta y compensa (la API /v1 va tal cual, sin latencia extra)
             if gz is None and len(body) >= 1400 and not self.path.startswith("/v1") \

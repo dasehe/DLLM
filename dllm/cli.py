@@ -496,6 +496,12 @@ def build_parser():
 
 
 def main():
+    from . import i18n
+    if "--lang" in sys.argv[1:-1]:  # opción global: dllm --lang es status
+        i = sys.argv.index("--lang")
+        os.environ["DLLM_LANG"] = sys.argv[i + 1]
+        del sys.argv[i:i + 2]
+    i18n.install_terminal()
     a = build_parser().parse_args()
     hw.quiet_windows_errors()
     hw.hide_child_consoles()

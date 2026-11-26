@@ -87,7 +87,7 @@ Después abre el panel (`http://127.0.0.1:8080` en el orquestador), comprueba qu
 ## Idioma / Language
 
 La interfaz se muestra en **inglés por defecto**; cambia a **Español (España)** con el selector de la cabecera del panel,
-del instalador o del desinstalador (se recuerda en el navegador). The interface is in English by default; switch language
+del instalador o del desinstalador (se recuerda en el navegador). En la terminal: `dllm --lang es …` o `DLLM_LANG=es`. The interface is in English by default; switch language
 with the selector in the header.
 
 ## Uso rápido

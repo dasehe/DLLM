@@ -162,6 +162,7 @@ class Setup:
             old = config.load()
             cfg = config.default(role)
             cfg["name"], cfg["models_dir"], cfg["install_dir"] = n["name"], n["models_dir"], n["install_dir"]
+            cfg["lang"] = o.get("lang") if o.get("lang") in i18n.LANGS else i18n.lang()  # idioma de terminal y servicio
             if role == "node":
                 cfg["secret"] = n["join"]["secret"] if n["join"] else None
             else:  # el orquestador conserva su secreto para no desemparejar nodos ya instalados
@@ -743,6 +744,8 @@ def _make_web_handler(st):
             pass
 
         def _send(self, code, obj=None, raw=None, ctype="application/json"):
+            if raw is None and code >= 400:
+                obj = i18n.tr_error(obj, i18n.request_lang(self.headers, urlparse(self.path).query))
             body = raw if raw is not None else json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)

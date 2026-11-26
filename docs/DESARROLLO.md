@@ -99,6 +99,9 @@ servidor inserta en el marcador `<!--I18N-->` el diccionario `dllm/i18n/en.json`
   y `tests/test_i18n.py` falla si queda alguno.
 - Textos ambiguos: `data-en="Unload"` en el elemento fija la traducción (p. ej. «Descargar» = descargar / sacar de memoria).
 - Contenido del usuario (chat, código): `class="notr"`, no se traduce.
+- Python: los mensajes se escriben en español y `dllm/i18n` los traduce al salir (terminal: `install_terminal()` envuelve
+  stdout/stderr y la ayuda de argparse; API: `tr_error()` según `X-DLLM-Lang`/`?lang=`). Idioma: `--lang`, `DLLM_LANG`,
+  `lang` de `config.json`, inglés por defecto. Los tests fijan `DLLM_LANG=es` (`tests/test_00_idioma.py`).
 
 ## Licencia en el código
 

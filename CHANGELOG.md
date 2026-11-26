@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.8.1] - 2026-11-26
+
+### Añadido
+- Mensajes del servidor y de la terminal en inglés por defecto: la terminal (`dllm …`, asistente de texto, servicio)
+  traduce su salida y la ayuda; `dllm --lang es …`, `DLLM_LANG` o `lang` en `config.json` (el instalador guarda el idioma
+  elegido). Los errores de la API salen en el idioma del cliente (`X-DLLM-Lang`, que envía el panel, o `?lang=`); los
+  eventos del servidor se ven traducidos en el panel. El diccionario cubre también los textos del código Python.
+
 ## [0.8.0] - 2026-11-26
 
 ### Añadido

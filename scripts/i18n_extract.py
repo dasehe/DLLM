@@ -136,10 +136,43 @@ def extract(text):
     return found
 
 
+PY_SP = re.compile(r"[áéíóúñ¿¡]|\b(el|la|los|las|de|del|no|un|una|con|sin|para|por|que|se|nodo|nodos|modelo|modelos|"
+                   r"equipo|carga|falta|puerto|hay|está|usa|ya|sobre|desde|hasta|cada|este|esta|todo|solo|inferencia|"
+                   r"distribuida|nuevo|nueva|otro|otra|cuando|como|pero|puede|son|es)\b", re.I)
+PY_SKIP = {"dllm/legal_notice.py"}  # el aviso legal va en los dos idiomas tal cual
+
+
+def extract_py(text):
+    """Mensajes visibles del código Python (errores, eventos, terminal): literales y trozos de f-strings, sin docstrings."""
+    import ast
+    tree = ast.parse(text)
+    docs = set()
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body \
+                and isinstance(n.body[0], ast.Expr) and isinstance(getattr(n.body[0], "value", None), ast.Constant):
+            docs.add(id(n.body[0].value))
+    keys = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Dict):  # las claves de diccionario son datos, no texto
+            keys |= {id(k) for k in n.keys if k is not None}
+    found = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and id(n) not in keys:
+            for line in n.value.split("\n"):
+                s = line.strip()
+                if len(s) >= 3 and " " in s and PY_SP.search(s) and not re.fullmatch(r"[\w./\-]+", s) \
+                        and not re.search(r"^[-\w]+=|%\(|\{\w*\}|^<|^\w+\(|\\[sdw]|\$\w+=|^Copyright \(C\)", s):
+                    found.add(s)
+    return found
+
+
 def all_strings():
     out = set()
     for p in PAGES:
         out |= extract((ROOT / p).read_text(encoding="utf-8"))
+    for f in sorted((ROOT / "dllm").glob("*.py")):
+        if str(f.relative_to(ROOT)).replace("\\", "/") not in PY_SKIP:
+            out |= extract_py(f.read_text(encoding="utf-8"))
     return out
 
 
