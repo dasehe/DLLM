@@ -1113,8 +1113,15 @@ class Cluster:
         if self.tools and not self.tool_template:
             self.event("aviso: la plantilla de este modelo no parece admitir herramientas (tool calling); se activa "
                        "--jinja pero puede que no devuelva tool_calls", level="warn", kind="load")
+        draft = None
+        if st.get("draft_model"):
+            try:
+                draft = str(self.models.resolve(st["draft_model"]))
+                self.event(f"decodificación especulativa con {st['draft_model']} (en la CPU del orquestador)")
+            except (models.ModelError, OSError, ValueError) as e:
+                self.event(f"modelo borrador no disponible ({e}): se carga sin decodificación especulativa", level="warn")
         cmd = self.driver.build_command({
-            "jinja": self.tools, "bin": self.cfg.llama_bin, "model_path": path, "port": self.llama_port, "ctx": ctx,
+            "jinja": self.tools, "draft": draft, "bin": self.cfg.llama_bin, "model_path": path, "port": self.llama_port, "ctx": ctx,
             "rpc": [f"127.0.0.1:{t.port}" for t in self.tunnels],
             "tensor_split": None if self.direct else plan["tensor_split"], "ngl": plan.get("ngl", 999),
             "device_args": (["--device", self.direct["name"]] if self.direct

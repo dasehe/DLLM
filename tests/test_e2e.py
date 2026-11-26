@@ -199,7 +199,8 @@ class E2E(unittest.TestCase):
         got = r["mock"]["received"]
         self.assertEqual((got["temperature"], got["max_tokens"]), (0.3, 50))
         self.assertEqual(got["messages"][0]["role"], "system")
-        self.assertTrue(got["messages"][0]["content"].startswith("Sé breve\n\nFecha y hora actuales"))
+        self.assertTrue(got["messages"][0]["content"].startswith("Sé breve\n\nFecha actual"))
+        self.assertIn("(hora del servidor: ", got["messages"][-1]["content"])
         st, r = self.req("POST", "/v1/chat/completions", {"temperature": 1.1, "messages": [{"role": "user", "content": "x"}]})
         self.assertEqual(r["mock"]["received"]["temperature"], 1.1)  # lo que pide el cliente manda
         self.assertEqual(self.req("POST", "/api/models/settings", {"model": "mock.gguf", "settings": {"temperature": 99}})[0], 400)

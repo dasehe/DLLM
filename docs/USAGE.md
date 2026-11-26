@@ -165,6 +165,8 @@ cannot be deleted.
 | Flash attention | Optimized attention (`auto`, `on`, `off`) | `auto` |
 | Logical / physical batch | Prompt tokens processed per step (`-b` / `-ub`) | 2048 / 512; higher = faster long prompts and more memory |
 | Concurrent requests | Parallel conversations (`-np`) | The context is shared among them |
+| Reuse prompt cache | `--cache-reuse N`: reuses KV cache chunks of at least N tokens between requests | 256 for long chats / RAG |
+| Draft model · draft tokens | Speculative decoding (`-md`, `--draft-max`): a small model of the same family (same tokenizer) proposes tokens and the large one validates them; it runs on the orchestrator's CPU (`-ngld 0`) and its memory is not counted in the split | A 0.5–1B model of the same family; untested with real models |
 | RoPE (scaling, base, factor) | Extend the context beyond the training one | Only if you know what you are doing; the model brings its own |
 | Multimodal projector | Vision/audio: automatic, none or a specific one | Automatic |
 | Direct local GPU (`local_gpu`) | `auto` / `on` / `off` (see [Direct local GPU](#direct-local-gpu)) | Automatic |
@@ -188,7 +190,9 @@ The split takes the cache type into account: with `q8_0` roughly twice the conte
 
 They apply to **all** requests (panel chat, API and apps such as Open WebUI). What the client sends always wins, and the
 system prompt is only added if the conversation has none. Date and time are always added (also if the client brings its
-own system prompt), unless disabled.
+own system prompt), unless disabled. To keep llama.cpp's **prompt cache** useful, the system message only carries the
+date (it changes once a day) and the time is appended at the end of the last user message (`(server time: 10:32 …)`);
+requests also go with `cache_prompt: true`.
 
 ## Multimodal models (vision and audio)
 

@@ -4,6 +4,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.9.1] - 2026-11-26
+
+### Cambiado (rendimiento)
+- **Caché del prompt útil en conversaciones**: la fecha y hora inyectadas cambiaban el principio del prompt cada minuto e
+  impedían a llama.cpp reutilizar la caché (se reprocesaba toda la conversación en cada turno). Ahora el mensaje de sistema
+  solo lleva la fecha y la hora va al final del último mensaje del usuario; las peticiones llevan `cache_prompt: true`.
+  El texto de fecha/hora sigue el idioma del servidor (inglés por defecto).
+
+### Añadido
+- Ajuste por modelo **Reutilizar caché del prompt** (`cache_reuse` → `--cache-reuse`).
+- **Decodificación especulativa**: ajustes `draft_model`, `draft_max`, `draft_min` (`-md`, `--draft-max`, `--draft-min`);
+  el borrador corre en la CPU del orquestador. Sin probar con modelos reales.
+
 ## [0.9.0] - 2026-11-26
 
 ### Añadido

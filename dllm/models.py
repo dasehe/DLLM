@@ -276,6 +276,10 @@ SETTING_RULES = {
     # carga (se aplican al lanzar llama-server)
     "ctx": (int, 256, 4194304), "batch_size": (int, 32, 65536), "ubatch_size": (int, 16, 65536),
     "parallel": (int, 1, 64), "rope_freq_base": (float, 1.0, 1e8), "rope_freq_scale": (float, 0.001, 100.0),
+    # reutilizar la caché KV entre peticiones con prefijo común (desplazando trozos de al menos N tokens)
+    "cache_reuse": (int, 0, 65536),
+    # decodificación especulativa: un modelo pequeño propone tokens y el grande los valida
+    "draft_max": (int, 1, 64), "draft_min": (int, 0, 64),
 }
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "typical_p", "repeat_penalty", "presence_penalty",
                  "frequency_penalty", "max_tokens", "seed", "stop")
@@ -289,7 +293,8 @@ BOOLS = ("embeddings",)
 # ajuste → opción de llama-server (comprobadas en su documentación)
 LOAD_FLAGS = {"cache_type_k": "-ctk", "cache_type_v": "-ctv", "flash_attn": "-fa", "batch_size": "-b",
               "ubatch_size": "-ub", "parallel": "-np", "rope_freq_base": "--rope-freq-base",
-              "rope_freq_scale": "--rope-freq-scale", "rope_scaling": "--rope-scaling"}
+              "rope_freq_scale": "--rope-freq-scale", "rope_scaling": "--rope-scaling",
+              "cache_reuse": "--cache-reuse", "draft_max": "--draft-max", "draft_min": "--draft-min"}
 
 
 def load_args(settings):
@@ -309,6 +314,8 @@ def validate_settings(s):
         raise ModelError("la caché V cuantizada requiere flash attention (on o auto)")
     if out.get("ubatch_size") and out.get("batch_size") and out["ubatch_size"] > out["batch_size"]:
         raise ModelError("el lote físico (ubatch) no puede ser mayor que el lógico (batch)")
+    if out.get("draft_min") is not None and out.get("draft_max") is not None and out["draft_min"] > out["draft_max"]:
+        raise ModelError("draft_min no puede ser mayor que draft_max")
     return out
 
 
@@ -342,6 +349,11 @@ def _validate_settings(s):
             if not isinstance(v, str) or (v and (not v.endswith(".gguf") or ".." in v.split("/") or v.startswith("/"))):
                 raise ModelError("proyector multimodal no válido")
             out[k] = v
+        elif k == "draft_model":
+            if not isinstance(v, str) or not v.endswith(".gguf") or ".." in v.split("/") or v.startswith("/") \
+                    or "\\" in v:
+                raise ModelError("modelo borrador no válido (un .gguf de la carpeta de modelos)")
+            out[k] = v
         elif k == "system_prompt":
             if not isinstance(v, str) or len(v) > 20000:
                 raise ModelError("el prompt de sistema debe ser texto (máx. 20000 caracteres)")
@@ -362,21 +374,59 @@ _MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agost
           "noviembre", "diciembre")
 
 
-def now_text(mode="datetime", now=None):
-    """«Fecha y hora actuales (reloj del servidor): domingo, 15 de noviembre de 2026, 10:32 (CET, UTC+01:00).»
-    Independiente del idioma del sistema. Los modelos no saben la fecha: sin esto suelen inventarla."""
-    t = now or time.localtime()
-    s = f"{_DIAS[t.tm_wday]}, {t.tm_mday} de {_MESES[t.tm_mon - 1]} de {t.tm_year}"
-    if mode == "date":
-        return f"Fecha actual (reloj del servidor): {s}."
+_DAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+              "November", "December")
+
+
+def _tz(t):
     off = getattr(t, "tm_gmtoff", None)
     off = -time.timezone if off is None else off
     sign, off = ("+" if off >= 0 else "-"), abs(int(off))
     zone = getattr(t, "tm_zone", None) or time.tzname[0]
     zone = zone if zone and zone.isascii() and len(zone) <= 6 else ""  # Windows da nombres largos y traducidos
     utc = f"UTC{sign}{off // 3600:02d}:{off % 3600 // 60:02d}" if off else "UTC"
-    tz = utc if not zone or zone in ("UTC", "GMT") else f"{zone}, {utc}"
-    return f"Fecha y hora actuales (reloj del servidor): {s}, {t.tm_hour:02d}:{t.tm_min:02d} ({tz})."
+    return utc if not zone or zone in ("UTC", "GMT") else f"{zone}, {utc}"
+
+
+def _en():
+    from . import i18n
+    return i18n.lang() == "en"
+
+
+def time_text(now=None):
+    t = now or time.localtime()
+    return (f"server time: {t.tm_hour:02d}:{t.tm_min:02d} ({_tz(t)})" if _en() else
+            f"hora del servidor: {t.tm_hour:02d}:{t.tm_min:02d} ({_tz(t)})")
+
+
+def now_text(mode="datetime", now=None):
+    """«Fecha y hora actuales (reloj del servidor): domingo, 15 de noviembre de 2026, 10:32 (CET, UTC+01:00).»
+    Independiente del idioma del sistema. Los modelos no saben la fecha: sin esto suelen inventarla."""
+    t = now or time.localtime()
+    if _en():
+        s = f"{_DAYS_EN[t.tm_wday]}, {_MONTHS_EN[t.tm_mon - 1]} {t.tm_mday}, {t.tm_year}"
+        if mode == "date":
+            return f"Current date (server clock): {s}."
+        return f"Current date and time (server clock): {s}, {t.tm_hour:02d}:{t.tm_min:02d} ({_tz(t)})."
+    s = f"{_DIAS[t.tm_wday]}, {t.tm_mday} de {_MESES[t.tm_mon - 1]} de {t.tm_year}"
+    if mode == "date":
+        return f"Fecha actual (reloj del servidor): {s}."
+    return f"Fecha y hora actuales (reloj del servidor): {s}, {t.tm_hour:02d}:{t.tm_min:02d} ({_tz(t)})."
+
+
+def _append_time(msgs, mode, now):
+    if mode != "datetime":
+        return
+    last = next((m for m in reversed(msgs) if isinstance(m, dict) and m.get("role") == "user"), None)
+    if last is None:
+        return
+    note = time_text(now)
+    c = last.get("content")
+    if isinstance(c, str):
+        last["content"] = f"{c}\n\n({note})" if c else f"({note})"
+    elif isinstance(c, list):
+        last["content"] = c + [{"type": "text", "text": f"({note})"}]
 
 
 def apply_settings(path, body, settings, now=None):
@@ -390,9 +440,13 @@ def apply_settings(path, body, settings, now=None):
             body[k] = settings[k]
     if not (path.endswith("/chat/completions") and isinstance(body.get("messages"), list)):
         return body
+    body.setdefault("cache_prompt", True)  # reutiliza la caché KV del prefijo común entre turnos
     sp = settings.get("system_prompt")
     mode = settings.get("datetime", "datetime")
-    extra = now_text(mode, now) if mode != "off" else None
+    # en el prompt de sistema va solo la fecha (cambia una vez al día); la hora va al final del último mensaje del
+    # usuario: así el principio de la conversación no cambia cada minuto y llama.cpp reutiliza la caché del prompt
+    extra = now_text("date", now) if mode != "off" else None
+    _append_time(body["messages"], mode, now)
     msgs = body["messages"]
     first = next((m for m in msgs if isinstance(m, dict) and m.get("role") == "system"), None)
     if first is None:

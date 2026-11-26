@@ -88,6 +88,9 @@ class LlamaCppDriver(EngineDriver):
             # plantilla Jinja del propio modelo: necesaria para que /v1/chat/completions acepte `tools` y devuelva
             # `tool_calls` (function calling) con el formato que ese modelo usa
             cmd += ["--jinja"]
+        if spec.get("draft") and not self.embeddings:
+            # decodificación especulativa: el borrador corre en la CPU del orquestador (-ngld 0), no se reparte
+            cmd += ["-md", spec["draft"], "-ngld", "0"]
         if spec.get("mmproj"):
             # visión/audio: el proyector se ejecuta en el orquestador (CPU), no se reparte entre los nodos
             cmd += ["--mmproj", spec["mmproj"], "--no-mmproj-offload"]

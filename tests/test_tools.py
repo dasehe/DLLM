@@ -34,6 +34,20 @@ class TestCommand(unittest.TestCase):
         return engine.driver_for(spec.pop("settings", {})).build_command(dict(
             {"bin": "llama-server", "model_path": "m.gguf", "port": 1, "ctx": 2048}, **spec))
 
+    def test_cache_reuse_and_speculative_decoding(self):
+        c = self.cmd(draft="/m/small.gguf", settings={"cache_reuse": 256, "draft_max": 16, "draft_min": 2})
+        self.assertEqual(c[c.index("--cache-reuse") + 1], "256")
+        self.assertEqual((c[c.index("-md") + 1], c[c.index("-ngld") + 1]), ("/m/small.gguf", "0"))
+        self.assertEqual(c[c.index("--draft-max") + 1], "16")
+        self.assertNotIn("-md", self.cmd(draft="/m/s.gguf", settings={"embeddings": True}))
+        from dllm import models
+        self.assertEqual(models.validate_settings({"draft_model": "hf/a/small.gguf", "draft_max": 8}),
+                         {"draft_model": "hf/a/small.gguf", "draft_max": 8})
+        for bad in ({"draft_model": "../x.gguf"}, {"draft_model": "/etc/x.gguf"}, {"draft_model": "x.bin"},
+                    {"draft_min": 9, "draft_max": 4}, {"cache_reuse": -1}):
+            with self.assertRaises(models.ModelError):
+                models.validate_settings(bad)
+
     def test_jinja_only_when_asked_and_never_for_embeddings(self):
         self.assertNotIn("--jinja", self.cmd())
         self.assertIn("--jinja", self.cmd(jinja=True))

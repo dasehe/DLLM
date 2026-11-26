@@ -237,7 +237,9 @@ class TestModels(unittest.TestCase):
         b = models.apply_settings("/v1/chat/completions", {"temperature": 1.0, "messages": [
             {"role": "system", "content": "mío"}, {"role": "user", "content": "x"}]}, s)
         self.assertEqual((b["temperature"], len(b["messages"])), (1.0, 2))
-        self.assertTrue(b["messages"][0]["content"].startswith("mío\n\nFecha y hora actuales"))
+        self.assertTrue(b["messages"][0]["content"].startswith("mío\n\nFecha actual"))
+        self.assertIn("(hora del servidor: ", b["messages"][1]["content"])
+        self.assertTrue(b["cache_prompt"])
 
     def test_server_datetime(self):
         import time as _t
@@ -248,6 +250,14 @@ class TestModels(unittest.TestCase):
         msg = lambda: {"messages": [{"role": "user", "content": "¿qué día es?"}]}
         b = models.apply_settings("/v1/chat/completions", msg(), None, now=t)  # sin ajustes: activado por defecto
         self.assertIn("15 de noviembre de 2026", b["messages"][0]["content"])
+        self.assertTrue(b["messages"][1]["content"].endswith("(hora del servidor: 10:32 (UTC))"))
+        # el prefijo (prompt de sistema) no cambia en todo el día: llama.cpp reutiliza la caché del prompt
+        t2 = _t.struct_time((2026, 11, 15, 18, 5, 0, 6, 319, 0))
+        b2 = models.apply_settings("/v1/chat/completions", msg(), None, now=t2)
+        self.assertEqual(b["messages"][0], b2["messages"][0])
+        with mock.patch.dict(os.environ, {"DLLM_LANG": "en"}):
+            self.assertEqual(models.now_text("date", t), "Current date (server clock): Sunday, November 15, 2026.")
+            self.assertTrue(models.time_text(t).startswith("server time: 10:32"))
         b = models.apply_settings("/v1/chat/completions", msg(), {"datetime": "off"}, now=t)
         self.assertEqual(b["messages"][0]["role"], "user")
         b = models.apply_settings("/v1/chat/completions", msg(), {"system_prompt": "Sé breve", "datetime": "date"}, now=t)

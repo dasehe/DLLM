@@ -155,6 +155,8 @@ Botón **Parámetros** (con ● si tiene alguno guardado). Vacío = valor por de
 | Flash attention | Atención optimizada (`auto`, `on`, `off`) | `auto` |
 | Lote lógico / físico | Tokens del prompt que se procesan por paso (`-b` / `-ub`) | 2048 / 512; más alto = prompts largos más rápidos y más memoria |
 | Peticiones simultáneas | Conversaciones en paralelo (`-np`) | El contexto se reparte entre ellas |
+| Reutilizar caché del prompt | `--cache-reuse N`: reutiliza trozos de caché KV de al menos N tokens entre peticiones | 256 para chats largos / RAG |
+| Modelo borrador · tokens del borrador | Decodificación especulativa (`-md`, `--draft-max`): un modelo pequeño de la misma familia (mismo tokenizador) propone tokens y el grande los valida; corre en la CPU del orquestador (`-ngld 0`) y su memoria no se cuenta en el reparto | Un modelo de 0,5–1B de la misma familia; sin probar con modelos reales |
 | RoPE (escalado, base, factor) | Extender el contexto más allá del de entrenamiento | Solo si sabes lo que haces; el modelo ya trae los suyos |
 | Proyector multimodal | Visión/audio: automático, ninguno o uno concreto | Automático |
 
@@ -176,7 +178,10 @@ El reparto tiene en cuenta el tipo de caché: con `q8_0` cabe aproximadamente el
 
 Se aplican a **todas** las peticiones (chat del panel, API y aplicaciones como Open WebUI). Lo que envía el cliente
 siempre manda, y el prompt de sistema solo se añade si la conversación no trae uno. La fecha y hora se añaden
-siempre (también si el cliente trae su propio prompt de sistema), salvo que se desactiven.
+siempre (también si el cliente trae su propio prompt de sistema), salvo que se desactiven. Para que la **caché del
+prompt** de llama.cpp sirva, el mensaje de sistema solo lleva la fecha (cambia una vez al día) y la hora se añade al final
+del último mensaje del usuario (`(hora del servidor: 10:32 …)`); las peticiones van además con `cache_prompt: true`. El
+texto va en el idioma del servidor (inglés por defecto).
 
 ## Modelos multimodales (visión y audio)
 
