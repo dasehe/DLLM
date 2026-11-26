@@ -1368,6 +1368,13 @@ class Cluster:
         finally:
             s.close()
 
+    def join_code(self):
+        """Código DLLM1 para que un agente se una (lleva el secreto del clúster: tratarlo como una contraseña)."""
+        disk = config.load() or {}
+        return config.encode_join({"secret": self.reg.secret, "orch": self.cfg_advertise() or config.lan_ip(),
+                                   "beacon": self.cfg.beacon_port, "tag": disk.get("llama_tag"),
+                                   "name": disk.get("name") or socket.gethostname()})
+
     def cfg_advertise(self):
         return getattr(self.cfg, "advertise_host", None)
 
@@ -1865,6 +1872,14 @@ def make_handler(cfg, cl):
                     cid = (parse_qs(urlparse(self.path).query).get("id") or [""])[0]
                     (cl.presence.touch if path.endswith("ping") else cl.presence.bye)(cid)
                     return self._send(200, {"ok": True})
+                if path == "/api/join-code":
+                    # lleva el secreto del clúster: la API key de los front-ends no basta, solo desde este equipo
+                    if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+                        return self._send(403, {"error": "el código de unión solo se muestra en el propio orquestador "
+                                                         "(abre el panel allí o usa `dllm join-code`)"})
+                    cl.event("código de unión consultado desde " + self.client_address[0], kind="security")
+                    return self._send(200, {"code": cl.join_code(), "orch": cl.cfg_advertise() or config.lan_ip(),
+                                            "beacon": cfg.beacon_port}, headers={"Cache-Control": "no-store"})
                 if path == "/api/ui/clients":
                     return self._send(200, cl.presence.view())
                 if path == "/api/pair/claim" and self.command == "POST":

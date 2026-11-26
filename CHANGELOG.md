@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.7.9] - 2026-11-26
+
+### Añadido
+- Código de unión visible en el panel: Nodos → **🔑 Código de unión** (oculto por defecto, mostrar/copiar) y
+  `GET /api/join-code`. Solo se sirve a clientes del propio equipo (lleva el secreto del clúster; la API key de los
+  front-ends no basta) y cada consulta queda en Registros. En terminal: `dllm join-code`.
+
 ## [0.7.8] - 2026-11-26
 
 ### Cambiado

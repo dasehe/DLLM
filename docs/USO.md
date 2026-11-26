@@ -207,7 +207,7 @@ solo como texto, elige *Ninguno* en su proyector.
 | `dllm plan MODELO [--ctx N]` | Simula el reparto sin cargar nada |
 | `dllm load MODELO [--ctx N]` | Carga el modelo (asíncrono; sigue con `status`) |
 | `dllm unload` | Descarga el modelo y libera los nodos |
-| `dllm join-code` | Muestra el código de unión (orquestador) |
+| `dllm join-code` | Muestra el código de unión (orquestador). En el panel: Nodos → 🔑 Código de unión (solo en el propio equipo). Paquete instalado: `python3 ~/.dllm/dllm.pyz join-code` (Windows: `py %USERPROFILE%\.dllm\dllm.pyz join-code`) |
 | `dllm doctor` | Diagnóstico del equipo local |
 | `dllm backup export\|import\|inspect [FICHERO]` | Copia de seguridad completa (cifrada por defecto) y restauración |
 | `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Desinstala: programa, arranque automático y cortafuegos; con `--purge` también llama.cpp y la configuración; con `--models` los modelos de la carpeta de DLLM |
@@ -292,6 +292,7 @@ Si no hay modelo listo la API responde `503` con el estado actual.
 | `GET\|POST /api/nodes/scan` | `{"range": "192.168.1.0/24", "port": 8765}` (opcional) | Lanza la búsqueda / estado y `found` (`libre`, `en_cluster`, `otro`) |
 | `GET\|POST /api/nodes/bench` | `{"nodes": ["IP:8765"]}` (opcional; vacío = todos) | Lanza la medición uno a uno y en conjunto / estado y resultados |
 | `POST /api/nodes/forget` | `{"node": "IP:8765"}` | Elimina el nodo de la lista; `409` si lo usa un modelo |
+| `GET /api/join-code` | — | Código de unión para nodos (solo desde el propio equipo; queda en Registros) |
 | `GET /api/telemetry[?since=t]` | — | Estado en tiempo real: tokens/s, peticiones y, por nodo, GPU/CPU/RAM/tráfico con historial |
 | `POST /api/node/limits` | `{"node": "IP:8765", "share": 33}` o `"mem_gb"`/`"threads"`/`"device"` (`""` = automático), o `{"node": …, "reset": true}` | Límites efectivos; `400` con motivo si el nodo es manual o el valor no es válido |
 | `GET /metrics` | — | Métricas Prometheus |

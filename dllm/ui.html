@@ -112,12 +112,18 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <div class="tool">
       <button onclick="$('addbox').classList.toggle('hide')">➕ Añadir por IP</button>
       <button class="sec" onclick="scanNet()" id="scanbtn">🔎 Buscar en la red</button>
+      <button class="sec" onclick="joinBox()">🔑 Código de unión</button>
       <button class="sec" onclick="benchNet()" id="benchbtn" title="Mide cada nodo por separado y después todos a la vez">📶 Medir la red</button>
       <span class="mut" style="font-size:12px">Si un equipo no aparece solo, añádelo por su IP o búscalo. Mide la red de nuevo si cambias cables o conmutadores.</span></div>
     <div id="addbox" class="hide drawer"><div class="tool"><input id="add_host" placeholder="IP o nombre, p. ej. 192.168.1.25" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')addNode()">
       <input id="add_port" type="number" value="8765" class="adv" style="width:90px" title="Puerto del agente (por defecto 8765)"><button onclick="addNode()">Añadir</button></div>
       <div class="mut" style="font-size:12px;margin-top:4px">Si el nodo ya usa el secreto de este clúster se añade al momento; si está sin emparejar se inicia el emparejamiento con código de verificación.</div>
       <div id="add_msg" style="margin-top:6px"></div></div>
+    <div id="joinbox" class="hide drawer"><b>Código de unión</b> <span class="mut">— pégalo en el instalador del nodo (paso «Nodo»). Lleva el secreto del clúster: trátalo como una contraseña. Solo se muestra abriendo el panel en el propio orquestador.</span>
+      <div class="tool" style="margin-top:6px"><input id="join_code" type="password" readonly style="flex:1;min-width:260px;font-family:monospace">
+        <button class="sec" onclick="const i=$('join_code');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'👁 Mostrar':'🙈 Ocultar'">👁 Mostrar</button>
+        <button onclick="cp('join_code')">📋 Copiar</button></div>
+      <div class="mut" style="font-size:12px;margin-top:4px">Orquestador: <b id="join_orch"></b>. En terminal: <code>dllm join-code</code> (o <code>python3 ~/.dllm/dllm.pyz join-code</code>; en Windows <code>py %USERPROFILE%\.dllm\dllm.pyz join-code</code>). También puedes no usarlo: el nodo aparecerá en «Buscar en la red» o «Añadir por IP».</div></div>
     <div id="scanbox" class="hide drawer"></div>
     <div id="benchbox" class="hide drawer"></div>
     <div class="grid" id="nodes" style="margin-top:14px"></div>
@@ -688,6 +694,7 @@ async function dl(){if(cur!=='mod'||document.hidden)return;try{const j=await api
   $('dl').innerHTML=j.length?j.map(x=>`<div style="margin:8px 0"><div class="row" style="justify-content:space-between"><span>${esc(x.label)} <span class="${x.status==='error'?'err':'mut'}">${esc(x.status)}${x.error?': '+esc(x.error):''}</span></span><span class="mut">${gib(x.done)} / ${gib(x.total)}${x.status==='descargando'?` · ${(x.speed/2**20).toFixed(1)} MB/s · quedan ${secs(x.eta)}`:''} ${['en cola','descargando'].includes(x.status)?`<button class="sec sm" onclick="api('POST','/api/downloads/cancel',{id:'${x.id}'}).then(dl)">Cancelar</button>`:`<button class="sec sm" title="Quitar del historial" onclick="clearDl('${x.id}')">✕</button>`}</span></div><div class="bar2"><div style="width:${x.pct||0}%"></div></div></div>`).join(''):'Ninguna.';
   $('dlclear').classList.toggle('hide',!j.some(x=>!['en cola','descargando'].includes(x.status)));
   if(sig!==lastDl){lastDl=sig;models()}}catch(e){}}
+async function joinBox(){const b=$('joinbox');if(!b.classList.toggle('hide')){try{const j=await api('GET','/api/join-code');$('join_code').value=j.code;$('join_code').dataset.v=j.code;$('join_orch').textContent=j.orch}catch(e){$('join_code').value='';$('join_orch').textContent='error: '+e.message}}else{$('join_code').value='';$('join_code').dataset.v=''}}
 async function clearDl(id){try{await api('POST','/api/downloads/clear',id?{id}:{});dl()}catch(e){alert(e.message)}}
 async function initTok(){try{const r=await api('GET','/api/hf/token');$('hftok').textContent=r.set?'(configurado)':''}catch(e){}}
 

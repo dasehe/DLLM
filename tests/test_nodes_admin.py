@@ -329,3 +329,18 @@ class NodesAdminE2E(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class JoinCodeApi(unittest.TestCase):
+    def test_codigo_de_union_por_api(self):
+        from dllm import config
+        NodesAdminE2E.setUpClass()
+        try:
+            st, r = NodesAdminE2E.api("GET", "/api/join-code")
+            self.assertEqual(st, 200, r)
+            d = config.decode_join(r["code"])
+            self.assertEqual(d["secret"], SECRET)
+            self.assertEqual(d["beacon"], NodesAdminE2E.bp)
+            self.assertEqual(d["orch"], r["orch"])
+        finally:
+            NodesAdminE2E.tearDownClass()
