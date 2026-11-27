@@ -132,7 +132,7 @@ directly on the local GPU when possible). As an order of magnitude, a quantized 
 
 ## Security in one line
 
-The panel requires **signing in** (users, groups and roles; API keys per user). Computers authenticate with a shared
+The panel requires **signing in** (users, groups and roles; API keys per user) and keeps an **audit log** of every administrative action. Computers authenticate with a shared
 secret (HMAC) and nodes only accept the orchestrator, but **traffic is not encrypted**: use it on a trusted network, a dedicated VLAN or over WireGuard. See [SECURITY](docs/SECURITY.md).
 
 ## License and authorship

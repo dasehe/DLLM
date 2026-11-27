@@ -78,5 +78,9 @@
  [
   "NOMBRE_DEL_MODELO",
   "MODEL_NAME"
+ ],
+ [
+  "^(\\d+) entradas$",
+  "$1 entries"
  ]
 ]

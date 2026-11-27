@@ -189,6 +189,29 @@ class LoginE2E(unittest.TestCase):
         st, ev, _ = self.req("GET", "/api/events?q=fallido", bearer=tok)
         self.assertTrue(any("fallido" in e["msg"] for e in ev["events"]))
 
+    def test_4_auditoria(self):
+        tok = Path(self.home, "local.token").read_text().strip()
+        st, k, _ = self.req("POST", "/api/keys/create", {"user": "ana", "label": "aud"}, bearer=tok)
+        self.assertEqual(self.req("GET", "/api/audit", bearer=k["key"])[0], 403)  # ana no tiene el permiso «audit»
+        st, j, _ = self.req("GET", "/api/audit?limit=500", bearer=tok)
+        self.assertEqual(st, 200, j)
+        acts = [(e["action"], e["user"], e["status"]) for e in j["entries"]]
+        self.assertIn(("POST /api/users/create", "admin", 200), acts)
+        self.assertIn(("POST /api/unload", "ana", 403), acts)            # también lo rechazado
+        self.assertIn(("GET /api/join-code", "ana", 403), acts)
+        self.assertIn(("login", "nadie", 401), acts)
+        self.assertIn(("login", "nadie", 429), acts)
+        self.assertIn(("POST /api/me/password", "admin", 200), acts)
+        self.assertNotIn("GET /api/state", [a[0] for a in acts])        # las consultas no se auditan
+        raw = Path(self.home, "audit.jsonl").read_text(encoding="utf-8")
+        for secret in ("contraseña-ana", "nueva-clave-admin", "\"admin\", \"new\""):
+            self.assertNotIn(secret, raw)
+        self.assertIn('"via": "session"', raw)
+        if os.name == "posix":
+            self.assertEqual(stat.S_IMODE(os.stat(Path(self.home, "audit.jsonl")).st_mode), 0o600)
+        st, j, _ = self.req("GET", "/api/audit?user=ana&failed=1", bearer=tok)
+        self.assertTrue(j["entries"] and all(e["user"] == "ana" and not e["ok"] for e in j["entries"]))
+
 
 if __name__ == "__main__":
     unittest.main()

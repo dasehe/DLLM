@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import backup, discovery, engine, eventlog, i18n, users
+from . import audit, backup, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -309,6 +309,7 @@ class Cluster:
         self.llama_build = parent.llama_build if parent else (hw.build_id(cfg.llama_bin) if cfg.llama_bin else None)
         self.models = parent.models if parent else models.Manager(cfg.models_dir)
         self.presence = parent.presence if parent else presence.Presence()  # pestañas del panel (`dllm open`)
+        self.audit = parent.audit if parent else audit.Audit(getattr(cfg, "audit_file", None))
         self.claims = parent.claims if parent else {}  # host → emparejamiento en curso
         self.jobs = parent.jobs if parent else {"scan": {}, "bench": {}}  # búsqueda de red y medición en curso
         self._local_devs = None   # dispositivos locales de llama-server (no cambian: se cachean)
@@ -1804,7 +1805,7 @@ def extract_model(body, ctype=""):
 LOOP = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
 _PERM_PREFIX = (  # (prefijo, permiso); el primero que encaja manda
     ("/api/users", "users"), ("/api/groups", "users"), ("/api/roles", "users"), ("/api/keys", "users"),
-    ("/api/backup", "system"), ("/api/join-code", "system"),
+    ("/api/audit", "audit"), ("/api/backup", "system"), ("/api/join-code", "system"),
     ("/api/node", "nodes"), ("/api/pair", "nodes"),
     ("/api/load", "models"), ("/api/unload", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
     ("/api/hf/token", "models"), ("/api/tools/test", "models"), ("/api/ollama/", "models"),
@@ -1826,6 +1827,17 @@ def perm_for(method, path):
     return "system"  # cualquier otra ruta de gestión: el permiso más restrictivo habitual
 
 
+_AUDIT_SKIP = ("/api/plan", "/api/backup/preview", "/api/ui/ping", "/api/ui/bye")  # POST que no cambian nada
+_AUDIT_GET = ("/api/join-code",)  # GET que revelan secretos: también se auditan
+
+
+def audited(method, path):
+    """¿Esta petición es una acción de administración que va al registro de auditoría?"""
+    if not path.startswith("/api/"):
+        return False
+    return (method == "POST" and path not in _AUDIT_SKIP) or path in _AUDIT_GET
+
+
 def make_handler(cfg, cl):
     UM = cl.users
     no_login = os.environ.get("DLLM_INSECURE_NO_LOGIN") == "1" and cfg.host in ("127.0.0.1", "localhost", "::1")
@@ -1841,6 +1853,7 @@ def make_handler(cfg, cl):
             pass
 
         def _send(self, code, obj=None, raw=None, ctype="application/json", headers=None, gz=None):
+            self._code = code
             if raw is None and code >= 400:
                 obj = i18n.tr_error(obj, i18n.request_lang(self.headers, urlparse(self.path).query))
             body = raw if raw is not None else json.dumps(obj, separators=(",", ":")).encode()
@@ -1872,20 +1885,40 @@ def make_handler(cfg, cl):
             """(usuario, permisos) de quien pide: sesión del panel (cookie), token local de la terminal (solo
             127.0.0.1), API key de un usuario, o (None, ∅)."""
             ip = self.client_address[0]
+            self._via = None
             if no_login and ip in LOOP:
+                self._via = "no-login"
                 return users.ADMIN, set(users.PERMS)
             u = UM.session_user(self._cookie("dllm_session"))
             if u:
+                self._via = "session"
                 return u, UM.perms_of(u)
             authz = self.headers.get("Authorization", "")
             if authz.startswith("Bearer "):
                 tok = authz[7:].strip()
                 if ip in LOOP and cl.local_token and hmac.compare_digest(tok, cl.local_token):
+                    self._via = "local-token"
                     return users.ADMIN, set(users.PERMS)
-                u, _ = UM.key_user(tok)
+                u, kid = UM.key_user(tok)
                 if u:
+                    self._via = f"key:{kid}"
                     return u, UM.perms_of(u)
             return None, set()
+
+        def _audit(self, action=None, user=None, params=None):
+            """Marca esta petición para el registro de auditoría (se escribe al terminar, con el código devuelto)."""
+            self._aud = {"action": action or f"{self.command} {urlparse(self.path).path}", "user": user,
+                         "via": getattr(self, "_via", None), "params": params}
+
+        def _audit_flush(self):
+            a = getattr(self, "_aud", None)
+            if a is not None and cl.audit is not None:
+                self._aud = None
+                try:
+                    cl.audit.record(a["action"], a["user"], a["via"], self.client_address[0],
+                                    getattr(self, "_code", None), a["params"])
+                except Exception as e:  # la auditoría nunca tumba una petición
+                    log("auditoría:", e)
 
         def _me(self, user):
             return {"user": user, "perms": sorted(UM.perms_of(user)), "default_pw": UM.is_default_password(user)}
@@ -1900,7 +1933,11 @@ def make_handler(cfg, cl):
                 req = json.loads(self.rfile.read(n)) if n else {}
             except ValueError:
                 return self._send(400, {"error": "el cuerpo debe ser JSON"})
+            if not isinstance(req, dict):
+                return self._send(400, {"error": "el cuerpo debe ser JSON"})
             if path == "/api/login" and self.command == "POST":
+                self._via = "password"
+                self._audit("login", str(req.get("user") or "")[:64] or None)
                 now = time.time()
                 fl = [t for t in fails.get(ip, []) if now - t < 300]
                 if len(fl) >= 5:
@@ -1921,10 +1958,13 @@ def make_handler(cfg, cl):
                 return self._send(200, self._me(user), headers={
                     "Set-Cookie": f"dllm_session={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age={users.SESSION_TTL}"})
             if path == "/api/logout" and self.command == "POST":
+                self._audit("logout", UM.session_user(self._cookie("dllm_session")))
                 UM.end_session(self._cookie("dllm_session"))
                 return self._send(200, {"ok": True},
                                   headers={"Set-Cookie": "dllm_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"})
             user, _ = self._principal()
+            if self.command == "POST":
+                self._audit(None, user, req)
             if not user:
                 return self._send(401, {"error": "inicia sesión o usa una API key", "login": True})
             if path == "/api/me":
@@ -1994,10 +2034,17 @@ def make_handler(cfg, cl):
             return urlparse(origin).netloc == self.headers.get("Host", "")
 
         def do_GET(self):
-            self._route()
+            self._run()
 
         def do_POST(self):
-            self._route()
+            self._run()
+
+        def _run(self):
+            self._aud, self._code = None, None
+            try:
+                self._route()
+            finally:
+                self._audit_flush()
 
         def _route(self):
             path = urlparse(self.path).path
@@ -2027,6 +2074,8 @@ def make_handler(cfg, cl):
                     return self._auth_routes(path)
                 actor, perms = self._principal()
                 need = perm_for(self.command, path)
+                if audited(self.command, path):
+                    self._audit(None, actor)
                 if path.startswith("/v1/") and actor is None and ip in LOOP:
                     pass  # aplicaciones de este mismo equipo (AnythingLLM local…): sin clave, como antes
                 elif need not in perms:
@@ -2045,6 +2094,13 @@ def make_handler(cfg, cl):
                     return self._proxy(body)
                 req = json.loads(body) if body else {}
                 q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+                if self._aud is not None:
+                    self._aud["params"] = {**q, **req} if isinstance(req, dict) else q
+                if path == "/api/audit":
+                    return self._send(200, {"entries": cl.audit.query(
+                        q.get("limit", 200), q.get("user") or None, q.get("q"),
+                        float(q["since"]) if q.get("since") else None, q.get("failed") in ("1", "true"))},
+                        headers={"Cache-Control": "no-store"})
                 mm = cl.models
                 if path.startswith(("/api/users", "/api/groups", "/api/roles", "/api/keys")):
                     return self._users_routes(path, req, actor)
@@ -2291,6 +2347,7 @@ def run(cfg):
         log("AVISO: llama-server no encontrado; podrás ver nodos pero no cargar modelos")
 
     cfg.events_file = str(config.home() / "events.jsonl")  # registro persistente (rota por tamaño)
+    cfg.audit_file = str(config.home() / "audit.jsonl")    # registro de auditoría (600, rota por tamaño)
     reg = Registry(secret, cfg.node_timeout, cfg.probe_interval)
     for n in cfg.node or []:
         h, _, p = n.partition(":")

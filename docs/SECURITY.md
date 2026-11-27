@@ -19,6 +19,7 @@ knowledge of the cluster secret.
 | Origin of connections to the node | `allow_ip`: by default the wizard only allows the orchestrator's IP (+ loopback) |
 | Discovery (UDP 50999) | Signed beacons; unsigned ones are ignored and logged |
 | Panel users | Sign-in always required (also locally); roles/groups/users with per-route permissions; PBKDF2-HMAC-SHA256 passwords; `HttpOnly` + `SameSite=Strict` session cookie (12 h sliding); 5 failed logins per IP → 5 min block; logins recorded in Logs. `admin`/`admin` if no password was set at install (warned at every login) |
+| Audit log | Every administrative action (also rejected ones and sign-ins) with user, credential, IP and result in `audit.jsonl` (600, append-only, rotated); secrets replaced by `***`; readable only with the `audit` permission |
 | API keys | One or more per user, inheriting its permissions; stored as SHA-256, shown once, revocable. The terminal uses a local token (600, loopback only) |
 | Orchestrator panel/API (8080) | Only `127.0.0.1` by default; exposing it **requires** an API key (constant-time comparison). Not asked from the computer itself (127.0.0.1). `POST` requests with an `Origin` header from another site are rejected (anti CSRF / DNS rebinding) |
 | Join code in the panel | `GET /api/join-code` is only served to clients on the orchestrator itself (the front-ends' API key is not enough) and each request is logged |

@@ -60,6 +60,16 @@ texto. Registra cargas y su duración, altas y caídas de nodos, recuperaciones,
 nodo con su código y líneas. Se guardan en `events.jsonl` (carpeta de configuración, rota a 2 MiB × 3) y sobreviven a
 reinicios.
 
+**Auditoría** (debajo de los registros, solo con el permiso `audit`): cada acción de administración —cualquier `POST` a
+`/api/*` (cargar/descargar, ajustes de modelos y nodos, añadir/olvidar nodos, descargas, copias de seguridad, usuarios,
+grupos, roles, claves, contraseña y claves propias)—, cada consulta del código de unión, los inicios de sesión (también
+los fallidos y bloqueados) y los cierres, con hora, usuario, credencial (`session`, `key:<id>`, `local-token`,
+`password`), IP, acción, parámetros y resultado HTTP. También se anotan las peticiones rechazadas (401/403). Se filtra por
+usuario, texto o *solo rechazadas o con error*. Se guarda aparte en `audit.jsonl` (carpeta de configuración, permisos 600,
+solo se añade, rota a 5 MiB × 5) **sin secretos**: contraseñas, claves, tokens, frases de paso y el contenido de las
+copias se sustituyen por `***`. Las consultas de solo lectura y el chat por `/v1` no se auditan. No va en las copias de
+seguridad.
+
 ### Monitor
 
 ![Monitor (datos simulados)](../img/monitor.png)
@@ -106,6 +116,7 @@ inicio de sesión hasta cambiarla (*👤 → Cambiar contraseña*). Los inicios 
 - 5 inicios de sesión fallidos desde una IP la bloquean 5 minutos. Contraseñas: PBKDF2-HMAC-SHA256; sesiones: token
   aleatorio en una cookie `HttpOnly`, `SameSite=Strict`, caducidad deslizante de 12 h. Los usuarios viajan en las copias
   (`users.json`).
+- Cada acción de administración queda en el **registro de auditoría** (ver *Registros*).
 
 ### Añadir, buscar, medir y eliminar nodos
 
@@ -330,6 +341,7 @@ simulados; **sin probar aún con clientes reales de Ollama**.
 | `GET /api/models` | — | `.gguf` disponibles |
 | `GET /api/resources` | — | VRAM, RAM y núcleos por nodo y totales, con lo reservado por los modelos cargados |
 | `GET /api/events` | `?level=info\|warn\|error&slot=N&node=NOMBRE&q=texto&since=T&limit=300` | Eventos filtrados y `counts` por nivel |
+| `GET /api/audit` | `?user=NOMBRE&q=texto&failed=1&since=T&limit=200` (permiso `audit`) | Entradas de auditoría, de la más reciente a la más antigua |
 | `POST /api/plan` | `{"model": "...", "ctx": 4096, "slot": 0\|"new", "targets": [{"node": "DSH", "device": "cpu"}]}` | Plan sin cargar, con `resources` (clúster tras cargarlo). `targets` vacío = automático; `device`: `gpu` o `cpu`; `@host` = RAM del orquestador |
 | `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true, "targets": […]}` | `202` con el `slot` usado (la carga sigue en segundo plano) |
 | `POST /api/unload` | `{"slot": N}` (opcional; sin `slot` descarga el principal) | `200`; en cualquier estado, y **cancela** una carga en curso sin esperar |

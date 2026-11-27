@@ -4,6 +4,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.11.0] - 2026-11-27
+
+### Añadido
+- **Registro de auditoría**: cada acción de administración (todo `POST` a `/api/*`, consulta del código de unión,
+  inicios y cierres de sesión, también los rechazados 401/403/429) con hora, usuario, credencial (sesión, API key,
+  token local), IP, acción, parámetros y resultado. Fichero propio `audit.jsonl` (600, solo se añade, rota 5 MiB × 5),
+  sin secretos (contraseñas, claves, tokens, frases de paso y contenido de copias → `***`).
+- Sección **Auditoría** en Registros (filtros por usuario, texto y solo rechazadas) y `GET /api/audit`, con el permiso
+  `audit`.
+
+### Corregido
+- `/api/login` y `/api/me/*` devuelven 400 (no 500) si el cuerpo JSON no es un objeto.
+
 ## [0.10.0] - 2026-11-26
 
 ### Añadido

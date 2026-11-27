@@ -63,6 +63,15 @@ text. It records loads and their duration, nodes joining and dropping, recoverie
 `llama-server` and, if an `rpc-server` died, the node's one with its code and lines. They are stored in `events.jsonl`
 (configuration folder, rotated at 2 MiB × 3) and survive restarts. Server messages are shown in the panel's language.
 
+**Audit** (below the logs, only with the `audit` permission): every administrative action — any `POST` to `/api/*`
+(loading/unloading, model and node settings, adding/forgetting nodes, downloads, backups, users, groups, roles, keys,
+own password and keys), viewing the join code, sign-ins (also failed and blocked ones) and sign-outs — with time, user,
+credential (`session`, `key:<id>`, `local-token`, `password`), IP, action, parameters and HTTP result. Rejected requests
+(401/403) are recorded too. Filter by user, text or *only rejected or failed*. It is stored separately in
+`audit.jsonl` (configuration folder, permissions 600, append-only, rotated at 5 MiB × 5) **without secrets**: passwords,
+keys, tokens, passphrases and backup contents are replaced by `***`. Read-only queries and `/v1` chat are not audited.
+It is not included in backups.
+
 ### Monitor
 
 ![Monitor (simulated data)](img/monitor.png)
@@ -109,6 +118,7 @@ login until it is changed (*👤 → Change password*). Logins with the default 
   600, only accepted from 127.0.0.1).
 - 5 failed logins from the same IP block logins from it for 5 minutes. Passwords: PBKDF2-HMAC-SHA256; sessions: random
   token in an `HttpOnly`, `SameSite=Strict` cookie, 12 h sliding expiry. Users travel in backups (`users.json`).
+- Every administrative action is recorded in the **audit log** (see *Logs*).
 
 ### Adding, searching, measuring and deleting nodes
 
@@ -339,6 +349,7 @@ binaries; **not tested yet with real Ollama clients**.
 | `GET /api/models` | — | Available `.gguf` |
 | `GET /api/resources` | — | VRAM, RAM and cores per node and in total, with what loaded models reserve |
 | `GET /api/events` | `?level=info\|warn\|error&slot=N&node=NAME&q=text&since=T&limit=300` | Filtered events and `counts` per level |
+| `GET /api/audit` | `?user=NAME&q=text&failed=1&since=T&limit=200` (permission `audit`) | Audit entries, newest first |
 | `POST /api/plan` | `{"model": "...", "ctx": 4096, "slot": 0\|"new", "targets": [{"node": "DSH", "device": "cpu"}]}` | Plan without loading, with `resources` (cluster after loading it). Empty `targets` = automatic; `device`: `gpu` or `cpu`; `@host` = orchestrator RAM |
 | `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true, "targets": […]}` | `202` with the `slot` used (loading continues in the background) |
 | `POST /api/unload` | `{"slot": N}` (optional; without `slot` unloads the main one) | `200`; in any state, and **cancels** a load in progress without waiting |

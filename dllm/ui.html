@@ -372,6 +372,15 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <div class="scroll" style="max-height:60vh;margin-top:8px"><table><thead><tr><th>Hora</th><th>Nivel</th><th>Modelo</th><th>Nodo</th><th>Qué pasó</th></tr></thead><tbody id="ev_t"></tbody></table></div>
     <div class="mut" style="font-size:12px;margin-top:6px">Se guardan también en <code>events.jsonl</code> (carpeta de configuración) y sobreviven a reinicios. Los de una ejecución anterior se marcan con «·».</div>
   </section>
+  <section id="auditbox" class="hide"><h2>Auditoría</h2>
+    <div class="row">
+      <label class="mut">Usuario <input id="au_u" oninput="auLoad()" style="width:120px"></label>
+      <input id="au_q" placeholder="buscar texto" oninput="auLoad()" style="min-width:180px">
+      <label class="mut"><input type="checkbox" id="au_f" onchange="auLoad()"> solo rechazadas o con error</label>
+      <span class="mut" id="au_c"></span></div>
+    <div class="scroll" style="max-height:50vh;margin-top:8px"><table><thead><tr><th>Hora</th><th>Usuario</th><th>Credencial</th><th>IP</th><th>Acción</th><th>Resultado</th></tr></thead><tbody id="au_t"></tbody></table></div>
+    <div class="mut" style="font-size:12px;margin-top:6px">Cada acción de administración (cargar y descargar modelos, ajustes, nodos, copias de seguridad, usuarios, inicios de sesión…) con quién, cuándo, desde dónde y el resultado. Se guarda aparte en <code>audit.jsonl</code> (permisos 600, rota por tamaño), sin contraseñas ni claves.</div>
+  </section>
   <section id="llamalogbox" class="hide"><h2>Salida de llama-server (último fallo)</h2><pre id="events"></pre></section>
 </div>
 </main>
@@ -700,7 +709,13 @@ async function evLoad(){if(cur!=='ev')return;
     $('ev_t').innerHTML=r.events.slice().reverse().map(e=>`<tr title="${esc(e.detail?JSON.stringify(e.detail):'')}"><td class="mut" style="white-space:nowrap">${e.old?'· ':''}${new Date(e.t*1000).toLocaleString()}</td><td><span class="badge lv-${esc(e.level)}">${esc(e.level)}</span></td><td>${e.slot||'—'}</td><td>${esc(e.node||'—')}</td><td>${esc(e.msg)}${e.count>1?` <span class="mut">(×${e.count})</span>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="mut">Sin eventos con ese filtro.</td></tr>'}catch(e){}
   const lc=S&&S.last_crash;$('crashbox').classList.toggle('hide',!lc);
   if(lc)$('crash').innerHTML=`<div>${new Date(lc.t*1000).toLocaleString()} · <b>llama-server</b> terminó${lc.code!=null?' (código '+lc.code+')':''}</div>`+(lc.lines||[]).map(l=>`<div class="mut"><code>${esc(l)}</code></div>`).join('')+(lc.rpc||[]).map(r=>`<div style="margin-top:6px"><b>rpc-server de ${esc(r.node)}</b> terminó (código ${r.code})${r.why?': '+esc(r.why):''}</div>`+(r.lines||[]).map(l=>`<div class="mut"><code>${esc(l)}</code></div>`).join('')).join('');
+  auLoad();
   const ll=S&&S.state==='ERROR'&&S.llama_log&&S.llama_log.length;$('llamalogbox').classList.toggle('hide',!ll);if(ll)$('events').textContent=S.llama_log.join('\n')}
+
+async function auLoad(){const ok=ME&&ME.perms.includes('audit');$('auditbox').classList.toggle('hide',!ok);if(!ok||cur!=='ev')return;
+  const q=new URLSearchParams({limit:300});if($('au_u').value.trim())q.set('user',$('au_u').value.trim());if($('au_q').value)q.set('q',$('au_q').value);if($('au_f').checked)q.set('failed','1');
+  try{const r=await api('GET','/api/audit?'+q);$('au_c').textContent=`${r.entries.length} entradas`;
+    $('au_t').innerHTML=r.entries.map(e=>`<tr title="${esc(e.params?JSON.stringify(e.params):'')}"><td class="mut" style="white-space:nowrap">${new Date(e.t*1000).toLocaleString()}</td><td>${esc(e.user||'—')}</td><td class="mut notr">${esc(e.via||'—')}</td><td class="notr">${esc(e.ip||'')}</td><td class="notr"><code>${esc(e.action)}</code></td><td><span class="badge lv-${e.ok?'info':'error'}">${e.status==null?'—':e.status}</span></td></tr>`).join('')||'<tr><td colspan="6" class="mut">Sin entradas con ese filtro.</td></tr>'}catch(e){}}
 
 /* ---------- modelos ---------- */
 async function models(){try{M=await api('GET','/api/models');const c=$('models').value;
