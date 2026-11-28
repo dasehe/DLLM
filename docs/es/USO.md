@@ -189,7 +189,11 @@ empaquetados para el motor propio de Ollama no los carga llama.cpp. En ese caso,
 
 Botón **Parámetros** (con ● si tiene alguno guardado). Vacío = valor por defecto de llama.cpp.
 
-**Carga** (se aplican al cargar el modelo; cambiarlos exige recargarlo):
+**Carga** (se aplican al cargar el modelo; cambiarlos exige recargarlo). **Guardar y recargar** guarda y vuelve a cargar
+el modelo ya cargado en el acto (*recarga en caliente*): las peticiones en curso terminan antes (hasta 120 s), las nuevas
+**esperan en cola** en vez de fallar o ir a otro modelo, y el modelo vuelve con los mismos nodos y los ajustes nuevos
+(contexto incluido). El botón **⟳ Recargar** de la lista de modelos cargados hace lo mismo sin cambiar nada; API:
+`POST /api/reload {"slot": N}`.
 
 | Parámetro | Qué hace | Orientación |
 |---|---|---|
@@ -352,6 +356,7 @@ simulados; **sin probar aún con clientes reales de Ollama**.
 | `POST /api/plan` | `{"model": "...", "ctx": 4096, "slot": 0\|"new", "targets": [{"node": "DSH", "device": "cpu"}]}` | Plan sin cargar, con `resources` (clúster tras cargarlo). `targets` vacío = automático; `device`: `gpu` o `cpu`; `@host` = RAM del orquestador |
 | `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true, "targets": […]}` | `202` con el `slot` usado (la carga sigue en segundo plano) |
 | `POST /api/unload` | `{"slot": N}` (opcional; sin `slot` descarga el principal) | `200`; en cualquier estado, y **cancela** una carga en curso sin esperar |
+| `POST /api/reload` | `{"slot": N}` | `202`; recarga en caliente con los ajustes actuales y los mismos nodos: las peticiones en curso terminan y las nuevas esperan en cola (`409` si ya hay una carga en curso) |
 | `GET /api/hf/search?q=…` · `GET /api/hf/files?repo=…` | — | Búsqueda de modelos GGUF y ficheros de un repo |
 | `POST /api/downloads` | `{"source":"hf","repo":…,"file":…}` · `{"source":"ollama","name":"qwen2.5:7b"}` · `{"source":"ollama-local","name":…}` | `202` con la descarga |
 | `GET /api/downloads` · `POST /api/downloads/cancel` | — · `{"id": "d1"}` | Descargas y progreso · cancelar |

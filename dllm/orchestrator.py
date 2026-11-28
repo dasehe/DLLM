@@ -299,6 +299,7 @@ class Cluster:
         self.direct = None  # dispositivo local en el que corre llama-server sin RPC (None = reparto por RPC)
         self.driver = engine.driver_for({})
         self.inflight = 0
+        self.reloading = False   # recarga en caliente en curso: las peticiones nuevas esperan en cola
         self.desired = None  # (nombre, ctx) que el usuario quiere tener cargado
         self.gen, self.recoveries, self.last_nodeset = 0, 0, frozenset()
         self.requests, self.req_errors = 0, 0
@@ -740,6 +741,54 @@ class Cluster:
         c.request_load(name, ctx, pinned, targets)
         return c.slot
 
+    def reload_slot(self, slot, drain_timeout=120.0):
+        """Recarga en caliente: vuelve a cargar el modelo del slot con sus ajustes actuales (contexto, parámetros de
+        carga) y los mismos nodos. Las peticiones nuevas esperan en cola (no fallan ni van a otro modelo); las que
+        están en curso terminan antes de descargar (hasta `drain_timeout` s)."""
+        c = self.slots.get(int(slot))
+        if c is None:
+            raise ValueError(f"el slot {slot} no existe")
+        with c.lock:
+            if c.reloading or c.state in (LOADING, RECOVERING):
+                raise Busy("ya hay una carga o recarga en curso en ese slot")
+            name = (c.desired or (None, None))[0] or c.model
+            if not name or c.state not in (READY, ERROR):
+                raise ValueError("no hay ningún modelo cargado en ese slot")
+            c.reloading = True
+        ctx = int(self.models.settings(name).get("ctx") or (c.desired or (None, 0))[1] or c.ctx or 4096)
+        c.event(f"recarga en caliente de {name} (ctx {ctx}): las peticiones nuevas esperan en cola")
+
+        def run():
+            try:
+                end = time.time() + drain_timeout
+                while c.inflight > 0 and time.time() < end:
+                    time.sleep(0.1)
+                if c.inflight:
+                    c.event(f"recarga: {c.inflight} peticiones seguían en curso tras {drain_timeout:.0f} s y se cortan",
+                            level="warn")
+                c.request_load(name, ctx, c.pinned, c.targets)
+                time.sleep(0.5)
+                end = time.time() + self.cfg.load_timeout + 60
+                while c.state in (LOADING, RECOVERING) and time.time() < end:
+                    time.sleep(0.2)
+            except Exception as e:
+                c.event(f"error en la recarga de {name}: {e}", level="error")
+            finally:
+                c.reloading = False
+        threading.Thread(target=run, daemon=True).start()
+        return {"accepted": True, "slot": c.slot, "model": name, "ctx": ctx}
+
+    def _wait_reload(self, c):
+        """La petición espera a que termine la recarga del slot `c` (cola)."""
+        end = time.time() + c.cfg.load_timeout + 180
+        while time.time() < end:
+            if not c.reloading and c.state == READY:
+                return c
+            if not c.reloading and c.state != READY:
+                raise RouteError(503, f"la recarga de {c.model} falló: {c.error or c.state}")
+            time.sleep(0.2)
+        raise RouteError(504, f"{c.model} no terminó de recargarse a tiempo", retry_after=10)
+
     def drop_slot(self, slot):
         """Descarga el slot; los secundarios además desaparecen (el 0 queda vacío)."""
         c = self.slots.get(int(slot))
@@ -802,8 +851,18 @@ class Cluster:
                 c = self.load_on_demand(nm, deadline)
             elif nm:
                 c = self.wait_slot(nm)
+        if c is None and model:  # ese modelo se está recargando: la petición espera en cola
+            r = self.find_slot(model, (LOADING, RECOVERING))
+            if r is not None and r.reloading:
+                c = self._wait_reload(r)
         if c is None:
             c = self.default_slot(cap)  # nombre desconocido o ausente: como siempre, el modelo cargado
+        if c is None:
+            r = next((x for x in self.slots.values() if x.reloading), None)
+            if r is not None:
+                c = self._wait_reload(r)
+        if c is not None and c.reloading:
+            c = self._wait_reload(c)
         if c is None:
             st = self.slots[0].state
             raise RouteError(503, f"modelo no listo (estado {st})")
@@ -961,7 +1020,7 @@ class Cluster:
         for k in sorted(self.slots):
             c = self.slots[k]
             out.append({"slot": k, "model": c.model, "state": c.state, "error": c.error, "ctx": c.ctx,
-                        "pinned": c.pinned, "last_used": c.last_used, "llama_port": c.llama_port,
+                        "pinned": c.pinned, "reloading": c.reloading, "last_used": c.last_used, "llama_port": c.llama_port,
                         "nodes": list(c.used), "est_tok_s": (c.plan or {}).get("est_tok_s"),
                         "active_requests": c.inflight, "activity": "BUSY" if c.inflight else "IDLE",
                         "policy": (c.plan or {}).get("policy"),
@@ -1815,7 +1874,7 @@ _PERM_PREFIX = (  # (prefijo, permiso); el primero que encaja manda
     ("/api/users", "users"), ("/api/groups", "users"), ("/api/roles", "users"), ("/api/keys", "users"),
     ("/api/audit", "audit"), ("/api/backup", "system"), ("/api/join-code", "system"),
     ("/api/node", "nodes"), ("/api/pair", "nodes"),
-    ("/api/load", "models"), ("/api/unload", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
+    ("/api/load", "models"), ("/api/unload", "models"), ("/api/reload", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
     ("/api/hf/token", "models"), ("/api/tools/test", "models"), ("/api/ollama/", "models"),
     ("/v1/", "chat"),
 )
@@ -2291,6 +2350,8 @@ def make_handler(cfg, cl):
                     return self._send(200, cl.forget_node(req.get("node"), req.get("block", True)))
                 if path == "/api/node/limits" and self.command == "POST":
                     return self._send(200, cl.set_node_limits(req))
+                if path == "/api/reload" and self.command == "POST":
+                    return self._send(202, cl.reload_slot(req.get("slot") or 0))
                 if path == "/api/unload" and self.command == "POST":
                     if req.get("slot") in (None, 0, "0"):
                         cl.unload()

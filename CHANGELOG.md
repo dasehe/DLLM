@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.16.0] - 2026-11-28
+
+### Añadido
+- **Recarga en caliente**: botón **Guardar y recargar** en los parámetros del modelo, **⟳ Recargar** en la lista de
+  modelos cargados y `POST /api/reload`. Las peticiones en curso terminan antes de descargar (hasta 120 s), las nuevas
+  esperan en cola en vez de fallar o ir a otro modelo, y el modelo vuelve con los mismos nodos y los ajustes nuevos.
+
 ## [0.15.0] - 2026-11-28
 
 ### Añadido

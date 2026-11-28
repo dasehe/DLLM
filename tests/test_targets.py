@@ -229,6 +229,34 @@ class Targets(unittest.TestCase):
         self.assertIn('dllm_events_total{level="error"}', text)
         self.api("POST", "/api/unload", {"slot": s})
 
+    def test_6_hot_reload_queues_requests(self):
+        import threading
+        st, r = self.api("POST", "/api/load", {"model": "other.gguf", "ctx": 2048, "slot": "new"})
+        s = r["slot"]
+        self.wait(lambda: self.slots()[s]["state"] == "READY", 60, "listo")
+        self.api("POST", "/api/models/settings", {"model": "other.gguf", "settings": {"ctx": 3072}})
+        out = {}
+        slow = threading.Thread(target=lambda: out.update(slow=self.api(
+            "POST", "/v1/chat/completions", {"model": "other.gguf", "messages": [], "_sleep": 2})[0]))
+        slow.start()
+        time.sleep(0.5)
+        st, j = self.api("POST", "/api/reload", {"slot": s})
+        self.assertEqual((st, j["ctx"]), (202, 3072), j)
+        self.assertEqual(self.api("POST", "/api/reload", {"slot": s})[0], 409)   # una recarga a la vez
+        t0 = time.time()
+        st, _ = self.api("POST", "/v1/chat/completions", {"model": "other.gguf", "messages": []})
+        waited = time.time() - t0
+        slow.join(30)
+        self.assertEqual(out.get("slow"), 200)   # la petición en curso terminó antes de descargar
+        self.assertEqual(st, 200)                # la nueva esperó en cola en vez de fallar
+        self.assertGreater(waited, 2.0)          # (carga simulada de 3 s)
+        sl = self.slots()[s]
+        self.assertEqual((sl["state"], sl["ctx"], sl["reloading"]), ("READY", 3072, False))
+        ev = self.api("GET", "/api/events?q=recarga")[1]["events"]
+        self.assertTrue(ev)
+        self.assertEqual(self.api("POST", "/api/reload", {"slot": 7})[0], 400)
+        self.api("POST", "/api/unload", {"slot": s})
+
 
 if __name__ == "__main__":
     unittest.main()

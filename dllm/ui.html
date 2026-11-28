@@ -254,7 +254,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
         <label class="mut" style="display:block;margin-top:10px;font-size:12px">Fecha y hora para el modelo<select id="ms_datetime"><option value="">por defecto (fecha y hora)</option><option value="datetime">fecha y hora del servidor</option><option value="date">solo la fecha</option><option value="off">no indicarla</option></select><span class="help">Los modelos no saben qué día es: se les indica el del reloj de este servidor en cada conversación.</span></label>
         <label class="mut" style="display:block;margin-top:10px;font-size:12px">Prompt de sistema<textarea id="ms_system_prompt" rows="3" placeholder="Instrucciones fijas, p. ej. «Responde en español, de forma breve»."></textarea></label>
       </fieldset>
-      <div class="row" style="margin-top:12px"><button onclick="saveSettings()">Guardar</button><button class="sec" onclick="saveSettings(true)">Restablecer</button><span id="ms_msg" class="mut"></span></div>
+      <div class="row" style="margin-top:12px"><button onclick="saveSettings()">Guardar</button><button class="sec" id="ms_reload" onclick="saveSettings(false,true)" title="Guarda y vuelve a cargar el modelo ya cargado con los ajustes nuevos; las peticiones que lleguen mientras tanto esperan en cola">Guardar y recargar</button><button class="sec" onclick="saveSettings(true)">Restablecer</button><span id="ms_msg" class="mut"></span></div>
     </div>
   </section>
   <section><h2>Añadir modelos</h2>
@@ -653,11 +653,11 @@ const where=(x,nm)=>x.assignments&&x.assignments.length?x.assignments.map(a=>`${
 function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||x.state!=='IDLE');
   const nm=id=>{const n=(S.nodes||[]).find(x=>x.id===id);return n?n.name:id};
   $('slotlist').innerHTML=sl.length?sl.map(x=>{const m=x.metrics||{},busy=x.state==='LOADING'||x.state==='RECOVERING',gone=x.state==='UNLOADING';
-    const tt=x.state==='READY'&&x.model?`<button class="sec sm" onclick="testTools(${x.slot},this)" title="Comprueba que el modelo llama a una herramienta de ejemplo">🛠 Probar</button> `:'';
+    const tt=x.state==='READY'&&x.model?`<button class="sec sm" onclick="testTools(${x.slot},this)" title="Comprueba que el modelo llama a una herramienta de ejemplo">🛠 Probar</button> <button class="sec sm" onclick="reloadSlot(${x.slot})" title="Vuelve a cargar el modelo con sus ajustes actuales; las peticiones nuevas esperan en cola">⟳ Recargar</button> `:'';
     const act=gone?'<span class="mut" data-en="unloading…">descargando…</span>':busy?`<button class="sec sm" onclick="dropSlot(${x.slot})">Cancelar</button>`:tt+(x.slot===0?`<button class="sec sm" data-en="Unload" onclick="dropSlot(0)">Descargar</button>`:`<button class="sec sm" onclick="dropSlot(${x.slot},'¿Eliminar este modelo y liberar su memoria?')">Eliminar</button>`);
     const perf=m.requests?`${m.requests} peticiones${m.errors?` · <span class="err">${m.errors} con error</span>`:''}<br><span class="mut">media ${m.avg_ms==null?'—':Math.round(m.avg_ms)+' ms'} · p95 ${m.p95_ms==null?'—':Math.round(m.p95_ms)+' ms'}${m.tok_s?` · ${m.tok_s} tok/s`:''}</span>`:'<span class="mut">sin peticiones</span>';
     return `<tr><td>${x.slot}${x.pinned?' 📌':''}</td><td>${x.model?esc(x.model):'<span class="mut">(vacío)</span>'}<br><span class="mut">ctx ${x.ctx||'—'} · ${esc(x.policy||'auto')}${x.llama_port?' · puerto '+x.llama_port:''}</span></td>
-    <td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.recoveries?` <span class="mut">recuperado ${x.recoveries}×</span>`:''}${x.error?`<br><span class="err">${esc(x.error)}</span><br><a href="#ev" onclick="evFocus(${x.slot});return false">Ver registro</a>`:''}</td>
+    <td><span class="badge ${esc(x.state)}">${esc(x.state)}</span>${x.reloading?' <span class="mut" data-en="reloading (requests queued)">recargando (peticiones en cola)</span>':''}${x.recoveries?` <span class="mut">recuperado ${x.recoveries}×</span>`:''}${x.error?`<br><span class="err">${esc(x.error)}</span><br><a href="#ev" onclick="evFocus(${x.slot});return false">Ver registro</a>`:''}</td>
     <td>${where(x)}</td><td>${x.activity==='BUSY'?`ocupado (${x.active_requests})`:'libre'}</td><td>${perf}</td><td>${act}</td></tr>`}).join(''):'<tr><td colspan="7" class="mut">Ningún modelo en memoria. Elige uno arriba y pulsa «Cargar».</td></tr>';
   const L=S.ledger||{};const parts=Object.entries(L).map(([id,v])=>{const r=Object.values(v.reserved||{}).reduce((a,b)=>a+b,0),q=Object.values(v.ram_reserved||{}).reduce((a,b)=>a+b,0);return r||q?`${esc(id==='@host'?'orquestador':nm(id))}: ${r?'VRAM '+gib(r)+' de '+gib(v.cap):''}${r&&q?' · ':''}${q?'RAM '+gib(q):''}`:''}).filter(Boolean);
   $('ledgernote').innerHTML=parts.length?'Memoria reservada · '+parts.join(' · '):''}
@@ -791,11 +791,16 @@ function editSettings(i){const m=M[i];msel=m.name;$('ms_title').textContent='Par
   $('ms_mmproj').value=('mmproj' in s)?s.mmproj:'__auto';
   $('ms_draft_model').innerHTML='<option value="">Ninguno</option>'+M.filter(x=>x.name!==m.name&&x.size<m.size).map(x=>`<option value="${esc(x.name)}">${esc(x.name)} (${gib(x.size)})</option>`).join('');
   SK.forEach(k=>{$('ms_'+k).value=k==='stop'?(s.stop||[]).join(', '):(s[k]??'')});$('ms_embeddings').value=s.embeddings?'true':'';$('ms_msg').textContent='';$('msettings').classList.remove('hide');$('msettings').scrollIntoView({behavior:'smooth',block:'nearest'})}
-async function saveSettings(reset){const st={};if(!reset){SK.forEach(k=>{const v=$('ms_'+k).value;if(v!=='')st[k]=TXT.has(k)?v:+v});
+async function saveSettings(reset,reload){const st={};if(!reset){SK.forEach(k=>{const v=$('ms_'+k).value;if(v!=='')st[k]=TXT.has(k)?v:+v});
     if($('ms_embeddings').value==='true')st.embeddings=true;
     if($('ms_mmproj').value!=='__auto')st.mmproj=$('ms_mmproj').value}
-  try{await api('POST','/api/models/settings',{model:msel,settings:st});$('ms_msg').className='ok';$('ms_msg').textContent=reset?'Restablecido.':'Guardado. Generación: desde la próxima petición · Carga: al volver a cargar el modelo.';await models();if(reset)SK.forEach(k=>$('ms_'+k).value='')}
+  try{await api('POST','/api/models/settings',{model:msel,settings:st});$('ms_msg').className='ok';$('ms_msg').textContent=reset?'Restablecido.':'Guardado. Generación: desde la próxima petición · Carga: al volver a cargar el modelo.';
+    if(reload){const sl=((S&&S.slots)||[]).filter(x=>x.model===msel&&(x.state==='READY'||x.state==='ERROR'));
+      if(!sl.length)$('ms_msg').textContent='Guardado. El modelo no está cargado: se aplicará al cargarlo.';
+      for(const x of sl){await api('POST','/api/reload',{slot:x.slot});$('ms_msg').textContent='Guardado. Recargando el modelo: las peticiones esperan en cola hasta que esté listo.'}}
+    await models();if(reset)SK.forEach(k=>$('ms_'+k).value='')}
   catch(e){$('ms_msg').className='err';$('ms_msg').textContent=e.message}}
+async function reloadSlot(n){try{await api('POST','/api/reload',{slot:n});refresh()}catch(e){alert(e.message)}}
 async function delModel(i){const m=M[i];if(!confirm(`¿Eliminar ${m.name} (${gib(m.size)}) del disco?`))return;try{await api('POST','/api/models/delete',{model:m.name});models()}catch(e){alert(e.message)}}
 function tab(t){['hf','ol','ll'].forEach(x=>{$('p_'+x).classList.toggle('hide',x!==t);$('t_'+x).classList.toggle('on',x===t)});if(t==='ll')olLocal()}
 async function hfSearch(){const q=$('hfq').value.trim();if(!q)return;$('hfres').innerHTML='<span class="mut">buscando…</span>';

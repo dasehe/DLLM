@@ -195,7 +195,11 @@ cannot be deleted.
 
 **Parameters** button (with ● if it has any saved). Empty = llama.cpp default.
 
-**Load** (applied when loading the model; changing them requires reloading it):
+**Load** (applied when loading the model; changing them requires reloading it). **Save and reload** saves and reloads
+the loaded model right away (*hot reload*): requests already running finish first (up to 120 s), new requests **wait in
+a queue** instead of failing or going to another model, and the model comes back with the same nodes and the new
+settings (context included). The **⟳ Reload** button in the list of loaded models does the same without changing
+anything; API: `POST /api/reload {"slot": N}`.
 
 | Parameter | What it does | Guidance |
 |---|---|---|
@@ -360,6 +364,7 @@ binaries; **not tested yet with real Ollama clients**.
 | `POST /api/plan` | `{"model": "...", "ctx": 4096, "slot": 0\|"new", "targets": [{"node": "DSH", "device": "cpu"}]}` | Plan without loading, with `resources` (cluster after loading it). Empty `targets` = automatic; `device`: `gpu` or `cpu`; `@host` = orchestrator RAM |
 | `POST /api/load` | `{"model": "...", "ctx": 4096, "slot": 0\|N\|"new", "pinned": true, "targets": […]}` | `202` with the `slot` used (loading continues in the background) |
 | `POST /api/unload` | `{"slot": N}` (optional; without `slot` unloads the main one) | `200`; in any state, and **cancels** a load in progress without waiting |
+| `POST /api/reload` | `{"slot": N}` | `202`; hot reload with the current settings and the same nodes: running requests finish, new ones wait in a queue (`409` if a load is already in progress) |
 | `GET /api/hf/search?q=…` · `GET /api/hf/files?repo=…` | — | GGUF model search and a repo's files |
 | `POST /api/downloads` | `{"source":"hf","repo":…,"file":…}` · `{"source":"ollama","name":"qwen2.5:7b"}` · `{"source":"ollama-local","name":…}` | `202` with the download |
 | `GET /api/downloads` · `POST /api/downloads/cancel` | — · `{"id": "d1"}` | Downloads and progress · cancel |
