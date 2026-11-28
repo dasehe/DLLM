@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.12.0] - 2026-11-28
+
+### Añadido
+- **Límite de peticiones por API key** (peticiones por minuto, ventana deslizante): panel, `/v1` y API Ollama responden
+  429 con `Retry-After` al superarlo. Botón *Límite* en Usuarios → API keys, `"rpm"` al crear y `POST /api/keys/limit`.
+- **Bloqueo de inicio de sesión configurable** (intentos, ventana, duración) en Usuarios y `POST /api/users/security`;
+  además de la IP, bloquea el nombre de usuario cuando se intenta desde la red (nunca desde el propio orquestador).
+
 ## [0.11.0] - 2026-11-27
 
 ### Añadido

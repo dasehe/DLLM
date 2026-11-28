@@ -116,7 +116,13 @@ login until it is changed (*👤 → Change password*). Logins with the default 
   network they need a key with the `chat` permission.
 - The terminal (`dllm status`, `load`…) on the orchestrator itself uses a local token (`~/.dllm/local.token`, permissions
   600, only accepted from 127.0.0.1).
-- 5 failed logins from the same IP block logins from it for 5 minutes. Passwords: PBKDF2-HMAC-SHA256; sessions: random
+- **Request limit per key:** each API key can have a limit of requests per minute (*Limit* button in **👥 Users →
+  API keys**, or `"rpm"` when creating it); it applies to the panel API, `/v1` and the Ollama API, and when exceeded the
+  answer is `429` with `Retry-After`. 0 = no limit (default).
+- **Sign-in lockout** (configurable in **👥 Users → Sign-in lockout**): by default 5 failed logins within 300 s block
+  the IP for 300 s and, from the network, also the user name (so guessing from many IPs does not help). From the
+  orchestrator itself a user is never blocked, so nobody can lock the administrator out remotely.
+- Passwords: PBKDF2-HMAC-SHA256; sessions: random
   token in an `HttpOnly`, `SameSite=Strict` cookie, 12 h sliding expiry. Users travel in backups (`users.json`).
 - Every administrative action is recorded in the **audit log** (see *Logs*).
 

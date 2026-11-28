@@ -323,7 +323,16 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <div class="mut" id="u_perminfo" style="font-size:12px;margin-top:6px"></div>
   </section>
   <section><h2>API keys</h2>
-    <table><thead><tr><th>Usuario</th><th>Nombre</th><th>Inicio</th><th>Último uso</th><th></th></tr></thead><tbody id="u_keys"></tbody></table>
+    <table><thead><tr><th>Usuario</th><th>Nombre</th><th>Inicio</th><th>Último uso</th><th>Límite</th><th></th></tr></thead><tbody id="u_keys"></tbody></table>
+    <div class="mut" style="font-size:12px;margin-top:6px">Límite: peticiones por minuto que acepta cada clave (panel, <code>/v1</code> y API Ollama); al superarlo responde 429 con <code>Retry-After</code>. 0 = sin límite.</div>
+  </section>
+  <section><h2>Bloqueo de inicio de sesión</h2>
+    <div class="tool"><label class="mut">Intentos fallidos <input id="sec_mf" type="number" min="1" max="100" style="width:70px"></label>
+      <label class="mut">en (s) <input id="sec_w" type="number" min="10" max="86400" style="width:90px"></label>
+      <label class="mut">bloqueo (s) <input id="sec_l" type="number" min="10" max="86400" style="width:90px"></label>
+      <label class="mut"><input type="checkbox" id="sec_u" style="width:auto"> bloquear también el usuario</label>
+      <button class="sec" onclick="secSave()">Guardar</button></div>
+    <div class="mut" style="font-size:12px;margin-top:6px">Tras ese número de fallos se bloquea la IP y, si se marca, también el usuario cuando se intenta desde la red (desde el propio orquestador nunca se bloquea por usuario, para que nadie pueda dejar fuera al administrador).</div>
   </section>
   <div id="u_msg"></div>
 </div>
@@ -821,7 +830,10 @@ async function uLoad(){try{U=await api('GET','/api/users')}catch(e){$('u_msg').i
   $('u_groups').innerHTML=Object.entries(U.groups).map(([g,rs])=>`<tr><td><b class="notr">${esc(g)}</b></td><td>${R.map(r=>`<label class="notr" style="display:inline;margin-right:8px"><input type="checkbox" style="width:auto" ${rs.includes(r)?'checked':''} ${g==='administrators'&&r==='administrator'?'disabled':''} onchange="gToggle('${esc(g)}','${esc(r)}',this.checked)"> ${esc(r)}</label>`).join('')}</td><td>${g==='administrators'?'':`<button class="sec sm" onclick="gDel('${esc(g)}')">🗑️</button>`}</td></tr>`).join('');
   $('u_roles').innerHTML=Object.entries(U.roles).map(([r,ps])=>`<tr><td><b class="notr">${esc(r)}</b></td><td>${U.perms.map(p=>`<label class="notr" style="display:inline;margin-right:8px" title="${esc(U.perm_info[p])}"><input type="checkbox" style="width:auto" ${ps.includes(p)?'checked':''} ${r==='administrator'?'disabled':''} onchange="rToggle('${esc(r)}','${p}',this.checked)"> ${p}</label>`).join('')}</td><td>${r==='administrator'?'':`<button class="sec sm" onclick="rDel('${esc(r)}')">🗑️</button>`}</td></tr>`).join('');
   $('u_perminfo').innerHTML=U.perms.map(p=>`<b class="notr">${p}</b>: ${esc(U.perm_info[p])}`).join(' · ');
-  $('u_keys').innerHTML=Object.entries(U.keys).map(([id,k])=>`<tr><td class="notr">${esc(k.user)}</td><td>${esc(k.name)}</td><td><code class="notr">${esc(k.prefix)}…</code></td><td class="mut">${when(k.last_used)}</td><td><button class="sec sm" onclick="kDel('${id}')">Revocar</button></td></tr>`).join('')||'<tr><td colspan="5" class="mut">Ninguna.</td></tr>'}
+  $('u_keys').innerHTML=Object.entries(U.keys).map(([id,k])=>`<tr><td class="notr">${esc(k.user)}</td><td>${esc(k.name)}</td><td><code class="notr">${esc(k.prefix)}…</code></td><td class="mut">${when(k.last_used)}</td><td>${k.rpm?k.rpm+'/min':'—'}</td><td><button class="sec sm" onclick="kLim('${id}',${k.rpm||0})">Límite</button> <button class="sec sm" onclick="kDel('${id}')">Revocar</button></td></tr>`).join('')||'<tr><td colspan="6" class="mut">Ninguna.</td></tr>';
+  const sc=U.security||{};$('sec_mf').value=sc.max_fails;$('sec_w').value=sc.window;$('sec_l').value=sc.lockout;$('sec_u').checked=!!sc.user_lockout}
+function kLim(id,cur){const v=prompt('Peticiones por minuto para esta clave (0 = sin límite)',cur);if(v!==null)uPost('/api/keys/limit',{id,rpm:Number(v)},'Límite guardado.')}
+function secSave(){uPost('/api/users/security',{security:{max_fails:Number($('sec_mf').value),window:Number($('sec_w').value),lockout:Number($('sec_l').value),user_lockout:$('sec_u').checked}},'Guardado.')}
 async function uPost(path,body,okmsg){try{U=await api('POST',path,body);$('u_msg').innerHTML=okmsg?'<span class="ok">'+esc(okmsg)+'</span>':'';uLoad();return true}catch(e){$('u_msg').innerHTML='<span class="err">'+esc(e.message)+'</span>';uLoad();return false}}
 async function uCreate(){if(await uPost('/api/users/create',{name:$('u_name').value.trim(),password:$('u_pw').value,groups:[$('u_grp').value]},'Usuario creado.')){$('u_name').value='';$('u_pw').value=''}}
 function uGroups(n,el){const gs=[...el.closest('td').querySelectorAll('input')].filter(i=>i.checked).map(i=>i.dataset.g);uPost('/api/users/update',{name:n,groups:gs})}

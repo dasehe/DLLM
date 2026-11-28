@@ -113,7 +113,13 @@ inicio de sesión hasta cambiarla (*👤 → Cambiar contraseña*). Los inicios 
   la red necesitan una clave con el permiso `chat`.
 - La terminal (`dllm status`, `load`…) en el propio orquestador usa un token local (`~/.dllm/local.token`, permisos 600,
   solo aceptado desde 127.0.0.1).
-- 5 inicios de sesión fallidos desde una IP la bloquean 5 minutos. Contraseñas: PBKDF2-HMAC-SHA256; sesiones: token
+- **Límite de peticiones por clave:** cada API key puede tener un límite de peticiones por minuto (botón *Límite* en
+  **👥 Usuarios → API keys**, o `"rpm"` al crearla); se aplica a la API del panel, `/v1` y la API Ollama y, al superarlo,
+  la respuesta es `429` con `Retry-After`. 0 = sin límite (por defecto).
+- **Bloqueo de inicio de sesión** (configurable en **👥 Usuarios → Bloqueo de inicio de sesión**): por defecto 5 fallos en
+  300 s bloquean la IP 300 s y, desde la red, también el nombre de usuario (probar desde muchas IP no sirve). Desde el
+  propio orquestador nunca se bloquea un usuario, para que nadie pueda dejar fuera al administrador desde la red.
+- Contraseñas: PBKDF2-HMAC-SHA256; sesiones: token
   aleatorio en una cookie `HttpOnly`, `SameSite=Strict`, caducidad deslizante de 12 h. Los usuarios viajan en las copias
   (`users.json`).
 - Cada acción de administración queda en el **registro de auditoría** (ver *Registros*).

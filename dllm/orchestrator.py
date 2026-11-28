@@ -1843,7 +1843,6 @@ def make_handler(cfg, cl):
     no_login = os.environ.get("DLLM_INSECURE_NO_LOGIN") == "1" and cfg.host in ("127.0.0.1", "localhost", "::1")
     if no_login:
         log("AVISO: DLLM_INSECURE_NO_LOGIN=1: el panel no pide usuario (solo para pruebas; solo en loopback)")
-    fails = {}  # ip → [marcas de tiempo de inicios de sesión fallidos]
 
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -1885,7 +1884,7 @@ def make_handler(cfg, cl):
             """(usuario, permisos) de quien pide: sesión del panel (cookie), token local de la terminal (solo
             127.0.0.1), API key de un usuario, o (None, ∅)."""
             ip = self.client_address[0]
-            self._via = None
+            self._via, self._kid = None, None
             if no_login and ip in LOOP:
                 self._via = "no-login"
                 return users.ADMIN, set(users.PERMS)
@@ -1902,6 +1901,7 @@ def make_handler(cfg, cl):
                 u, kid = UM.key_user(tok)
                 if u:
                     self._via = f"key:{kid}"
+                    self._kid = kid
                     return u, UM.perms_of(u)
             return None, set()
 
@@ -1938,17 +1938,19 @@ def make_handler(cfg, cl):
             if path == "/api/login" and self.command == "POST":
                 self._via = "password"
                 self._audit("login", str(req.get("user") or "")[:64] or None)
-                now = time.time()
-                fl = [t for t in fails.get(ip, []) if now - t < 300]
-                if len(fl) >= 5:
-                    return self._send(429, {"error": "demasiados intentos fallidos: espera 5 minutos"},
-                                      headers={"Retry-After": "300"})
                 user, pw = str(req.get("user") or ""), str(req.get("password") or "")
+                left = UM.login_blocked(user[:64], ip, local=ip in LOOP)
+                if left:
+                    return self._send(429, {"error": f"demasiados intentos fallidos: inténtalo dentro de {left} s"},
+                                      headers={"Retry-After": str(left)})
                 if not UM.authenticate(user, pw):
-                    fails[ip] = fl + [now]
+                    UM.login_failed(user, ip)
                     cl.event(f"inicio de sesión fallido de «{user[:64]}» desde {ip}", level="warn", kind="security")
+                    if UM.login_blocked(user[:64], ip, local=ip in LOOP):
+                        cl.event(f"inicio de sesión bloqueado para {ip} / «{user[:64]}» por intentos fallidos",
+                                 level="warn", kind="security")
                     return self._send(401, {"error": "usuario o contraseña incorrectos"})
-                fails.pop(ip, None)
+                UM.login_ok(user, ip)
                 tok = UM.new_session(user, ip)
                 if UM.is_default_password(user):
                     cl.event(f"«{user}» ha iniciado sesión con la contraseña por defecto desde {ip}: cámbiala",
@@ -2014,11 +2016,16 @@ def make_handler(cfg, cl):
                 elif path == "/api/roles/delete":
                     UM.delete_role(name)
                 elif path == "/api/keys/create":
-                    kid, key = UM.create_key(str(req.get("user") or actor), req.get("label") or req.get("name"))
+                    kid, key = UM.create_key(str(req.get("user") or actor), req.get("label") or req.get("name"),
+                                             rpm=req.get("rpm") or 0)
                     cl.event(f"«{actor}» ha creado una API key para «{req.get('user') or actor}»", kind="security")
                     return self._send(200, {"id": kid, "key": key})
                 elif path == "/api/keys/delete":
                     UM.delete_key(str(req.get("id") or ""))
+                elif path == "/api/keys/limit":
+                    UM.set_key_limit(str(req.get("id") or ""), req.get("rpm"))
+                elif path == "/api/users/security":
+                    UM.set_security(req.get("security") if isinstance(req.get("security"), dict) else req)
                 else:
                     return self._send(404, {"error": "ruta no encontrada"})
                 cl.event(f"«{actor}»: {path.rsplit('/api/', 1)[1]} {name}".strip(), kind="security")
@@ -2076,6 +2083,13 @@ def make_handler(cfg, cl):
                 need = perm_for(self.command, path)
                 if audited(self.command, path):
                     self._audit(None, actor)
+                if self._kid:
+                    ok, wait = UM.allow(self._kid)
+                    if not ok:
+                        self.close_connection = True
+                        return self._send(429, {"error": f"límite de peticiones de esta API key superado: "
+                                                         f"inténtalo dentro de {wait} s"},
+                                          headers={"Retry-After": str(wait)})
                 if path.startswith("/v1/") and actor is None and ip in LOOP:
                     pass  # aplicaciones de este mismo equipo (AnythingLLM local…): sin clave, como antes
                 elif need not in perms:

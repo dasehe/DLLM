@@ -85,6 +85,51 @@ class UsersLogic(unittest.TestCase):
         self.u.sessions["x"] = {"user": "admin", "exp": time.time() - 1, "ip": ""}
         self.assertIsNone(self.u.session_user("x"))
 
+    def test_limite_por_clave(self):
+        kid, key = self.u.create_key("admin", "script", rpm=3)
+        t = 1000.0
+        self.assertEqual([self.u.allow(kid, t + i)[0] for i in range(4)], [True, True, True, False])
+        ok, wait = self.u.allow(kid, t + 10)
+        self.assertFalse(ok)
+        self.assertGreaterEqual(wait, 49)
+        self.assertTrue(self.u.allow(kid, t + 61)[0])            # ventana deslizante
+        self.assertEqual(self.u.allow(None), (True, 0))
+        for bad in (-1, users.MAX_RPM + 1, "x"):
+            with self.assertRaises(users.UserError):
+                self.u.set_key_limit(kid, bad)
+        with self.assertRaises(users.UserError):
+            self.u.create_key("admin", "mala", rpm=-5)
+        self.assertEqual(len(self.u.data["keys"]), 1)             # la clave inválida no se queda a medias
+        self.u.set_key_limit(kid, 0)
+        self.assertTrue(all(self.u.allow(kid, t + 100)[0] for _ in range(50)))
+        self.assertEqual(self.u.view()["keys"][kid]["rpm"], 0)
+
+    def test_bloqueo_configurable(self):
+        self.assertEqual(self.u.view()["security"], users.DEFAULT_SECURITY)
+        self.u.set_security({"max_fails": 3, "window": 60, "lockout": 600, "user_lockout": True})
+        for bad in ({"max_fails": 0}, {"window": 5}, {"lockout": "x"}, {"otro": 1}):
+            with self.assertRaises(users.UserError):
+                self.u.set_security(bad)
+        t = 5000.0
+        for i in range(3):
+            self.assertEqual(self.u.login_blocked("ana", "10.0.0.9", now=t + i), 0)
+            self.u.login_failed("ana", "10.0.0.9", now=t + i)
+        self.assertGreater(self.u.login_blocked("ana", "10.0.0.9", now=t + 3), 590)
+        # el usuario queda bloqueado desde otra IP de la red, pero no desde el propio equipo
+        self.assertGreater(self.u.login_blocked("ana", "10.0.0.50", now=t + 3), 0)
+        self.assertEqual(self.u.login_blocked("ana", "127.0.0.1", local=True, now=t + 3), 0)
+        self.assertEqual(self.u.login_blocked("bob", "10.0.0.50", now=t + 3), 0)
+        self.assertEqual(self.u.login_blocked("ana", "10.0.0.9", now=t + 603), 0)   # termina el bloqueo
+        # fallos dispersos (fuera de la ventana) no bloquean
+        for i in range(3):
+            self.u.login_failed("eva", "10.0.0.7", now=t + 1000 + i * 100)
+        self.assertEqual(self.u.login_blocked("eva", "10.0.0.7", now=t + 1201), 0)
+        self.u.set_security({"user_lockout": False})
+        self.u.login_ok("ana", "10.0.0.9")
+        for i in range(3):
+            self.u.login_failed("ana", "10.0.0.9", now=t + 2000 + i)
+        self.assertEqual(self.u.login_blocked("ana", "10.0.0.50", now=t + 2003), 0)
+
 
 @unittest.skipIf(os.name == "nt", "binarios simulados POSIX")
 class LoginE2E(unittest.TestCase):
@@ -211,6 +256,19 @@ class LoginE2E(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(Path(self.home, "audit.jsonl")).st_mode), 0o600)
         st, j, _ = self.req("GET", "/api/audit?user=ana&failed=1", bearer=tok)
         self.assertTrue(j["entries"] and all(e["user"] == "ana" and not e["ok"] for e in j["entries"]))
+
+    def test_5_limite_de_clave(self):
+        tok = Path(self.home, "local.token").read_text().strip()
+        st, k, _ = self.req("POST", "/api/keys/create", {"user": "admin", "label": "lim", "rpm": 2}, bearer=tok)
+        self.assertEqual(st, 200, k)
+        codes = [self.req("GET", "/api/state", bearer=k["key"])[0] for _ in range(3)]
+        self.assertEqual(codes, [200, 200, 429])
+        st, j, _ = self.req("POST", "/api/keys/limit", {"id": k["id"], "rpm": 0}, bearer=tok)
+        self.assertEqual(st, 200, j)
+        self.assertEqual(self.req("GET", "/api/state", bearer=k["key"])[0], 200)
+        self.assertEqual(self.req("POST", "/api/keys/limit", {"id": k["id"], "rpm": -1}, bearer=tok)[0], 400)
+        st, j, _ = self.req("POST", "/api/users/security", {"security": {"max_fails": 7}}, bearer=tok)
+        self.assertEqual((st, j["security"]["max_fails"]), (200, 7))
 
 
 if __name__ == "__main__":

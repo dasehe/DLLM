@@ -71,12 +71,19 @@ def _password(pw):
     return pw
 
 
+DEFAULT_SECURITY = {"max_fails": 5, "window": 300, "lockout": 300, "user_lockout": True}
+SECURITY_RULES = {"max_fails": (1, 100), "window": (10, 86400), "lockout": (10, 86400)}
+MAX_RPM = 100000
+
+
 class Users:
     def __init__(self, path, iterations=ITERATIONS):
         self.path = Path(path)
         self.iterations = iterations
         self.lock = threading.RLock()
         self.sessions = {}  # token → {"user", "exp", "ip"}
+        self.hits = {}      # id de clave → marcas de tiempo del último minuto (límite de peticiones)
+        self.fails = {}     # "ip:<ip>" / "user:<nombre>" → marcas de tiempo de inicios de sesión fallidos
         self.data = self._load()
 
     # ------------------------------------------------------------------ persistencia
@@ -89,6 +96,9 @@ class Users:
         d.setdefault("groups", {k: {"roles": list(v)} for k, v in DEFAULT_GROUPS.items()})
         d.setdefault("users", {})
         d.setdefault("keys", {})
+        sec = d.setdefault("security", {})
+        for k, v in DEFAULT_SECURITY.items():
+            sec.setdefault(k, v)
         d["roles"].setdefault(ADMIN_ROLE, {"perms": list(PERMS)})
         d["roles"][ADMIN_ROLE]["perms"] = list(PERMS)  # el rol de administrador siempre lo tiene todo
         d["groups"].setdefault(ADMIN_GROUP, {"roles": [ADMIN_ROLE]})
@@ -185,6 +195,89 @@ class Users:
                         self.save()
                     return k["user"], kid
         return None, None
+
+    # ------------------------------------------------------------------ límites
+    def allow(self, kid, now=None):
+        """¿La clave `kid` puede hacer otra petición? → (sí/no, segundos hasta poder). Ventana deslizante de 60 s."""
+        k = self.data["keys"].get(kid) if kid else None
+        rpm = int((k or {}).get("rpm") or 0)
+        if not rpm:
+            return True, 0
+        now = now or time.time()
+        with self.lock:
+            h = [t for t in self.hits.get(kid, []) if now - t < 60]
+            if len(h) >= rpm:
+                self.hits[kid] = h
+                return False, max(1, int(60 - (now - h[0])) + 1)
+            h.append(now)
+            self.hits[kid] = h
+            return True, 0
+
+    def set_key_limit(self, kid, rpm):
+        try:
+            rpm = int(rpm or 0)
+        except (TypeError, ValueError):
+            raise UserError("límite no válido: número de peticiones por minuto (0 = sin límite)")
+        if not 0 <= rpm <= MAX_RPM:
+            raise UserError(f"el límite debe estar entre 0 y {MAX_RPM} peticiones por minuto")
+        with self.lock:
+            if kid not in self.data["keys"]:
+                raise UserError("clave no encontrada")
+            self.data["keys"][kid]["rpm"] = rpm
+            self.hits.pop(kid, None)
+            self.save()
+
+    def set_security(self, upd):
+        """Ajustes del bloqueo de inicio de sesión (validados)."""
+        with self.lock:
+            sec = dict(self.data["security"])
+            for k, v in (upd or {}).items():
+                if k in SECURITY_RULES:
+                    lo, hi = SECURITY_RULES[k]
+                    try:
+                        v = int(v)
+                    except (TypeError, ValueError):
+                        raise UserError(f"{k}: debe ser un número entero")
+                    if not lo <= v <= hi:
+                        raise UserError(f"{k}: debe estar entre {lo} y {hi}")
+                    sec[k] = v
+                elif k == "user_lockout":
+                    sec[k] = bool(v)
+                else:
+                    raise UserError(f"ajuste desconocido: {k}")
+            self.data["security"] = sec
+            self.save()
+            return dict(sec)
+
+    def login_blocked(self, user, ip, local=False, now=None):
+        """Segundos que quedan de bloqueo para este intento (0 = puede intentarlo). Se bloquea la IP tras
+        `max_fails` fallos en `window` s y, si `user_lockout`, también el usuario desde la red (desde el propio
+        equipo nunca se bloquea por usuario: así un atacante no puede dejar fuera al administrador local)."""
+        sec, now = self.data["security"], now or time.time()
+        keys = ["ip:" + ip] + (["user:" + user] if sec.get("user_lockout") and user and not local else [])
+        left = 0
+        with self.lock:
+            for k in keys:
+                fl = [t for t in self.fails.get(k, []) if now - t < sec["window"] + sec["lockout"]]
+                self.fails[k] = fl
+                if not fl or now - fl[-1] >= sec["lockout"]:
+                    continue
+                # ¿max_fails fallos dentro de una ventana que acaba en el último? → bloqueado hasta último + lockout
+                if sum(1 for t in fl if fl[-1] - t < sec["window"]) >= sec["max_fails"]:
+                    left = max(left, int(sec["lockout"] - (now - fl[-1])) + 1)
+        return left
+
+    def login_failed(self, user, ip, now=None):
+        now = now or time.time()
+        with self.lock:
+            for k in ("ip:" + ip, "user:" + (user or "")[:64]):
+                self.fails.setdefault(k, []).append(now)
+                del self.fails[k][:-200]
+
+    def login_ok(self, user, ip):
+        with self.lock:
+            self.fails.pop("ip:" + ip, None)
+            self.fails.pop("user:" + user, None)
 
     # ------------------------------------------------------------------ gestión
     def set_password(self, user, pw, default=False):
@@ -295,7 +388,7 @@ class Users:
                 g["roles"] = [r for r in g["roles"] if r != name]
             self.save()
 
-    def create_key(self, user, label, key=None):
+    def create_key(self, user, label, key=None, rpm=0):
         """Crea una API key para `user` y devuelve el texto (solo esta vez)."""
         with self.lock:
             if user not in self.data["users"]:
@@ -304,7 +397,13 @@ class Users:
             key = key or KEY_PREFIX + secrets.token_urlsafe(24)
             kid = secrets.token_hex(6)
             self.data["keys"][kid] = {"user": user, "name": label, "hash": key_hash(key), "prefix": key[:10],
-                                      "created": int(time.time()), "last_used": 0}
+                                      "created": int(time.time()), "last_used": 0, "rpm": 0}
+            if rpm:
+                try:
+                    self.set_key_limit(kid, rpm)
+                except UserError:
+                    del self.data["keys"][kid]
+                    raise
             self.save()
             return kid, key
 
@@ -326,7 +425,9 @@ class Users:
                                   "default_pw": v.get("default_pw", False), "created": v.get("created"),
                                   "perms": sorted(self.perms_of(k))} for k, v in self.data["users"].items()},
                     "keys": {k: {"user": v["user"], "name": v["name"], "prefix": v["prefix"], "created": v["created"],
-                                 "last_used": v.get("last_used", 0)} for k, v in self.data["keys"].items()}}
+                                 "last_used": v.get("last_used", 0), "rpm": v.get("rpm", 0)}
+                             for k, v in self.data["keys"].items()},
+                    "security": dict(self.data["security"])}
 
 
 # ---------------------------------------------------------------------- token local para la terminal

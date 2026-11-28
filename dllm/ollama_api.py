@@ -195,8 +195,13 @@ def make_handler(cfg, cl):
             um = getattr(cl, "users", None)
             if not um or not authz.startswith("Bearer "):
                 return False
-            user, _ = um.key_user(authz[7:].strip())
-            return bool(user) and "chat" in um.perms_of(user)
+            user, kid = um.key_user(authz[7:].strip())
+            if not user or "chat" not in um.perms_of(user):
+                return False
+            ok, wait = um.allow(kid)
+            if not ok:
+                raise ApiError(429, f"límite de peticiones de esta API key superado: inténtalo dentro de {wait} s")
+            return True
 
         def _same_origin(self):
             origin = self.headers.get("Origin")
