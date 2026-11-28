@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.18.0] - 2026-11-28
+
+### Añadido
+- **Plantillas de despliegue** (Modelos → Plantillas): guardar una forma de cargar (modelo, contexto, destino, fijado,
+  dónde ejecutar con deslizantes y prioridades), desplegarla con un clic, pasarla al formulario o borrarla.
+  `dllm template list|apply|delete`, API `/api/templates*` (permiso `models`); `templates.json` va en las copias.
+
 ## [0.17.1] - 2026-11-28
 
 ### Cambiado

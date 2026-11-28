@@ -285,6 +285,26 @@ class Targets(unittest.TestCase):
         self.assertEqual(self.api("POST", "/api/node/settings", {"node": gid, "priority": 11})[0], 400)
         self.api("POST", "/api/node/settings", {"node": gid, "priority": None})
 
+    def test_8_deployment_templates(self):
+        write_gguf(os.path.join(self.tmp, "models", "mid.gguf"), 9 * GiB)
+        tg = [{"node": "gpu1", "device": "both"}]
+        st, v = self.api("POST", "/api/templates/save", {"name": "mid en gpu1", "model": "mid.gguf", "ctx": 2048,
+                                                          "slot": "new", "targets": tg})
+        self.assertEqual(st, 200, v)
+        self.assertIn("mid en gpu1", self.api("GET", "/api/templates")[1]["templates"])
+        st, r = self.api("POST", "/api/templates/apply", {"name": "mid en gpu1"})
+        self.assertEqual(st, 202, r)
+        s = r["slot"]
+        self.wait(lambda: self.slots()[s]["state"] == "READY", 60, "plantilla desplegada")
+        sl = self.slots()[s]
+        self.assertEqual((sl["model"], sl["ctx"], sl["targets"]), ("mid.gguf", 2048, tg))
+        out = subprocess.run([sys.executable, "-m", "dllm", "--lang", "es", "template", "list", "--url",
+                              f"http://127.0.0.1:{self.op}"], cwd=ROOT, capture_output=True, text=True, timeout=60)
+        self.assertIn("mid en gpu1: mid.gguf", out.stdout, out.stderr)
+        self.assertEqual(self.api("POST", "/api/templates/apply", {"name": "no existe"})[0], 400)
+        self.api("POST", "/api/unload", {"slot": s})
+        self.assertEqual(self.api("POST", "/api/templates/delete", {"name": "mid en gpu1"})[0], 200)
+
 
 if __name__ == "__main__":
     unittest.main()

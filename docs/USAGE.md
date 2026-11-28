@@ -59,6 +59,11 @@ From top to bottom:
    with `-ngl` (GPU layers) and the rest in its RAM, without RPC. Per node it can be disabled (*Use its RAM too*) or
    capped (*Maximum RAM for models*). **Simulate** loads nothing: it
    computes the split and draws in orange in *Resources* what the model would add.
+   **Templates**: *💾 Save as template* stores this way of loading (model, context, target, pinned and *Where to run*
+   with its sliders and priorities) under a name; *▶ Deploy* repeats it with one click and *Fill in the form* loads it
+   into the form to tweak it. Terminal: `dllm template list|apply NAME|delete NAME`. API: `GET /api/templates`,
+   `POST /api/templates/save|apply|delete` (permission `models`). They are stored in `~/.dllm/templates.json` and
+   travel in backups.
 3. **Models in memory**: one row per model (a "slot" is a memory slot; 0 is the main one). It shows state, **where it
    runs** (node, GPU/CPU, GiB, *direct* when it uses the local GPU without RPC), usage and performance (requests,
    errors, average, p95, tok/s). You can **Cancel** a load in progress, **Unload** the main one or **Delete** any other,
@@ -285,6 +290,7 @@ choose *None* as its projector.
 | `dllm join-code` | Shows the join code (orchestrator). In the panel: Nodes → 🔑 Join code (only on the computer itself). Installed package: `python3 ~/.dllm/dllm.pyz join-code` (Windows: `py %USERPROFILE%\.dllm\dllm.pyz join-code`) |
 | `dllm doctor` | Local computer diagnostics |
 | `dllm backup export\|import\|inspect [FILE]` | Full backup (encrypted by default) and restore |
+| `dllm template list\|apply\|delete [NAME]` | Deployment templates saved in the panel (Models → Templates) |
 | `dllm tls status\|enable\|disable [--cert C --key K]` | HTTPS for the panel and the API (see [HTTPS](#https-optional)) |
 | `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Uninstalls: program, autostart and firewall; with `--purge` also llama.cpp and the configuration; with `--models` the models in the DLLM folder |
 

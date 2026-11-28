@@ -58,6 +58,11 @@ De arriba abajo:
    `-ngl` (capas en GPU) y el resto en su RAM, sin RPC. Por nodo se puede desactivar (*Usar también su RAM*) o limitar
    (*RAM máxima para modelos*).
    **Simular** no carga nada: calcula el reparto y dibuja en *Recursos* en naranja lo que añadiría el modelo.
+   **Plantillas**: *💾 Guardar como plantilla* guarda esta forma de cargar (modelo, contexto, destino, fijado y *Dónde
+   ejecutar* con sus deslizantes y prioridades) con un nombre; *▶ Desplegar* la repite con un clic y *Rellenar el
+   formulario* la pasa al formulario para retocarla. Terminal: `dllm template list|apply NOMBRE|delete NOMBRE`. API:
+   `GET /api/templates`, `POST /api/templates/save|apply|delete` (permiso `models`). Se guardan en
+   `~/.dllm/templates.json` y van en las copias de seguridad.
 3. **Modelos en memoria**: una fila por modelo (qué es el «slot»: una ranura de memoria; el 0 es el principal).
    Muestra estado, **dónde corre** (nodo, GPU/CPU, GiB), uso y rendimiento (peticiones, errores, media, p95, tok/s).
    Se puede **Cancelar** una carga en curso, **Descargar** el principal o **Eliminar** cualquier otro, también si está
@@ -278,6 +283,7 @@ solo como texto, elige *Ninguno* en su proyector.
 | `dllm join-code` | Muestra el código de unión (orquestador). En el panel: Nodos → 🔑 Código de unión (solo en el propio equipo). Paquete instalado: `python3 ~/.dllm/dllm.pyz join-code` (Windows: `py %USERPROFILE%\.dllm\dllm.pyz join-code`) |
 | `dllm doctor` | Diagnóstico del equipo local |
 | `dllm backup export\|import\|inspect [FICHERO]` | Copia de seguridad completa (cifrada por defecto) y restauración |
+| `dllm template list\|apply\|delete [NOMBRE]` | Plantillas de despliegue guardadas en el panel (Modelos → Plantillas) |
 | `dllm tls status\|enable\|disable [--cert C --key K]` | HTTPS del panel y la API (ver [HTTPS](#https-opcional)) |
 | `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Desinstala: programa, arranque automático y cortafuegos; con `--purge` también llama.cpp y la configuración; con `--models` los modelos de la carpeta de DLLM |
 

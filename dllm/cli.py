@@ -103,6 +103,25 @@ def cmd_load(a):
     print("carga iniciada; sigue el progreso con `dllm status` o en la UI")
 
 
+def cmd_template(a):
+    if a.action == "list":
+        t = _api(a, "GET", "/api/templates")["templates"]
+        for name, x in t.items():
+            where = ", ".join(f"{g['node']}:{g.get('device', 'gpu')}" for g in x.get("targets") or []) or "automático"
+            print(f"{name}: {x['model']} · ctx {x.get('ctx') or 'del modelo'} · {where}")
+        if not t:
+            print("no hay plantillas (se guardan en el panel: Modelos → Plantillas)")
+        return
+    if not a.name:
+        sys.exit("indica el nombre de la plantilla")
+    if a.action == "delete":
+        _api(a, "POST", "/api/templates/delete", {"name": a.name})
+        print("plantilla borrada")
+    else:
+        r = _api(a, "POST", "/api/templates/apply", {"name": a.name})
+        print(f"carga iniciada (slot {r.get('slot')}); sigue el progreso con `dllm status` o en la UI")
+
+
 def cmd_unload(a):
     _api(a, "POST", "/api/unload")
     print("modelo descargado")
@@ -546,6 +565,12 @@ def build_parser():
             s.add_argument("--slot", help="número de slot o «new» para cargarlo junto a los que ya hay")
             s.add_argument("--on-demand", action="store_true", help="no fijar el modelo: podrá expulsarse por LRU")
         s.set_defaults(fn=fn)
+    s = sub.add_parser("template", help="plantillas de despliegue: listar, aplicar o borrar")
+    s.add_argument("action", choices=["list", "apply", "delete"])
+    s.add_argument("name", nargs="?")
+    s.add_argument("--url", default="http://127.0.0.1:8080")
+    s.add_argument("--api-key")
+    s.set_defaults(fn=cmd_template)
     return p
 
 

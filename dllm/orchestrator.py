@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import audit, backup, backup_schedule, tls, webhooks, discovery, engine, eventlog, i18n, users
+from . import audit, backup, backup_schedule, templates, tls, webhooks, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -317,6 +317,7 @@ class Cluster:
         self.presence = parent.presence if parent else presence.Presence()  # pestañas del panel (`dllm open`)
         self.audit = parent.audit if parent else audit.Audit(getattr(cfg, "audit_file", None))
         self.webhooks = parent.webhooks if parent else webhooks.Webhooks(getattr(cfg, "webhooks_file", None))
+        self.templates = parent.templates if parent else templates.Templates(getattr(cfg, "templates_file", None))
         self.claims = parent.claims if parent else {}  # host → emparejamiento en curso
         self.jobs = parent.jobs if parent else {"scan": {}, "bench": {}}  # búsqueda de red y medición en curso
         self._local_devs = None   # dispositivos locales de llama-server (no cambian: se cachean)
@@ -1658,6 +1659,8 @@ class Cluster:
                 self.users.data = fresh.data
         if self.webhooks is not None and "webhooks.json" in files:
             self.webhooks.reload()
+        if self.templates is not None and "templates.json" in files:
+            self.templates.reload()
         for x in json.loads(files.get("nodes_added.json") or b"[]"):
             try:
                 self.reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)
@@ -1944,7 +1947,7 @@ _PERM_PREFIX = (  # (prefijo, permiso); el primero que encaja manda
     ("/api/users", "users"), ("/api/groups", "users"), ("/api/roles", "users"), ("/api/keys", "users"),
     ("/api/audit", "audit"), ("/api/backup", "system"), ("/api/join-code", "system"),
     ("/api/node", "nodes"), ("/api/pair", "nodes"),
-    ("/api/load", "models"), ("/api/unload", "models"), ("/api/reload", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
+    ("/api/load", "models"), ("/api/unload", "models"), ("/api/reload", "models"), ("/api/templates", "models"), ("/api/models/", "models"), ("/api/downloads/", "models"),
     ("/api/hf/token", "models"), ("/api/tools/test", "models"), ("/api/ollama/", "models"),
     ("/v1/", "chat"),
 )
@@ -2171,6 +2174,31 @@ def make_handler(cfg, cl):
             except users.UserError as e:
                 return self._send(400, {"error": str(e)})
 
+        def _template_routes(self, path, req):
+            T = cl.templates
+            try:
+                if path == "/api/templates" and self.command == "GET":
+                    return self._send(200, T.view())
+                if self.command != "POST":
+                    return self._send(405, {"error": "método no permitido"})
+                if path == "/api/templates/save":
+                    name, _ = T.save(req, cl.parse_targets)
+                    cl.event(f"plantilla de despliegue guardada: {name}")
+                    return self._send(200, T.view())
+                if path == "/api/templates/delete":
+                    T.delete(req.get("name"))
+                    return self._send(200, T.view())
+                if path == "/api/templates/apply":
+                    t = T.get(req.get("name"))
+                    ctx = t.get("ctx") or cl.models.settings(t["model"]).get("ctx") or 4096
+                    slot = cl.load_model(t["model"], int(ctx), t.get("slot", "new"), t.get("pinned", True),
+                                         t.get("targets") or None)
+                    cl.event(f"plantilla de despliegue aplicada: {req.get('name')} → {t['model']}")
+                    return self._send(202, {"accepted": True, "slot": slot, "template": t})
+                return self._send(404, {"error": "ruta no encontrada"})
+            except templates.TemplateError as e:
+                return self._send(400, {"error": str(e)})
+
         def _webhook_routes(self, path, req):
             W = cl.webhooks
             try:
@@ -2284,6 +2312,8 @@ def make_handler(cfg, cl):
                     cl.event("código de unión consultado desde " + self.client_address[0], kind="security")
                     return self._send(200, {"code": cl.join_code(), "orch": cl.cfg_advertise() or config.lan_ip(),
                                             "beacon": cfg.beacon_port}, headers={"Cache-Control": "no-store"})
+                if path.startswith("/api/templates"):
+                    return self._template_routes(path, req)
                 if path.startswith("/api/webhooks"):
                     return self._webhook_routes(path, req)
                 if path == "/api/ui/clients":
@@ -2542,6 +2572,7 @@ def run(cfg):
     cfg.events_file = str(config.home() / "events.jsonl")  # registro persistente (rota por tamaño)
     cfg.audit_file = str(config.home() / "audit.jsonl")    # registro de auditoría (600, rota por tamaño)
     cfg.webhooks_file = str(config.home() / "webhooks.json")  # alertas por webhook (600)
+    cfg.templates_file = str(config.home() / "templates.json")  # plantillas de despliegue
     reg = Registry(secret, cfg.node_timeout, cfg.probe_interval)
     for n in cfg.node or []:
         h, _, p = n.partition(":")

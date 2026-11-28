@@ -207,6 +207,8 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
     <div class="row" style="margin-top:8px"><label class="mut">Dónde ejecutar <select id="wh" onchange="whChange()"><option value="auto">Automático (el planificador elige)</option><option value="manual">Elegir nodos y dispositivo (GPU o CPU)</option></select></label></div>
     <div id="wh_box" class="hide"></div>
     <div class="row" style="margin-top:10px"><button class="sec" onclick="plan()">Simular (no carga nada)</button><button onclick="load()">Cargar</button></div>
+    <div class="row" style="margin-top:10px"><label class="mut" title="Guarda esta forma de cargar (modelo, contexto, destino, dónde ejecutar con sus deslizantes y prioridades) para repetirla con un clic">Plantillas <select id="tp_sel" class="notr" style="min-width:180px"></select></label>
+      <button class="sec sm" onclick="tpApply()">▶ Desplegar</button><button class="sec sm" onclick="tpFill()">Rellenar el formulario</button><button class="sec sm" onclick="tpSave()">💾 Guardar como plantilla</button><button class="sec sm" onclick="tpDel()">🗑️</button><span id="tp_msg" class="mut"></span></div>
     <div id="plan"></div>
   </section>
   <section id="slotsec"><h2>Modelos en memoria <span class="mut" style="font-size:12px;text-transform:none;letter-spacing:0">· cada fila ocupa memoria; el proxy /v1 elige uno por el campo «model»</span></h2>
@@ -458,7 +460,7 @@ const mbps=b=>b==null?na:(b>=1e6?(b/1e6).toFixed(1)+' MB/s':(b/1e3).toFixed(0)+'
 function show(t){cur=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   document.querySelectorAll('.tab').forEach(d=>d.classList.toggle('hide',d.id!=='t-'+t));
   try{history.replaceState(null,'','#'+t)}catch(e){}
-  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes()}if(t==='ev')evLoad();if(t==='con')conLoad();if(t==='sys')sysLoad();if(t==='usr')uLoad()}
+  if(t==='mon')tele();if(t==='mod'){models();dl();loadRes();tpLoad()}if(t==='ev')evLoad();if(t==='con')conLoad();if(t==='sys')sysLoad();if(t==='usr')uLoad()}
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
 
 /* ---------- estado general ---------- */
@@ -659,6 +661,17 @@ function targets(){if($('wh').value!=='manual')return [];const t=Object.entries(
   if(!t.length)throw new Error('Marca al menos un nodo (o elige «Automático»).');return t}
 async function plan(){$('plan').dataset.manual='1';try{const tg=targets(),sl=$('slotsel').value;$('plan').innerHTML='<div class="mut">midiendo red y calculando…</div>';
   const p=await api('POST','/api/plan',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':0,targets:tg});PROJ=p.ok?p.resources:null;renderPlan(p);renderRes()}catch(e){PROJ=null;$('plan').innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+let TP={};
+async function tpLoad(){try{TP=(await api('GET','/api/templates')).templates||{}}catch(e){TP={}}const cur=$('tp_sel').value;
+  $('tp_sel').innerHTML=Object.keys(TP).length?Object.entries(TP).map(([n,t])=>`<option value="${esc(n)}">${esc(n)} · ${esc(t.model)}</option>`).join(''):'<option value="" data-en="(none)">(ninguna)</option>';if(cur&&TP[cur])$('tp_sel').value=cur}
+function tpMsg(t,c){$('tp_msg').className=c||'mut';$('tp_msg').textContent=t}
+async function tpSave(){const n=prompt('Nombre de la plantilla',$('tp_sel').value||$('models').value.replace(/\.gguf$/,''));if(!n)return;
+  try{const sl=$('slotsel').value;await api('POST','/api/templates/save',{name:n.trim(),model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':0,pinned:$('pinned').checked,targets:targets()});await tpLoad();$('tp_sel').value=n.trim();tpMsg('Plantilla guardada.','ok')}catch(e){tpMsg(e.message,'err')}}
+function tpFill(){const t=TP[$('tp_sel').value];if(!t)return;$('models').value=t.model;if(t.ctx)$('ctx').value=t.ctx;$('slotsel').value=String(t.slot);$('pinned').checked=t.pinned!==false;
+  WSEL={};(t.targets||[]).forEach(g=>{WSEL[g.node]={device:g.device||'gpu',vram:g.vram_gb!=null?g.vram_gb*GB:null,ram:g.ram_gb!=null?g.ram_gb*GB:null,prio:g.priority??null}});
+  $('wh').value=(t.targets||[]).length?'manual':'auto';whChange();PROJ=null;renderRes();tpMsg('Formulario rellenado: pulsa Simular o Cargar.')}
+async function tpApply(){const n=$('tp_sel').value;if(!n||!TP[n])return;try{const r=await api('POST','/api/templates/apply',{name:n});tpMsg(`Desplegando ${n} (slot ${r.slot}).`,'ok');refresh();loadRes()}catch(e){tpMsg(e.message,'err')}}
+async function tpDel(){const n=$('tp_sel').value;if(!n||!TP[n]||!confirm('¿Borrar la plantilla '+n+'?'))return;try{await api('POST','/api/templates/delete',{name:n});await tpLoad();tpMsg('')}catch(e){tpMsg(e.message,'err')}}
 async function load(){delete $('plan').dataset.manual;PROJ=null;try{const tg=targets(),sl=$('slotsel').value;await api('POST','/api/load',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':+sl,pinned:$('pinned').checked,targets:tg});refresh();loadRes()}catch(e){alert(e.message)}}
 
 /* ---------- modelos en memoria ---------- */
