@@ -4,6 +4,15 @@
 (function () {
   var D = window.__I18N || {}, KEYS = null;
   var RE = (window.__I18N_RE || []).map(function (p) { return [new RegExp(p[0]), p[1]]; });
+  // plantillas de frases con valores: {"nodo {0} de nuevo en línea": "node {0} back online"}
+  var TPL = Object.keys(window.__I18N_TPL || {}).map(function (src) {
+    var parts = src.split(/\{(\d+)\}/), rx = '', order = [];
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2) { order.push(+parts[i]); rx += '([\\s\\S]+?)'; }
+      else rx += parts[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    return [new RegExp('^' + rx + '$'), window.__I18N_TPL[src], order];
+  });
   function getLang() {
     try {
       var q = new URLSearchParams(location.search).get('lang');
@@ -16,7 +25,7 @@
   document.documentElement.lang = LANG === 'es' ? 'es-ES' : 'en';
   window.setLang = function (l) { try { localStorage.setItem('dllm_lang', l); } catch (e) {} location.reload(); };
   // texto suelto para el código JS (alert, confirm, mensajes construidos a mano)
-  window.L = function (s) { return LANG === 'en' ? String(s).split('\n').map(tr).join('\n') : s; };  // conserva saltos de línea
+  window.L = function (s) { return LANG === 'en' ? String(s).split('\n').map(function (x) { return tr(x); }).join('\n') : s; };  // conserva saltos de línea
   function sel() { var s = document.getElementById('langsel'); if (s) s.value = LANG; }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sel); else sel();
   if (LANG !== 'en') return;
@@ -26,13 +35,25 @@
       .sort(function (a, b) { return b.length - a.length; });
     return KEYS;
   }
-  function tr(s) {
+  function fill(m, dst, order, depth) {
+    var vals = {};
+    for (var i = 0; i < order.length; i++) vals[order[i]] = m[i + 1];
+    return dst.replace(/\{(\d+)\}/g, function (x, n) {
+      var v = vals[n]; if (v == null) return x;
+      return depth < 2 && /[a-záéíóúñ]{2}/i.test(v) ? tr(v, depth + 1) : v;
+    });
+  }
+  function tr(s, depth) {
     var t = s.trim();
     if (!t) return s;
     if (Object.prototype.hasOwnProperty.call(D, t)) return s.replace(t, D[t]);
     var c = t.replace(/\s+/g, ' ');  // el HTML junta espacios y saltos de línea; el diccionario también
     if (c !== t && Object.prototype.hasOwnProperty.call(D, c)) return s.replace(t, D[c]);
     if (!/[a-záéíóúñ]{2}/i.test(t)) return s;
+    for (var p = 0; p < TPL.length; p++) {
+      var m = TPL[p][0].exec(t) || (c !== t ? TPL[p][0].exec(c) : null);
+      if (m) return s.replace(t, fill(m, TPL[p][1], TPL[p][2], depth || 0));
+    }
     var lead = s.match(/^\s*/)[0], trail = s.match(/\s*$/)[0], out = /\n/.test(t) ? c : t, ks = keys();
     for (var i = 0; i < ks.length; i++) {
       if (out.indexOf(ks[i]) >= 0) out = out.split(ks[i]).join(D[ks[i]]);

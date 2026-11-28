@@ -20,12 +20,15 @@ CODE = re.compile(r"^[\w.#\-\[\]=:>~*+]*[.#\[\]=:>~*+][\w.#\-\[\]=:>~*+]*$|^/|^h
 SKIP_NOTR = re.compile(r"<!--notr-->.*?<!--/notr-->", re.S)
 
 
+TEMPLATES = []  # plantillas JS completas (`texto ${valor} texto` → «texto {0} texto»), las rellena js_literals
+
+
 def js_literals(js):
     """Tokenizador mínimo de JS: devuelve los trozos estáticos de cada literal ('', "", `` con ${} anidados)."""
     out, i, n = [], 0, len(js)
 
     def template(i):  # i apunta tras la comilla invertida; devuelve (trozos, fin)
-        pieces, buf = [], ""
+        pieces, buf, key = [], "", ""
         while i < n:
             c = js[i]
             if c == "\\":
@@ -33,15 +36,18 @@ def js_literals(js):
                 i += 2
             elif c == "`":
                 pieces.append(buf)
+                TEMPLATES.append(key + buf)
                 return pieces, i + 1
             elif js.startswith("${", i):
                 pieces.append(buf)
+                key += buf + "{%d}" % (len(pieces) - 1)
                 buf = ""
                 i = code(i + 2, "}")
             else:
                 buf += c
                 i += 1
         pieces.append(buf)
+        TEMPLATES.append(key + buf)
         return pieces, i
 
     def code(i, end):  # recorre código hasta la llave de cierre, recogiendo literales anidados
@@ -125,6 +131,8 @@ def extract(text):
     for m in re.findall(r'\b(?:title|placeholder|aria-label|alt|data-tip)="([^"]+)"', text):
         if "${" not in m and _keep(htmllib.unescape(m)):
             found.add(_keep(htmllib.unescape(m)))
+    for m in re.findall(r">([a-záéíóúñ]{3,})<", js):  # palabras sueltas entre etiquetas dentro del JS («>todos<»)
+        found.add(m)
     for lit in js_literals(js):
         if re.search(r"^\s*[.#]?[\w-]+\s*\{|\{\s*[\w-]+\s*:", lit):
             continue  # CSS
@@ -166,6 +174,90 @@ def extract_py(text):
     return found
 
 
+# ---------------------------------------------------------------- frases con valores (plantillas)
+_W = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{3,}")
+_ES_END = re.compile(r"(ando|iendo|ción|ciones|ados|adas|idos|idas|ivos|ivas)$", re.I)
+
+
+def _vocab():
+    from dllm import i18n
+    d = i18n.dictionary("en")
+    en = {w.lower() for v in d.values() for w in _W.findall(v)}
+    es = {w.lower() for k in d for w in _W.findall(k)} - en
+    return en, es
+
+
+def spanish_words(text, vocab):
+    """Palabras que siguen en español (sirve para ver si una traducción quedó a medias)."""
+    en, es = vocab
+    return [w for w in _W.findall(text) if w.lower() in es or (w.lower() not in en and (
+        re.search(r"[áéíóúñ]", w, re.I) or _ES_END.search(w)))]
+
+
+def _renum(seg):
+    n = iter(range(100))
+    return re.sub(r"\{\d+\}", lambda m: "{%d}" % next(n), seg)
+
+
+def template_candidates():
+    """Frases con valores dentro (f-strings de Python y plantillas `${}` de las páginas)."""
+    import ast
+    out = set()
+    for f in sorted((ROOT / "dllm").glob("*.py")):
+        if str(f.relative_to(ROOT)).replace("\\", "/") in PY_SKIP:
+            continue
+        for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            if isinstance(n, ast.JoinedStr):
+                key, k = "", 0
+                for v in n.values:
+                    if isinstance(v, ast.Constant):
+                        key += str(v.value)
+                    else:
+                        key += "{%d}" % k
+                        k += 1
+                if k and "\n" not in key and not re.search(r"^\{\d+\}-\w+$", key.strip()):
+                    out.add(key.strip())  # (los nombres de reglas «{0}-agente» no son texto)
+    for p in PAGES:
+        TEMPLATES.clear()
+        text = SKIP_NOTR.sub("", (ROOT / p).read_text(encoding="utf-8"))
+        a, b = text.find("<script>"), text.rfind("</script>")
+        if a >= 0:
+            js = re.sub(r"/\*.*?\*/", "", text[a:b], flags=re.S)
+            js_literals(re.sub(r"(?m)^\s*//.*$", "", js))
+        for t in TEMPLATES:
+            for seg in re.split(r"<[^>]*>|<[^>]*$|^[^<]*>", t):
+                seg = " ".join(seg.replace("\\n", " ").split())
+                if "{" in seg and "\n" not in seg and not re.search(r"[=;]|\(\)|=>|^curl ", seg):
+                    out.add(_renum(seg))
+    return out
+
+
+def templates_missing():
+    """Plantillas que harían falta: frases con valores que el traductor dejaría a medio traducir."""
+    from dllm import i18n
+    have = i18n.templates("en")
+    i18n._TPL.clear()
+    vocab = _vocab()
+    miss = []
+    for key in sorted(template_candidates()):
+        if key in have:
+            continue
+        lit = re.sub(r"\{\d+\}", " ", key)
+        if not (PY_SP.search(lit) or spanish_words(lit, vocab)):
+            continue
+        sample = re.sub(r"\{(\d+)\}", lambda m: "Zq" + m.group(1), key)
+        saved, i18n._CACHE[("tpl", "en")] = i18n._CACHE.get(("tpl", "en")), {}
+        try:
+            i18n._TPL.clear()
+            out = i18n.tr(sample, "en")
+        finally:
+            i18n._CACHE[("tpl", "en")] = saved
+            i18n._TPL.clear()
+        if spanish_words(re.sub(r"Zq\d+", " ", out), vocab):
+            miss.append(key)
+    return miss
+
+
 def all_strings():
     out = set()
     for p in PAGES:
@@ -182,6 +274,12 @@ def missing():
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(ROOT))
+    if "--templates" in sys.argv:
+        t = templates_missing()
+        print(json.dumps({k: "" for k in t}, ensure_ascii=False, indent=1))
+        print(f"\n{len(t)} plantillas sin traducir (dllm/i18n/en.tpl.json)", file=sys.stderr)
+        sys.exit(0)
     m = missing()
     if "--json" in sys.argv:
         print(json.dumps({k: "" for k in m}, ensure_ascii=False, indent=1))

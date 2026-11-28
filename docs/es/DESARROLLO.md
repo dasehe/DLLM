@@ -99,6 +99,10 @@ servidor inserta en el marcador `<!--I18N-->` el diccionario `dllm/i18n/en.json`
 
 - **Cada texto visible nuevo necesita su entrada en `en.json`**: `python scripts/i18n_extract.py --json` lista los que faltan
   y `tests/test_i18n.py` falla si queda alguno.
+- **Frases con valores dentro** (f-strings como `f"nodo {n.name} de nuevo en línea"`, plantillas JS `${…}`) van como
+  plantillas completas en `dllm/i18n/en.tpl.json` (`"nodo {0} de nuevo en línea": "node {0} back online"`), así nunca
+  quedan a medio traducir; los valores también se traducen si son texto conocido. `python scripts/i18n_extract.py
+  --templates` lista las que quedarían a medias en español y `tests/test_i18n.py` falla si queda alguna.
 - Textos ambiguos: `data-en="Unload"` en el elemento fija la traducción (p. ej. «Descargar» = descargar / sacar de memoria).
 - Contenido del usuario (chat, código): `class="notr"`, no se traduce.
 - Python: los mensajes se escriben en español y `dllm/i18n` los traduce al salir (terminal: `install_terminal()` envuelve

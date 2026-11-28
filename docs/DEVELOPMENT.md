@@ -19,7 +19,7 @@ dllm/                 Python package (standard library only)
   pairing.py          pairing nodes without a code (DH + verification code)
   presence.py         open tabs and hidden console (`dllm open`, wizard)
   models.py telemetry.py devices.py limits.py   models, monitor, devices, limits
-  i18n/               en.json, en.re.json, runtime.js: English by default, Spanish (Spain) optional
+  i18n/               en.json, en.re.json, en.tpl.json, runtime.js: English by default, Spanish (Spain) optional
   ui.html  setup.html  uninstall.html   panel, web wizard and uninstaller
 packaging/            launchers and README of the distributable package
 scripts/              build_package.py, install.sh / install.ps1, i18n_extract.py, build-llamacpp.sh, systemd example
@@ -100,6 +100,10 @@ and `alert/confirm`. The user picks the language with the header selector (remem
 
 - **Every new visible text needs its entry in `en.json`**: `python scripts/i18n_extract.py --json` lists the missing ones
   and `tests/test_i18n.py` fails if any is left.
+- **Sentences with values inside** (f-strings such as `f"nodo {n.name} de nuevo en línea"`, JS templates `${…}`) go
+  as whole templates in `dllm/i18n/en.tpl.json` (`"nodo {0} de nuevo en línea": "node {0} back online"`), so they are
+  never half translated; the values are translated too when they are known text. `python scripts/i18n_extract.py
+  --templates` lists the ones that would be left half in Spanish and `tests/test_i18n.py` fails if any is left.
 - Ambiguous texts: `data-en="Unload"` on the element fixes the translation (e.g. "Descargar" = download / unload).
 - User content (chat, code): `class="notr"`, not translated.
 - Python: messages are written in Spanish and `dllm/i18n` translates them on output (terminal: `install_terminal()` wraps

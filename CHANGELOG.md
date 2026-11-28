@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.16.1] - 2026-11-28
+
+### Corregido
+- **Textos que salían a medias en español con la interfaz en inglés** (p. ej. «nodo vAI2 back online», «descarga queued»,
+  «reclamando…», «informativos», «todos» en los filtros de Registros): las frases con valores se traducen ahora como
+  plantillas completas (`dllm/i18n/en.tpl.json`) en el panel, la terminal y la API, y el test de idiomas detecta las que
+  quedarían a medio traducir.
+
 ## [0.16.0] - 2026-11-28
 
 ### Añadido

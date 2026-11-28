@@ -42,6 +42,40 @@ class I18n(unittest.TestCase):
             data = out.split("window.__I18N=", 1)[1].split(";window.__I18N_RE=", 1)[0]
             self.assertEqual(json.loads(data), i18n.dictionary("en"))
 
+    def test_frases_con_valores_completas(self):
+        falta = i18n_extract.templates_missing()
+        self.assertEqual(falta, [], "frases con valores que quedarían a medio traducir (añádelas a "
+                                    "dllm/i18n/en.tpl.json; scripts/i18n_extract.py --templates las lista):\n"
+                                    + "\n".join(falta[:40]))
+        for src, dst in i18n.templates("en").items():  # mismos marcadores en origen y traducción
+            self.assertEqual(sorted(re.findall(r"\{\d+\}", src)), sorted(re.findall(r"\{\d+\}", dst)), src)
+
+    def test_plantillas_python(self):
+        self.assertEqual(i18n.tr("nodo vAI2 de nuevo en línea", "en"), "node vAI2 back online")
+        self.assertEqual(i18n.tr("descarga en cola: ollama gemma4:31b + proyector multimodal", "en"),
+                         "download queued: ollama gemma4:31b + multimodal projector")
+        self.assertEqual(i18n.tr("0 errores · 2 avisos · 5 informativos", "en"), "0 errors · 2 warnings · 5 informational")
+        self.assertEqual(i18n.tr("vAI2: emparejamiento rechazada", "en"), "vAI2: pairing rejected")  # valor traducido
+        self.assertEqual(i18n.tr("nodo vAI2 de nuevo en línea", "es"), "nodo vAI2 de nuevo en línea")
+
+    @unittest.skipUnless(shutil.which("node"), "sin node")
+    def test_plantillas_runtime_js(self):
+        """El traductor del navegador aplica las mismas plantillas (se ejecuta con node y un DOM mínimo)."""
+        out = i18n.inject("<!--I18N-->")
+        js = re.findall(r"<script>(.*?)</script>", out, re.S)
+        stub = ("var location={search:''};var localStorage={getItem:function(){return 'en'},setItem:function(){}};"
+                "var document={readyState:'loading',documentElement:{},addEventListener:function(){},"
+                "getElementById:function(){return null}};var window=globalThis;"
+                "window.alert=window.confirm=window.prompt=function(){};")
+        test = ("console.log(JSON.stringify([L('nodo vAI2 de nuevo en línea'),"
+                "L('reclamando vAI2 (192.168.1.153): código de verificación 398 499'),"
+                "L('0 errores · 2 avisos · 5 informativos'),L('todos')]))")
+        r = subprocess.run(["node"], input=stub + "\n".join(js) + "\n" + test, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout), ["node vAI2 back online",
+                                                "claiming vAI2 (192.168.1.153): verification code 398 499",
+                                                "0 errors · 2 warnings · 5 informational", "all"])
+
     @unittest.skipUnless(shutil.which("node"), "sin node")
     def test_runtime_sintaxis(self):
         r = subprocess.run(["node", "--check", os.path.join(ROOT, "dllm", "i18n", "runtime.js")],

@@ -27,7 +27,9 @@ def inject(html):
     js = pkgutil.get_data("dllm", "i18n/runtime.js").decode("utf-8")
     data = json.dumps(dictionary("en"), ensure_ascii=False).replace("</", "<\\/")
     pats = json.dumps(patterns("en"), ensure_ascii=False).replace("</", "<\\/")
-    return html.replace("<!--I18N-->", f"<script>window.__I18N={data};window.__I18N_RE={pats};</script>"
+    tpls = json.dumps(templates("en"), ensure_ascii=False).replace("</", "<\\/")
+    return html.replace("<!--I18N-->", f"<script>window.__I18N={data};window.__I18N_RE={pats};"
+                                       f"window.__I18N_TPL={tpls};</script>"
                                        f"<script>{js}</script>", 1)
 
 
@@ -35,6 +37,43 @@ def patterns(lang="en"):
     """Expresiones regulares para textos con valores dentro (p. ej. «de 6.0 GiB»): [[patrón, sustitución], ...]."""
     raw = pkgutil.get_data("dllm", f"i18n/{lang}.re.json")
     return json.loads(raw.decode("utf-8")) if raw else []
+
+
+def templates(lang="en"):
+    """Mensajes con valores dentro como plantillas completas: {"nodo {0} de nuevo en línea": "node {0} back online"}.
+    Se prueban antes que los trozos sueltos, así una frase con valores nunca queda a medio traducir; los valores se
+    traducen también si son texto conocido."""
+    if ("tpl", lang) not in _CACHE:
+        raw = pkgutil.get_data("dllm", f"i18n/{lang}.tpl.json")
+        _CACHE[("tpl", lang)] = json.loads(raw.decode("utf-8")) if raw else {}
+    return _CACHE[("tpl", lang)]
+
+
+_TPL = []
+
+
+def _compiled_templates():
+    if not _TPL:
+        for src, dst in templates("en").items():
+            parts = re.split(r"\{(\d+)\}", src)
+            rx, order = "", []
+            for i, part in enumerate(parts):
+                if i % 2:
+                    order.append(int(part))
+                    rx += "(.+?)"
+                else:
+                    rx += re.escape(part)
+            _TPL.append((re.compile("^" + rx + "$", re.S), dst, order))
+    return _TPL
+
+
+def _fill(m, dst, order, depth):
+    vals = {n: m.group(i + 1) for i, n in enumerate(order)}
+    return re.sub(r"\{(\d+)\}", lambda x: _tr_value(vals.get(int(x.group(1)), x.group(0)), depth), dst)
+
+
+def _tr_value(v, depth):
+    return tr(v, "en", depth + 1) if depth < 2 and re.search(r"[a-záéíóúñ]{2}", v, re.I) else v
 
 
 def lang():
@@ -54,7 +93,7 @@ _KEYS = []
 _RES = []
 
 
-def tr(text, to=None):
+def tr(text, to=None, _depth=0):
     """Traduce un mensaje (español fuente) al inglés con el mismo algoritmo que el navegador: texto exacto, trozos conocidos
     dentro del texto (mensajes con valores) y expresiones. Con to='es' (o idioma es) lo devuelve tal cual."""
     if (to or lang()) != "en" or not isinstance(text, str) or not text.strip():
@@ -68,6 +107,10 @@ def tr(text, to=None):
         return text.replace(t, d[c])
     if not re.search(r"[a-záéíóúñ]{2}", t, re.I):
         return text
+    for rx, dst, order in _compiled_templates():
+        m = rx.match(t) or (rx.match(c) if c != t else None)
+        if m:
+            return text.replace(t, _fill(m, dst, order, _depth))
     if not _KEYS:
         _KEYS.extend(sorted((k for k in d if len(k) >= 5 and " " in k.strip()), key=len, reverse=True))
         _RES.extend((re.compile(p), r.replace("$1", r"\1").replace("$2", r"\2")) for p, r in patterns("en"))
