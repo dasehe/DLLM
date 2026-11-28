@@ -20,7 +20,7 @@ import time
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, auth, config, devices, hw, limits, pairing, telemetry
+from . import __version__, auth, config, devices, hw, limits, pairing, selfupdate, telemetry
 from .util import FastHTTPServer, log, pipe, tune
 
 MAX_BODY = 64 << 20
@@ -65,6 +65,8 @@ class Agent:
         self.build = hw.build_id(self.rpc_bin) if self.rpc_bin else None
         # actualización de llama.cpp ordenada por el orquestador (misma build en todo el clúster)
         self.auto_update = not getattr(a, "no_auto_update", False)
+        self.dllm_update = not getattr(a, "no_dllm_update", False)  # actualizar DLLM desde el orquestador
+        self.dllm_last = None   # resultado de la última actualización de DLLM
         self.llama_backend = getattr(a, "llama_backend", None)
         self.update = {"state": "inactiva"}
         self.devices, self.device, self.device_error = [], None, ""
@@ -128,6 +130,41 @@ class Agent:
                             self.device.update(free=d["free"], total=d["total"])
                 except RuntimeError:
                     pass
+
+    # ------------------------------------------------------------ actualización de DLLM
+    def update_dllm(self, data, sha256, version):
+        if not self.dllm_update:
+            raise PermissionError("este nodo no permite que el orquestador actualice DLLM (--no-dllm-update)")
+        if version == __version__:
+            return {"ok": True, "version": version, "unchanged": True}
+        try:
+            selfupdate.install(data, sha256, version, config.home(), __version__)
+        except selfupdate.UpdateError as e:
+            self.dllm_last = {"t": int(time.time()), "ok": False, "to": version, "error": str(e)}
+            raise ValueError(str(e))
+        self.dllm_last = {"t": int(time.time()), "ok": True, "from": __version__, "to": version}
+        log(f"DLLM {__version__} → {version}: paquete verificado y sustituido; se reinicia el agente")
+        self._kill_all_for_restart()
+        selfupdate.restart_soon(1.5, log)
+        return {"ok": True, "from": __version__, "version": version, "restarting": True}
+
+    def rollback_dllm(self):
+        if not self.dllm_update:
+            raise PermissionError("este nodo no permite que el orquestador actualice DLLM (--no-dllm-update)")
+        try:
+            selfupdate.rollback(config.home())
+        except selfupdate.UpdateError as e:
+            raise ValueError(str(e))
+        log("se vuelve a la versión anterior de DLLM; se reinicia el agente")
+        self._kill_all_for_restart()
+        selfupdate.restart_soon(1.5, log)
+        return {"ok": True, "restarting": True}
+
+    def _kill_all_for_restart(self):
+        with self.lock:
+            for r in self.rpcs.values():
+                r.want = False
+                self._kill_one(r)
 
     # ------------------------------------------------------------ actualización de llama.cpp
     def install_llama(self, tag):
@@ -420,7 +457,9 @@ class Agent:
                   "devices": self.devices, "device": self.device and self.device["name"],
                   "device_desc": self.device and self.device["desc"], "device_error": self.device_error,
                   "gpu_warning": self.gpu_warning,
-                  "auto_update": self.auto_update, "llama_backend": self.llama_backend, "update": self.update,
+                  "auto_update": self.auto_update, "dllm_update": self.dllm_update,
+                  "pyz": selfupdate.current_pyz() is not None, "dllm_backup": selfupdate.has_backup(),
+                  "dllm_last": self.dllm_last, "llama_backend": self.llama_backend, "update": self.update,
                   "telemetry": self.sampler.latest})
         return s
 
@@ -523,6 +562,21 @@ def make_handler(agent):
                         self._send(403, {"error": str(e)})
                     except ValueError as e:
                         self._send(400, {"error": str(e)})
+                elif p.path == "/dllm/update" and self.command == "POST":
+                    try:
+                        self._send(202, agent.update_dllm(body, self.headers.get("X-DLLM-Sha256"),
+                                                          self.headers.get("X-DLLM-Version")))
+                    except PermissionError as e:
+                        self._send(403, {"error": str(e)})
+                    except ValueError as e:
+                        self._send(400, {"error": str(e)})
+                elif p.path == "/dllm/rollback" and self.command == "POST":
+                    try:
+                        self._send(202, agent.rollback_dllm())
+                    except PermissionError as e:
+                        self._send(403, {"error": str(e)})
+                    except ValueError as e:
+                        self._send(400, {"error": str(e)})
                 elif p.path == "/llama/install" and self.command == "POST":
                     try:
                         self._send(202, agent.install_llama(json.loads(body or b"{}").get("tag")))
@@ -556,6 +610,7 @@ def run(a):
     if not a.secret and not getattr(a, "pairing", False):
         sys.exit("falta el secreto del clúster: --secret, DLLM_SECRET o `dllm init` en este equipo "
                  "(o --pairing para que lo reclame un orquestador)")
+    selfupdate.startup_guard(config.home(), log)  # ¿viene de una actualización de DLLM? (vuelta atrás si no arranca)
     ag = Agent(a)
     snap = ag.probe.snapshot(ag.limits)
     log(f"agente '{ag.name}' · backend={snap['backend']} · aporta {snap['cap_bytes'] / hw.GiB:.1f} GiB "

@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import audit, backup, backup_schedule, templates, tls, webhooks, discovery, engine, eventlog, i18n, users
+from . import audit, backup, backup_schedule, selfupdate, templates, tls, webhooks, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -85,14 +85,19 @@ def _headers(secret, method, path, data):
     return {"X-DLLM-Time": ts, "X-DLLM-Sig": sig, "X-DLLM-Body": bh, "Content-Type": "application/json"}
 
 
-def call_agent(secret, node, method, path, body=None, timeout=5):
-    data = json.dumps(body).encode() if body is not None else b""
+def call_agent(secret, node, method, path, body=None, timeout=5, raw=None, extra_headers=None):
+    """Petición firmada a un agente. `raw`: cuerpo binario (p. ej. un dllm.pyz) en lugar de JSON."""
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else b"")
     c = http.client.HTTPConnection(node.host, node.http_port, timeout=timeout)
     try:
-        c.request(method, path, body=data or None, headers=_headers(secret, method, path, data))
+        h = _headers(secret, method, path, data)
+        if raw is not None:
+            h["Content-Type"] = "application/octet-stream"
+        h.update(extra_headers or {})
+        c.request(method, path, body=data or None, headers=h)
         r = c.getresponse()
         payload = r.read()
-        if r.status != 200:
+        if not 200 <= r.status < 300:  # 202 = aceptado (instalaciones y actualizaciones en segundo plano)
             try:
                 msg = json.loads(payload).get("error") or ""
             except ValueError:
@@ -407,6 +412,13 @@ class Cluster:
                 cur["direct_local"] = False
             else:
                 cur.pop("direct_local", None)
+        if "dllm_update" in req:  # permitir actualizar DLLM en este nodo desde el panel (por defecto sí)
+            if req["dllm_update"] not in (True, False, None):
+                raise ValueError("'dllm_update' debe ser true o false")
+            if req["dllm_update"] is False:
+                cur["dllm_update"] = False
+            else:
+                cur.pop("dllm_update", None)
         if "use_ram" in req:  # nodo con GPU: usar también su RAM cuando el modelo no cabe en la VRAM (por defecto sí)
             if req["use_ram"] not in (True, False, None):
                 raise ValueError("'use_ram' debe ser true o false")
@@ -1835,6 +1847,57 @@ class Cluster:
                 "note": ("sigue vivo y se anuncia: se ignora 10 min; para quitarlo del todo, desinstálalo en ese equipo"
                          if up and not n.static else "")}
 
+    # ---------------------------------------------------------- actualizar DLLM en los nodos
+    def update_dllm_nodes(self, node=None):
+        """Envía el dllm.pyz de este orquestador a un nodo (o a todos con otra versión, node="all")."""
+        pyz = selfupdate.current_pyz()
+        if pyz is None:
+            raise ValueError("este orquestador se ejecuta desde el código fuente: solo una instalación con dllm.pyz "
+                             "puede actualizar los nodos")
+        data = pyz.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        if node == "all":
+            targets = [n for n in self.reg.all() if self.reg.is_up(n) and (n.info or {}).get("version")
+                       and n.info["version"] != __version__]
+        else:
+            n = self.reg.get(node or "")
+            if not n:
+                raise ValueError("nodo desconocido")
+            targets = [n]
+        out = []
+        for n in targets:
+            i = n.info or {}
+            if self.node_settings(n.name).get("dllm_update") is False:
+                out.append({"node": n.name, "ok": False, "error": "desactivado en el panel para este nodo"})
+                continue
+            if i.get("dllm_update") is False:
+                out.append({"node": n.name, "ok": False, "error": "el nodo no lo permite (--no-dllm-update)"})
+                continue
+            if not i.get("pyz"):
+                out.append({"node": n.name, "ok": False, "error": "el nodo ejecuta DLLM desde el código fuente"})
+                continue
+            try:
+                r = call_agent(self.reg.secret, n, "POST", "/dllm/update", raw=data, timeout=120,
+                               extra_headers={"X-DLLM-Sha256": sha, "X-DLLM-Version": __version__})
+                self.event(f"DLLM de {n.name}: {i.get('version') or '?'} → {__version__} (se reinicia el agente)",
+                           node=n.name, kind="node")
+                out.append({"node": n.name, "ok": True, **r})
+            except (AgentError, OSError) as e:
+                self.event(f"DLLM de {n.name}: no se pudo actualizar ({e})", level="warn", node=n.name, kind="node")
+                out.append({"node": n.name, "ok": False, "error": str(e)})
+        return {"version": __version__, "sha256": sha, "results": out}
+
+    def rollback_dllm_node(self, node):
+        n = self.reg.get(node or "")
+        if not n:
+            raise ValueError("nodo desconocido")
+        try:
+            r = call_agent(self.reg.secret, n, "POST", "/dllm/rollback", {}, timeout=30)
+        except (AgentError, OSError) as e:
+            raise ValueError(f"{n.name}: {e}")
+        self.event(f"DLLM de {n.name}: vuelta a la versión anterior (se reinicia el agente)", node=n.name, kind="node")
+        return {"node": n.name, **r}
+
     def node_models(self, n):
         """Modelos que tienen reparto en el nodo."""
         out = []
@@ -1859,6 +1922,8 @@ class Cluster:
                           "device": i.get("device"), "device_desc": i.get("device_desc"), "gpu_warning": i.get("gpu_warning"),
                           "devices": i.get("devices"), "update": i.get("update"),
                           "auto_update": i.get("auto_update"), "settings": self.node_settings(n.name),
+                          "version": i.get("version"), "dllm_update": i.get("dllm_update"), "pyz": i.get("pyz"),
+                          "dllm_backup": i.get("dllm_backup"), "dllm_last": i.get("dllm_last"),
                           "telemetry": i.get("telemetry"),
                           "rpc_running": i.get("rpc_running"), "models": self.node_models(n), "static": n.static,
                           "used": any(n.id in c.used for c in list(self.slots.values())),
@@ -2446,6 +2511,10 @@ def make_handler(cfg, cl):
                     if self.command == "POST":
                         return self._send(200, cl.start_bench(req.get("nodes") or None))
                     return self._send(200, cl.jobs["bench"])
+                if path == "/api/nodes/update-dllm" and self.command == "POST":
+                    return self._send(200, cl.update_dllm_nodes(req.get("node")))
+                if path == "/api/nodes/rollback-dllm" and self.command == "POST":
+                    return self._send(200, cl.rollback_dllm_node(req.get("node")))
                 if path == "/api/nodes/forget" and self.command == "POST":
                     return self._send(200, cl.forget_node(req.get("node"), req.get("block", True)))
                 if path == "/api/node/limits" and self.command == "POST":

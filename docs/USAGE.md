@@ -156,6 +156,16 @@ remembered by the browser.
 | **Use anyway** | A node below the minimum (800 Mbps, `--min-mbps`) is not used in splits. This mode allows it **after confirming**; the plan warns that it is forced mode. "Stop forcing" reverts it. For testing |
 | **Delete** | Removes the node from the list (does not uninstall it). Not possible if a model uses it. If it is still alive and announcing, it is ignored for 10 min. Nodes set with `--node` reappear when the orchestrator restarts |
 
+### Updating DLLM on the nodes
+
+When a node has another DLLM version than the orchestrator, its card says so with an **Update DLLM** button, and
+*Nodes* shows **⬆ Update DLLM on the nodes** for all of them at once. The orchestrator sends its own `dllm.pyz`; the
+node verifies it (sha256 and a test run), keeps the previous one and restarts its agent (models using it recover on
+their own). If the new version does not keep running, the node goes back to the previous one by itself; in advanced
+mode, **↩ Previous DLLM** does it by hand. Only for nodes installed with the package (`dllm.pyz`). API:
+`POST /api/nodes/update-dllm {"node": ID|"all"}` and `POST /api/nodes/rollback-dllm {"node": ID}` (permission
+`nodes`). Details in [ARCHITECTURE](ARCHITECTURE.md).
+
 ### Configuring each node
 
 ![Configuring a node (advanced mode, simulated data)](img/nodos.png)
@@ -169,6 +179,7 @@ remembered by the browser.
 | Priority (0-10) | Orchestrator | Nodes with higher priority are filled first (their GPU and, if needed, their RAM); the rest goes to the others. 0 = normal (the planner picks the most efficient) |
 | Use its RAM too | Orchestrator | GPU nodes: what does not fit in its VRAM goes to its RAM (default: yes) |
 | Maximum RAM for models | Orchestrator | GPU nodes: cap on the RAM used together with its GPU (empty = free RAM minus the safety margin) |
+| Allow updating DLLM | Orchestrator | Whether *Update DLLM* can send this orchestrator's version to the node (default: yes). The node can also forbid it with `--no-dllm-update` |
 | Fixed layers | Orchestrator | How many model layers this node holds; the rest is split automatically. Useful for manual tuning |
 | Memory bandwidth | Orchestrator | Ranks nodes by speed (faster ones fill first). E.g.: RTX 3060 = 360, RX 7600 XT = 288 GB/s |
 | Device | Node | Which GPU it lends (or CPU). Automatic = the one with most memory |

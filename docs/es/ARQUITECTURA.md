@@ -77,6 +77,16 @@ oficial para su sistema y backend (el que se instaló, `--llama-backend`), verif
 vuelve a detectar dispositivos y lo guarda en su configuración. Como mucho se intenta una vez cada 15 min por nodo. Se
 desactiva con `--no-auto-update` en el nodo o `--no-auto-sync` en el orquestador.
 
+**Actualizar DLLM en los nodos (0.19):** desde *Nodos* (*Actualizar DLLM* en un nodo, o *⬆ Actualizar DLLM en los nodos*
+para todos los que tienen otra versión) el orquestador envía **su propio `dllm.pyz`** al agente (`POST /dllm/update`,
+firmado con HMAC sobre el sha256 del cuerpo, y además el sha256 y la versión en cabeceras). El agente comprueba el
+sha256, ejecuta `python dllm.pyz.new --version` y solo si dice la versión esperada guarda el anterior como
+`dllm.pyz.bak`, lo sustituye, escribe la marca `dllm_update.json` y se reinicia (`execv` con los mismos argumentos). Si
+la versión nueva se reinicia más de 3 veces sin aguantar 90 s en marcha, vuelve sola a la anterior; *↩ DLLM anterior*
+(modo avanzado) lo hace a mano (`POST /dllm/rollback`). Solo en nodos instalados con `dllm.pyz` (no desde el código
+fuente). Se desactiva en el nodo (`--no-dllm-update`, `"dllm_update": false` en su `config.json`) o desde el panel
+(*Configurar → Permitir actualizar DLLM*). Nunca es automático: alguien pulsa el botón.
+
 **Dispositivos en el orquestador:** antes de lanzar `llama-server` se listan sus dispositivos sin y con `--rpc …`. La
 diferencia son los remotos, en orden, y se lanza con `--device <solo esos>` y un `-ts` alineado. Así la GPU local del
 orquestador no entra en el reparto (rol *Ambos* en un PC con GPU), y no se depende de cómo nombre llama.cpp a los

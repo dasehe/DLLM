@@ -108,6 +108,8 @@ def agent_argv(cfg):
         argv += ["--device", a["device"]]
     if a.get("auto_update") is False:
         argv += ["--no-auto-update"]
+    if a.get("dllm_update") is False:
+        argv += ["--no-dllm-update"]
     if a.get("share") is not None:
         argv += ["--share", str(a["share"])]
     if a.get("threads") is not None:

@@ -494,6 +494,8 @@ def build_parser():
     s.add_argument("--install-dir", help="carpeta de DLLM (llama.cpp se actualiza en <carpeta>/llama.cpp)")
     s.add_argument("--no-auto-update", action="store_true",
                    help="no permitir que el orquestador actualice llama.cpp en este nodo")
+    s.add_argument("--no-dllm-update", action="store_true",
+                   help="no permitir que el orquestador actualice DLLM en este nodo")
     s.add_argument("--limits-mode", choices=["auto", "manual"], default="auto",
                    help="auto: el orquestador puede ajustar lo que aporta este nodo; manual: solo aquí")
     s.add_argument("--share", type=float, help="porcentaje del equipo a compartir (RAM/VRAM e hilos), 1-100")

@@ -82,6 +82,16 @@ package for its system and backend (the installed one, `--llama-backend`), verif
 re-detects devices and saves it in its configuration. At most one attempt every 15 min per node. Disabled with
 `--no-auto-update` on the node or `--no-auto-sync` on the orchestrator.
 
+**Updating DLLM on the nodes (0.19):** from *Nodes* (*Update DLLM* on a node, or *⬆ Update DLLM on the nodes* for all
+with another version) the orchestrator sends **its own `dllm.pyz`** to the agent (`POST /dllm/update`, signed with
+HMAC over the body's sha256, plus the sha256 and the version in headers). The agent checks the sha256, runs
+`python dllm.pyz.new --version` and only if it reports the expected version does it keep the previous one as
+`dllm.pyz.bak`, replace it, write the mark `dllm_update.json` and restart itself (`execv` with the same arguments). If
+the new version restarts more than 3 times without running 90 s, it goes back to the previous one on its own; *↩
+Previous DLLM* (advanced mode) does it by hand (`POST /dllm/rollback`). Only for nodes installed with `dllm.pyz` (not
+from source). It can be disabled on the node (`--no-dllm-update`, `"dllm_update": false` in its `config.json`) or from
+the panel (*Configure → Allow updating DLLM*). It is never automatic: someone presses the button.
+
 **Devices on the orchestrator:** before launching `llama-server` its devices are listed without and with `--rpc …`. The
 difference is the remote ones, in order, and it is launched with `--device <only those>` and an aligned `-ts`. So the
 orchestrator's local GPU does not enter the RPC split (*Both* role on a PC with a GPU), and it does not depend on how

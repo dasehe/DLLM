@@ -152,6 +152,16 @@ Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, to
 | **Usar igualmente** | Un nodo por debajo del mínimo (800 Mbps, `--min-mbps`) no entra en los repartos. Este modo lo permite **tras confirmar**; el plan avisa de que es modo forzado. «Dejar de forzar» lo revierte. Para pruebas |
 | **Eliminar** | Quita el nodo de la lista (no lo desinstala). No se puede si un modelo lo usa. Si sigue vivo y anunciándose, se ignora 10 min. Los nodos fijados con `--node` reaparecen al reiniciar el orquestador |
 
+### Actualizar DLLM en los nodos
+
+Cuando un nodo tiene otra versión de DLLM que el orquestador, su tarjeta lo dice con un botón **Actualizar DLLM**, y
+*Nodos* muestra **⬆ Actualizar DLLM en los nodos** para todos a la vez. El orquestador envía su propio `dllm.pyz`; el nodo
+lo verifica (sha256 y una ejecución de prueba), guarda el anterior y reinicia su agente (los modelos que lo usen se
+recuperan solos). Si la versión nueva no aguanta en marcha, el nodo vuelve solo a la anterior; en modo avanzado,
+**↩ DLLM anterior** lo hace a mano. Solo en nodos instalados con el paquete (`dllm.pyz`). API:
+`POST /api/nodes/update-dllm {"node": ID|"all"}` y `POST /api/nodes/rollback-dllm {"node": ID}` (permiso `nodes`).
+Detalles en [ARQUITECTURA](ARQUITECTURA.md).
+
 ### Configurar cada nodo
 
 ![Configurar un nodo (modo avanzado, datos simulados)](../img/nodos.png)
@@ -164,6 +174,7 @@ Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, to
 | Prioridad (0-10) | Orquestador | Los nodos con más prioridad se llenan antes (su GPU y, si hace falta, su RAM); el resto pasa a los demás. 0 = normal (el reparto elige lo más eficiente) |
 | Usar también su RAM | Orquestador | Nodos con GPU: lo que no cabe en su VRAM va a su RAM (por defecto sí) |
 | RAM máxima para modelos | Orquestador | Nodos con GPU: tope de RAM que se usa junto a su GPU (vacío = la libre menos el margen de seguridad) |
+| Permitir actualizar DLLM | Orquestador | Si *Actualizar DLLM* puede enviar la versión de este orquestador al nodo (por defecto sí). El nodo también puede prohibirlo con `--no-dllm-update` |
 | Capas fijas | Orquestador | Cuántas capas del modelo lleva este nodo; el resto se reparte solo. Útil para afinar a mano |
 | Ancho de banda de memoria | Orquestador | Ordena los nodos por velocidad (los más rápidos se llenan primero). Ej.: RTX 3060 = 360, RX 7600 XT = 288 GB/s |
 | Dispositivo | Nodo | Qué GPU presta (o CPU). Automático = la de más memoria |

@@ -144,6 +144,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
       <button class="sec" onclick="scanNet()" id="scanbtn">🔎 Buscar en la red</button>
       <button class="sec" onclick="joinBox()">🔑 Código de unión</button>
       <button class="sec" onclick="benchNet()" id="benchbtn" title="Mide cada nodo por separado y después todos a la vez">📶 Medir la red</button>
+      <button class="sec hide" onclick="updDllm('all')" id="upd_all" title="Envía la versión de DLLM de este orquestador a los nodos que tienen otra (se reinicia su agente)">⬆ Actualizar DLLM en los nodos</button>
       <span class="mut" style="font-size:12px">Si un equipo no aparece solo, añádelo por su IP o búscalo. Mide la red de nuevo si cambias cables o conmutadores.</span></div>
     <div id="addbox" class="hide drawer"><div class="tool"><input id="add_host" placeholder="IP o nombre, p. ej. 192.168.1.25" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')addNode()">
       <input id="add_port" type="number" value="8765" class="adv" style="width:90px" title="Puerto del agente (por defecto 8765)"><button onclick="addNode()">Añadir</button></div>
@@ -169,6 +170,7 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
           <label class="switch"><input type="checkbox" id="ne_enabled"> Usar este nodo en los repartos</label>
           <label class="switch" title="Solo aplica si este nodo es el propio equipo del orquestador"><input type="checkbox" id="ne_direct"> Permitir ejecución directa en su GPU (sin RPC) cuando un modelo quepa</label>
           <label>Prioridad (0-10)<input id="ne_prio" type="number" min="0" max="10" step="1" placeholder="0"><span class="help">Los nodos con más prioridad se llenan antes (su GPU y, si hace falta, su RAM); lo que no quepa pasa a los demás. 0 = normal: el reparto elige lo más eficiente.</span></label>
+          <label class="switch adv"><input type="checkbox" id="ne_dllmupd"> Permitir actualizar DLLM en este nodo desde el orquestador</label>
           <label class="switch" title="Solo nodos con GPU: lo que no cabe en su VRAM va a su RAM (mismo equipo, sin otro salto de red)"><input type="checkbox" id="ne_useram"> Usar también su RAM cuando el modelo no quepa en su GPU</label>
           <label class="adv">RAM máxima para modelos (GiB)<input id="ne_ramgb" type="number" min="0.5" step="0.5" placeholder="automático"><span class="help">Solo nodos con GPU: tope de RAM que se usa junto a su GPU. Vacío = la libre menos el margen de seguridad.</span></label>
           <label class="adv">Capas fijas<input id="ne_layers" type="number" min="1" step="1" placeholder="automático"><span class="help">Cuántas capas del modelo lleva este nodo. Vacío = las decide el reparto.</span></label>
@@ -536,8 +538,11 @@ function nodeCard(n){const st=n.settings||{},off=st.enabled===false,slow=isSlow(
   if(slow&&!forced)h+=`<div class="slowbox">⚠️ Red lenta (${n.net.mbps} Mbps, el mínimo es ${S.min_mbps}). No se usa en los repartos. <button class="sm" onclick="allowSlow('${esc(n.id)}',true)">Usar igualmente (pruebas)</button></div>`;
   if(slow&&forced)h+=`<div class="slowbox forced">🧪 Modo forzado: se usa aunque su red sea lenta (${n.net.mbps} Mbps). <button class="sec sm" onclick="allowSlow('${esc(n.id)}',false)">Dejar de forzar</button></div>`;
   if(n.error&&!n.up)h+=`<div class="err" style="font-size:12px">${esc(n.error)}</div>`;
-  h+=`<div class="adv mut" style="font-size:12px;margin-top:6px">${devcell(n)}<br>${contrib(n)}<br>${repcell(n)} · llama.cpp ${n.rpc_bin?esc(n.rpc_build||'?'):'sin rpc-server'}${n.static?' · añadido a mano':''}</div>`;
-  h+=`<div class="row acts"><button class="sec sm" onclick="editNode('${esc(n.id)}')">⚙️ Configurar</button><button class="sec sm" onclick="benchNet('${esc(n.id)}')" ${n.up?'':'disabled'}>📶 Medir red</button><button class="sec sm" style="margin-left:auto" onclick="forgetNode('${esc(n.id)}')" title="Quitar de la lista">🗑️ Eliminar</button></div></div>`;
+  if(n.up&&n.version&&n.version!==S.version){const why=!n.pyz?'ejecuta DLLM desde el código fuente':n.dllm_update===false?'el nodo no lo permite (--no-dllm-update)':st.dllm_update===false?'desactivado en Configurar':'';
+    h+=`<div class="slowbox">⬆ Este nodo tiene DLLM <b class="notr">${esc(n.version)}</b> y el orquestador <b class="notr">${esc(S.version)}</b>. ${why?'<span class="mut">No se puede actualizar desde aquí: '+why+'.</span>':`<button class="sm" onclick="updDllm('${esc(n.id)}')">Actualizar DLLM</button>`}</div>`}
+  const dl=n.dllm_last;if(dl&&dl.ok===false)h+=`<div class="err" style="font-size:12px">Última actualización de DLLM fallida: ${esc(dl.error||'')}</div>`;
+  h+=`<div class="adv mut" style="font-size:12px;margin-top:6px">${devcell(n)}<br>${contrib(n)}<br>${repcell(n)} · DLLM <span class="notr">${esc(n.version||'?')}</span> · llama.cpp ${n.rpc_bin?esc(n.rpc_build||'?'):'sin rpc-server'}${n.static?' · añadido a mano':''}</div>`;
+  h+=`<div class="row acts"><button class="sec sm" onclick="editNode('${esc(n.id)}')">⚙️ Configurar</button><button class="sec sm" onclick="benchNet('${esc(n.id)}')" ${n.up?'':'disabled'}>📶 Medir red</button>${n.up&&n.dllm_backup?`<button class="sec sm adv" onclick="rollDllm('${esc(n.id)}')" title="Vuelve a la versión de DLLM que tenía antes de la última actualización">↩ DLLM anterior</button>`:''}<button class="sec sm" style="margin-left:auto" onclick="forgetNode('${esc(n.id)}')" title="Quitar de la lista">🗑️ Eliminar</button></div></div>`;
   return h}
 function renderJobs(){const j=S.jobs||{},bn=j.bench||{},sc=j.scan||{};
   const bb=$('benchbox');
@@ -565,6 +570,7 @@ function scanRows(sc){return '<table><tbody>'+(sc.found||[]).map(f=>{const hp=`'
   return `<tr><td>${esc(f.host)}:${f.port}</td><td>${esc(f.name||'')}</td><td>${lab}</td><td style="text-align:right">${act}</td></tr>`}).join('')+'</tbody></table>'}
 function renderNodes(){const s=S;if(!s)return;
   $('nodes').innerHTML=s.nodes.map(nodeCard).join('');
+  $('upd_all').classList.toggle('hide',!s.nodes.some(n=>n.up&&n.version&&n.version!==s.version&&n.pyz));
   renderJobs();
   $('nonodes').style.display=s.nodes.length?'none':'block';
   const cl={};(s.claims||[]).forEach(c=>cl[c.host]=c);
@@ -595,14 +601,18 @@ function editNode(id){if(!S)return;const n=S.nodes.find(x=>x.id===id);if(!n)retu
   $('ne_title').textContent='Configurar '+n.name;
   $('ne_hw').textContent=`${n.cores??'?'} hilos · ${gib(n.ram_total)} RAM${n.gpu?' · '+n.gpu.name+' '+gib(n.gpu.total):''} · recomendado: ${gib(n.recommended&&n.recommended.mem_bytes)} y ${n.recommended?n.recommended.threads:'?'} hilos · máximo: ${gib(n.ceiling)}`;
   $('ne_enabled').checked=s.enabled!==false;$('ne_direct').checked=s.direct_local!==false;$('ne_layers').value=s.layers??'';$('ne_bw').value=s.bw_gbps??'';
-  $('ne_prio').value=s.priority??'';$('ne_useram').checked=s.use_ram!==false;$('ne_ramgb').value=s.ram_gb??'';
+  $('ne_prio').value=s.priority??'';$('ne_useram').checked=s.use_ram!==false;$('ne_dllmupd').checked=s.dllm_update!==false;$('ne_ramgb').value=s.ram_gb??'';
   const man=n.limits_mode==='manual';$('ne_manual').classList.toggle('hide',!man);$('ne_auto').classList.toggle('hide',man);$('ne_autob').classList.toggle('hide',man);
   const devs=(n.devices||[]);$('ne_dev').innerHTML='<option value="">Automático (el de más memoria)</option>'+devs.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} · ${esc(d.desc)} (${gib(d.total)})</option>`).join('')+(devs.some(d=>/^cpu/i.test(d.name))?'':'<option value="CPU">CPU (no prestar GPU)</option>');
   $('ne_dev').value=n.backend==='cpu'&&n.device==null&&devs.length?'CPU':'';if(n.device&&devs.some(d=>d.name===n.device))$('ne_dev').value=n.device;
   $('ne_share').value=l.share||50;$('ne_sharev').textContent=l.share||50;$('ne_mem').value=l.mem_gb??'';$('ne_thr').value=l.threads??'';
   $('ne_msg1').textContent=$('ne_msg2').textContent='';$('nedit').classList.remove('hide');$('nedit').scrollIntoView({behavior:'smooth',block:'nearest'})}
+async function updDllm(id){if(!confirm(id==='all'?'¿Enviar esta versión de DLLM a todos los nodos con otra versión? Su agente se reinicia (los modelos que usen esos nodos se recuperan solos).':'¿Actualizar DLLM en este nodo? Su agente se reinicia (si hay modelos usándolo, se recuperan solos).'))return;
+  try{const r=await api('POST','/api/nodes/update-dllm',{node:id});const bad=r.results.filter(x=>!x.ok);
+    alert(r.results.length?(r.results.filter(x=>x.ok).map(x=>'✅ '+x.node).concat(bad.map(x=>'❌ '+x.node+': '+x.error)).join('\n')):'No hay nodos con otra versión.');refresh()}catch(e){alert(e.message)}}
+async function rollDllm(id){if(!confirm('¿Volver a la versión anterior de DLLM en este nodo? Su agente se reinicia.'))return;try{await api('POST','/api/nodes/rollback-dllm',{node:id});refresh()}catch(e){alert(e.message)}}
 function closeNode(){editing=null;$('nedit').classList.add('hide')}
-async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,direct_local:true,layers:null,bw_gbps:null,priority:null,use_ram:true,ram_gb:null}:{node:editing,enabled:$('ne_enabled').checked,direct_local:$('ne_direct').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null,priority:$('ne_prio').value===''?null:+$('ne_prio').value,use_ram:$('ne_useram').checked,ram_gb:$('ne_ramgb').value||null};
+async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,direct_local:true,layers:null,bw_gbps:null,priority:null,use_ram:true,ram_gb:null,dllm_update:true}:{node:editing,enabled:$('ne_enabled').checked,direct_local:$('ne_direct').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null,priority:$('ne_prio').value===''?null:+$('ne_prio').value,use_ram:$('ne_useram').checked,ram_gb:$('ne_ramgb').value||null,dllm_update:$('ne_dllmupd').checked};
   try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_direct').checked=true;$('ne_layers').value='';$('ne_bw').value='';$('ne_prio').value='';$('ne_useram').checked=true;$('ne_ramgb').value=''}refresh()}
   catch(e){$('ne_msg1').className='err';$('ne_msg1').textContent=e.message}}
 async function saveLimits(reset){if(!editing)return;const n=S.nodes.find(x=>x.id===editing)||{};

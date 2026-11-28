@@ -4,6 +4,19 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.19.0] - 2026-11-28
+
+### Añadido
+- **Actualizar DLLM en los nodos desde el orquestador** (Nodos → *Actualizar DLLM* o *⬆ Actualizar DLLM en los nodos*):
+  el orquestador envía su `dllm.pyz` firmado (HMAC + sha256); el nodo lo prueba antes de sustituir, guarda
+  `dllm.pyz.bak`, se reinicia y vuelve solo a la anterior si la nueva no aguanta en marcha; *↩ DLLM anterior* a mano.
+  Desactivable en el nodo (`--no-dllm-update`) o por nodo en el panel. La versión de DLLM de cada nodo se ve en su
+  tarjeta.
+
+### Corregido
+- La orden de actualizar llama.cpp a un nodo se registraba como fallida («HTTP 202») aunque el nodo la aceptaba: las
+  respuestas 2xx del agente se tratan como correctas.
+
 ## [0.18.0] - 2026-11-28
 
 ### Añadido
