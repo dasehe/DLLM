@@ -32,7 +32,8 @@ MAGIC_ZIP = b"PK\x03\x04"    # sin cifrar (zip)
 ITERATIONS = 600_000
 MAX_BACKUP = 16 << 20         # tamaño máximo del fichero que se acepta
 MAX_MEMBER = 12 << 20         # y de cada fichero descomprimido (anti zip-bomb)
-CORE = ("config.json", "cluster.json", "models.json", "secrets.json", "nodes.json", "nodes_added.json", "users.json")
+CORE = ("config.json", "cluster.json", "models.json", "secrets.json", "nodes.json", "nodes_added.json", "users.json",
+        "webhooks.json")
 OPTIONAL = ("events.jsonl",)
 ALLOWED = CORE + OPTIONAL
 EXT = ".dllmbak"

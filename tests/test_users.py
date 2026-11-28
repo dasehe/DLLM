@@ -270,6 +270,29 @@ class LoginE2E(unittest.TestCase):
         st, j, _ = self.req("POST", "/api/users/security", {"security": {"max_fails": 7}}, bearer=tok)
         self.assertEqual((st, j["security"]["max_fails"]), (200, 7))
 
+    def test_6_webhooks(self):
+        from test_webhooks import Receiver
+        rx = Receiver()
+        try:
+            tok = Path(self.home, "local.token").read_text().strip()
+            st, j, _ = self.req("POST", "/api/webhooks/set", {"name": "alertas", "url": rx.url + "/h",
+                                                               "kinds": ["security"]}, bearer=tok)
+            self.assertEqual(st, 200, j)
+            self.assertTrue(j["secret"])
+            st, r, _ = self.req("POST", "/api/webhooks/test", {"id": j["id"]}, bearer=tok)
+            self.assertEqual((st, r["ok"]), (200, True))
+            self.login("intruso", "mal")  # evento de seguridad (aviso) → webhook
+            got = rx.wait(2)
+            ev = json.loads(got[-1][2])["event"]
+            self.assertEqual((ev["kind"], ev["level"]), ("security", "warn"))
+            self.assertIn("intruso", ev["msg"])
+            st, v, _ = self.req("GET", "/api/webhooks", bearer=tok)
+            self.assertNotIn(j["secret"], json.dumps(v))
+            self.assertNotIn(j["secret"], Path(self.home, "audit.jsonl").read_text(encoding="utf-8"))
+            self.assertEqual(self.req("POST", "/api/webhooks/set", {"url": "file:///etc/passwd"}, bearer=tok)[0], 400)
+        finally:
+            rx.close()
+
 
 if __name__ == "__main__":
     unittest.main()

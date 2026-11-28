@@ -402,6 +402,32 @@ identifiers and stay as they are.
   Useful triggers: the `READY` item at 0 for 5 min, a `dllm_node_up` at 0, or `change()` of `dllm_recoveries_total`
   greater than 0.
 
+## Webhook alerts
+
+*System* → **Alerts (webhooks)** sends the events you choose by HTTP `POST` to other applications (Slack, Mattermost,
+Discord, n8n, Home Assistant, your own service). Each webhook has a URL (`http://` or `https://`, no user/password in
+it), a **format** (`generic`: JSON `{"source","version","origin","event":{t,level,kind,msg,node,slot,detail}}`;
+`slack`: `{"text"}`, also Mattermost/Rocket.Chat; `discord`: `{"content"}`), a **minimum level** (all, warnings and
+errors — default —, only errors) and optional **types** (`load, unload, node, net, security, backup, request, route,
+tools, download`; empty = all). **Test** sends a test event and shows the HTTP result; *Pause*, *New secret* and delete.
+
+Every delivery is signed so the receiver can check it comes from this orchestrator:
+
+```
+X-DLLM-Event: node
+X-DLLM-Timestamp: 1764320000
+X-DLLM-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>
+```
+
+Check it in the receiver (Python): `hmac.compare_digest(sig, "sha256=" + hmac.new(secret, f"{ts}.".encode() + body,
+hashlib.sha256).hexdigest())` and reject old timestamps (e.g. > 5 min). The secret is shown **once** when the webhook is
+created (or regenerated) and is stored in `~/.dllm/webhooks.json` (permissions 600, included in backups). Deliveries run
+in the background (5 s timeout, 2 retries on network errors, 5xx or 429; no retry on other 4xx), **redirects are not
+followed**, the same event repeated within 5 s is sent once and each webhook sends at most 30 events per minute (the rest
+are counted as *dropped*). Messages follow the server language. API: `GET /api/webhooks`, `POST /api/webhooks/set`
+(`{id?, name, url, format, min_level, kinds, enabled, regenerate}`), `/api/webhooks/delete`, `/api/webhooks/test`
+(permission `system`).
+
 ## Automatic recovery
 
 If a node **in use** stops responding (10 s) or `llama-server` exits, the orchestrator replans with the remaining nodes
@@ -449,7 +475,7 @@ front-end does. See [INTEGRATIONS](INTEGRATIONS.md).
 
 *System* → **Create backup** downloads a single `.dllmbak` file (ZIP with sha256 per file; encrypted with
 PBKDF2-HMAC-SHA256 + HMAC, standard library only) with: cluster secret, API key, model and node settings, nodes added by
-IP, Hugging Face token and the list of installed models with their source. Models are not included (they are
+IP, Hugging Face token, users and keys, webhook alerts and the list of installed models with their source. Models are not included (they are
 re-downloaded). **Restore backup** shows what it contains and what would change; before applying it, it saves the
 current state in `~/.dllm/backups/` (keeps 5). Terminal equivalent: `dllm backup export|inspect|import`. If the restore
 changes the secret or the API key, it asks for a restart. On a new computer: installer → *Restore from a backup*.

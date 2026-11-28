@@ -361,6 +361,16 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
         <div id="bk_res" style="margin-top:10px"></div></div>
     </div>
   </section>
+  <section><h2>Alertas (webhooks)</h2>
+    <div class="mut">Envía los eventos que elijas (nodo caído, fallo del modelo, seguridad…) por HTTP POST a otra aplicación: Slack, Mattermost, Discord, n8n, Home Assistant o tu propio servicio. Cada envío va firmado: <code>X-DLLM-Signature: sha256=HMAC(secreto, "timestamp.cuerpo")</code> con <code>X-DLLM-Timestamp</code>.</div>
+    <table style="margin-top:10px"><thead><tr><th>Nombre</th><th>URL</th><th>Formato</th><th>Desde nivel</th><th>Tipos</th><th>Último envío</th><th></th></tr></thead><tbody id="wh_t"></tbody></table>
+    <div class="tool" style="margin-top:8px"><input id="wh_name" placeholder="nombre" style="width:120px"><input id="wh_url" placeholder="https://…" style="min-width:260px">
+      <select id="wh_fmt" class="notr"><option>generic</option><option>slack</option><option>discord</option></select>
+      <select id="wh_lvl"><option value="warn">avisos y errores</option><option value="error">solo errores</option><option value="info">todo</option></select>
+      <input id="wh_kinds" placeholder="tipos (vacío = todos)" class="notr" style="width:170px"><button onclick="whAdd()">＋ Añadir</button></div>
+    <div class="mut notr" style="font-size:12px;margin-top:6px" id="wh_kl"></div>
+    <div id="wh_msg" style="margin-top:6px"></div>
+  </section>
   <section><h2>Recuperación ante desastres</h2>
     <div class="mut" style="line-height:1.7">1. En el equipo nuevo, instala DLLM con el <b>Instalador</b> y elige <b>Restaurar desde una copia</b> (o, con DLLM ya instalado, usa «Restaurar copia» aquí o <code>dllm backup import</code>).<br>
     2. Los nodos siguen funcionando: la copia lleva el secreto del clúster, así que se reconectan solos (si no estaban en la misma red, quedan listados porque se recuerdan los añadidos por IP).<br>
@@ -639,7 +649,20 @@ function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||
 async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
 
 /* ---------- sistema: copia de seguridad ---------- */
-function sysLoad(){}
+function sysLoad(){whLoad()}
+let WH=null;
+const lvlTxt=l=>({warn:'avisos y errores',error:'solo errores',info:'todo'}[l]||l);
+async function whLoad(){try{WH=await api('GET','/api/webhooks')}catch(e){return}
+  $('wh_kl').textContent='Tipos: '+WH.kinds.filter(k=>k!=='test').join(', ');
+  $('wh_t').innerHTML=Object.entries(WH.hooks).map(([id,h])=>{const st=h.status||{};const last=st.t?`<span class="badge lv-${st.ok?'info':'error'}">${st.code||'✕'}</span> <span class="mut">${when(st.t)}</span>${st.error?' <span class="mut notr">'+esc(st.error)+'</span>':''}`:'—';
+    return `<tr class="${h.enabled?'':'mut'}"><td><b class="notr">${esc(h.name)}</b></td><td class="notr" style="max-width:280px;overflow:hidden;text-overflow:ellipsis"><code>${esc(h.url)}</code></td><td class="notr">${esc(h.format)}</td><td>${lvlTxt(h.min_level)}</td><td class="notr">${h.kinds.length?esc(h.kinds.join(', ')):'*'}</td><td>${last}${st.dropped?` <span class="mut">(${st.dropped} descartados)</span>`:''}</td>
+    <td><button class="sec sm" onclick="whTest('${id}')">Probar</button> <button class="sec sm" onclick="whSet({id:'${id}',enabled:${!h.enabled}})">${h.enabled?'Pausar':'Activar'}</button> <button class="sec sm" onclick="whSecret('${id}')">Nuevo secreto</button> <button class="sec sm" onclick="whDel('${id}')">🗑️</button></td></tr>`}).join('')||'<tr><td colspan="7" class="mut">Ninguno.</td></tr>'}
+function whShowSecret(sec){$('wh_msg').innerHTML=`<div class="slowbox">🔑 Secreto de firma (cópialo ahora, no se volverá a mostrar): <code id="whs" class="notr" data-v="${esc(sec)}">${esc(sec)}</code> <button class="sm" onclick="cp('whs')">📋 Copiar</button></div>`}
+async function whSet(body){try{const r=await api('POST','/api/webhooks/set',body);if(r.secret)whShowSecret(r.secret);else $('wh_msg').innerHTML='';whLoad();return true}catch(e){$('wh_msg').innerHTML='<span class="err">'+esc(e.message)+'</span>';return false}}
+async function whAdd(){if(await whSet({name:$('wh_name').value.trim(),url:$('wh_url').value.trim(),format:$('wh_fmt').value,min_level:$('wh_lvl').value,kinds:$('wh_kinds').value})){$('wh_name').value='';$('wh_url').value='';$('wh_kinds').value=''}}
+function whSecret(id){if(confirm('¿Generar un secreto nuevo? El receptor tendrá que usar el nuevo para comprobar la firma.'))whSet({id,regenerate:true})}
+async function whDel(id){if(!confirm('¿Borrar este webhook?'))return;try{await api('POST','/api/webhooks/delete',{id});whLoad()}catch(e){alert(e.message)}}
+async function whTest(id){$('wh_msg').innerHTML='<span class="mut">Enviando…</span>';try{const r=await api('POST','/api/webhooks/test',{id});$('wh_msg').innerHTML=r.ok?`<span class="ok">Entregado (HTTP ${r.code}).</span>`:`<span class="err">No entregado: ${esc(r.error||('HTTP '+r.code))}</span>`;whLoad()}catch(e){$('wh_msg').innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
 function b64file(f){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]||'');r.onerror=()=>ko(new Error('no se pudo leer el fichero'));r.readAsDataURL(f)})}
 async function bkExport(){const m=$('bk_msg'),plain=$('bk_plain').checked,pw=$('bk_pw').value;m.className='mut';
   if(!plain){if(pw.length<8){m.className='err';m.textContent='La contraseña debe tener al menos 8 caracteres';return}

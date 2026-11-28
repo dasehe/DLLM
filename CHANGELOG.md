@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.13.0] - 2026-11-28
+
+### Añadido
+- **Alertas por webhook** (Sistema → Alertas): los eventos elegidos (por nivel mínimo y tipo) se envían por HTTP POST
+  firmados con HMAC-SHA256 (`X-DLLM-Signature`, `X-DLLM-Timestamp`), en formato genérico JSON, Slack/Mattermost o
+  Discord. Botón *Probar*, pausar, regenerar secreto; envío en segundo plano con reintentos, sin seguir redirecciones,
+  máx. 30 eventos/min por webhook. Configuración en `webhooks.json` (600), incluida en las copias de seguridad.
+
 ## [0.12.0] - 2026-11-28
 
 ### Añadido

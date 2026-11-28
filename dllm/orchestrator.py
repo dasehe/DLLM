@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import audit, backup, discovery, engine, eventlog, i18n, users
+from . import audit, backup, webhooks, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -310,6 +310,7 @@ class Cluster:
         self.models = parent.models if parent else models.Manager(cfg.models_dir)
         self.presence = parent.presence if parent else presence.Presence()  # pestañas del panel (`dllm open`)
         self.audit = parent.audit if parent else audit.Audit(getattr(cfg, "audit_file", None))
+        self.webhooks = parent.webhooks if parent else webhooks.Webhooks(getattr(cfg, "webhooks_file", None))
         self.claims = parent.claims if parent else {}  # host → emparejamiento en curso
         self.jobs = parent.jobs if parent else {"scan": {}, "bench": {}}  # búsqueda de red y medición en curso
         self._local_devs = None   # dispositivos locales de llama-server (no cambian: se cachean)
@@ -323,6 +324,8 @@ class Cluster:
         msg = f"[slot {self.slot}] {msg}" if self.slot else msg
         log(msg)
         ev = self.elog.add(msg, level, self.slot, node, kind, detail)
+        if ev.get("count", 1) == 1 and self.webhooks is not None:
+            self.webhooks.emit(ev)  # alertas (los repetidos en 5 s no se vuelven a enviar)
         self.events.append({"t": ev["t"], "msg": msg, "level": ev["level"], "slot": self.slot, "node": node,
                             "kind": kind})
 
@@ -1521,6 +1524,8 @@ class Cluster:
             fresh = users.Users(config.home() / "users.json")
             with self.users.lock:
                 self.users.data = fresh.data
+        if self.webhooks is not None and "webhooks.json" in files:
+            self.webhooks.reload()
         for x in json.loads(files.get("nodes_added.json") or b"[]"):
             try:
                 self.reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)
@@ -2033,6 +2038,26 @@ def make_handler(cfg, cl):
             except users.UserError as e:
                 return self._send(400, {"error": str(e)})
 
+        def _webhook_routes(self, path, req):
+            W = cl.webhooks
+            try:
+                if path == "/api/webhooks" and self.command == "GET":
+                    return self._send(200, W.view())
+                if self.command != "POST":
+                    return self._send(405, {"error": "método no permitido"})
+                if path == "/api/webhooks/set":
+                    hid, sec = W.set(req)
+                    return self._send(200, {**W.view(), "id": hid, "secret": sec},
+                                      headers={"Cache-Control": "no-store"})
+                if path == "/api/webhooks/delete":
+                    W.delete(str(req.get("id") or ""))
+                    return self._send(200, W.view())
+                if path == "/api/webhooks/test":
+                    return self._send(200, W.test(str(req.get("id") or "")))
+                return self._send(404, {"error": "ruta no encontrada"})
+            except webhooks.WebhookError as e:
+                return self._send(400, {"error": str(e)})
+
         def _same_origin(self):
             """Contra CSRF / DNS rebinding: una web ajena abierta en el navegador no puede mandar órdenes al panel."""
             origin = self.headers.get("Origin")
@@ -2126,6 +2151,8 @@ def make_handler(cfg, cl):
                     cl.event("código de unión consultado desde " + self.client_address[0], kind="security")
                     return self._send(200, {"code": cl.join_code(), "orch": cl.cfg_advertise() or config.lan_ip(),
                                             "beacon": cfg.beacon_port}, headers={"Cache-Control": "no-store"})
+                if path.startswith("/api/webhooks"):
+                    return self._webhook_routes(path, req)
                 if path == "/api/ui/clients":
                     return self._send(200, cl.presence.view())
                 if path == "/api/pair/claim" and self.command == "POST":
@@ -2362,6 +2389,7 @@ def run(cfg):
 
     cfg.events_file = str(config.home() / "events.jsonl")  # registro persistente (rota por tamaño)
     cfg.audit_file = str(config.home() / "audit.jsonl")    # registro de auditoría (600, rota por tamaño)
+    cfg.webhooks_file = str(config.home() / "webhooks.json")  # alertas por webhook (600)
     reg = Registry(secret, cfg.node_timeout, cfg.probe_interval)
     for n in cfg.node or []:
         h, _, p = n.partition(":")

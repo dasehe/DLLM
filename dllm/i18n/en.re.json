@@ -82,5 +82,13 @@
  [
   "^(\\d+) entradas$",
   "$1 entries"
+ ],
+ [
+  "\\((\\d+) descartados\\)",
+  "($1 dropped)"
+ ],
+ [
+  "^máximo (\\d+) webhooks$",
+  "maximum $1 webhooks"
  ]
 ]

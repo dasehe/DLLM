@@ -391,6 +391,33 @@ viene del propio equipo (127.0.0.1).
   `dllm_node_up{node="mini-pc"}`. Disparadores útiles: el ítem de `READY` a 0 durante 5 min, un `dllm_node_up` a 0,
   o `change()` de `dllm_recoveries_total` mayor que 0.
 
+## Alertas por webhook
+
+*Sistema* → **Alertas (webhooks)** envía los eventos que elijas por HTTP `POST` a otras aplicaciones (Slack, Mattermost,
+Discord, n8n, Home Assistant, tu propio servicio). Cada webhook tiene una URL (`http://` o `https://`, sin usuario ni
+contraseña en ella), un **formato** (`generic`: JSON `{"source","version","origin","event":{t,level,kind,msg,node,slot,detail}}`;
+`slack`: `{"text"}`, también Mattermost/Rocket.Chat; `discord`: `{"content"}`), un **nivel mínimo** (todo, avisos y
+errores —por defecto—, solo errores) y **tipos** opcionales (`load, unload, node, net, security, backup, request, route,
+tools, download`; vacío = todos). **Probar** envía un evento de prueba y muestra el resultado HTTP; también *Pausar*,
+*Nuevo secreto* y borrar.
+
+Cada envío va firmado para que el receptor compruebe que viene de este orquestador:
+
+```
+X-DLLM-Event: node
+X-DLLM-Timestamp: 1764320000
+X-DLLM-Signature: sha256=<hex HMAC-SHA256(secreto, "<timestamp>.<cuerpo tal cual>")>
+```
+
+Comprobación en el receptor (Python): `hmac.compare_digest(firma, "sha256=" + hmac.new(secreto, f"{ts}.".encode() +
+cuerpo, hashlib.sha256).hexdigest())`, y rechaza marcas de tiempo antiguas (p. ej. > 5 min). El secreto se muestra **una
+vez** al crear (o regenerar) el webhook y se guarda en `~/.dllm/webhooks.json` (permisos 600, va en las copias). Los
+envíos van en segundo plano (5 s de espera, 2 reintentos ante errores de red, 5xx o 429; sin reintento ante otros 4xx),
+**no se siguen redirecciones**, el mismo evento repetido en 5 s se envía una vez y cada webhook envía como mucho 30
+eventos por minuto (el resto se cuentan como *descartados*). Los mensajes siguen el idioma del servidor. API:
+`GET /api/webhooks`, `POST /api/webhooks/set` (`{id?, name, url, format, min_level, kinds, enabled, regenerate}`),
+`/api/webhooks/delete`, `/api/webhooks/test` (permiso `system`).
+
 ## Recuperación automática
 
 Si un nodo **en uso** deja de responder (10 s) o `llama-server` termina, el orquestador replanifica con los nodos que
@@ -437,7 +464,7 @@ cual; **no ejecuta las herramientas**: lo hace el front-end. Ver [INTEGRACIONES.
 
 *Sistema* → **Crear copia** descarga un único fichero `.dllmbak` (ZIP con sha256 por fichero; cifrado con
 PBKDF2-HMAC-SHA256 + HMAC, solo biblioteca estándar) con: secreto del clúster, API key, ajustes de modelos y nodos, nodos
-añadidos por IP, token de Hugging Face y la lista de modelos instalados con su origen. Los modelos no se incluyen (se
+añadidos por IP, token de Hugging Face, usuarios y claves, alertas por webhook y la lista de modelos instalados con su origen. Los modelos no se incluyen (se
 re-descargan). **Restaurar copia** muestra qué contiene y qué cambiaría; antes de aplicarla guarda el estado actual en
 `~/.dllm/backups/` (conserva 5). Equivalente en terminal: `dllm backup export|inspect|import`. Si la restauración cambia
 el secreto o la API key, pide reiniciar. En un equipo nuevo: instalador → *Restaurar desde una copia*.
