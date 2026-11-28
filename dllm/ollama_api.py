@@ -9,6 +9,7 @@ peticiones de navegador de otro origen. Las respuestas en streaming son NDJSON, 
 import hashlib
 import http.client
 import json
+import ssl
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
@@ -112,7 +113,13 @@ def make_handler(cfg, cl):
     up_host = "127.0.0.1" if cfg.host in ("0.0.0.0", "", "127.0.0.1", "localhost", "::", "::1") else cfg.host
 
     def upstream(path, body):
-        c = http.client.HTTPConnection(up_host, cfg.port, timeout=3600)
+        t = getattr(cl, "tls", None)
+        if t and up_host != "127.0.0.1":  # el orquestador escucha en una IP concreta con HTTPS: hablarle en HTTPS
+            ctx = ssl.create_default_context(cafile=t["cert"])
+            ctx.check_hostname = False  # es este mismo equipo; se verifica que el certificado sea el nuestro
+            c = http.client.HTTPSConnection(up_host, cfg.port, timeout=3600, context=ctx)
+        else:
+            c = http.client.HTTPConnection(up_host, cfg.port, timeout=3600)
         headers = {"Content-Type": "application/json", "X-DLLM-Lang": "en"}
         if cfg.api_key:
             headers["Authorization"] = "Bearer " + cfg.api_key

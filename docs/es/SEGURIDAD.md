@@ -31,13 +31,15 @@ exige demostrar que se conoce el secreto del clúster.
 | Actualización ordenada por el orquestador | `POST /llama/install` firmado con HMAC; solo una etiqueta `bNNNN` validada; el agente descarga únicamente de las releases oficiales de ggml-org/llama.cpp con sha256. Desactivable con `--no-auto-update` (nodo) o `--no-auto-sync` (orquestador) |
 | Descargas de llama.cpp | sha256 publicado por GitHub; extracción que rechaza path traversal, enlaces que escapan y ficheros especiales |
 | Copias programadas | Siempre cifradas (mismo esquema que las manuales), ficheros 600 en carpeta 700; la contraseña está en `backup_schedule.json` (600) y la API nunca la devuelve; solo se rotan los ficheros `dllm-auto-*.dllmbak` |
+| HTTPS (opcional) | `dllm tls enable` (autofirmado con openssl, clave 600) o certificado propio; TLS ≥ 1.2 en panel/API y API Ollama; desde la red solo HTTPS (HTTP sin cifrar → 301 a `https://`); cookie de sesión `Secure` por HTTPS; huella SHA-256 en la terminal y en *Sistema* |
 | Secretos en disco | `~/.dllm/config.json` con permisos 600; el servicio no lleva el secreto en su definición |
 | Servicio | De usuario, sin privilegios; en Linux `NoNewPrivileges` y `PrivateTmp` |
 
 ## Qué NO protege (riesgos asumidos)
 
-- **Confidencialidad**: prompts, respuestas y pesos viajan **sin cifrar** por la LAN. Alguien en la misma red puede
-  leerlos.
+- **Confidencialidad**: entre el orquestador y los nodos, prompts, respuestas y pesos viajan **sin cifrar** por la LAN
+  (el túnel RPC está autenticado, no cifrado). Alguien en la misma red puede leerlos. El tráfico del panel y la API solo
+  va cifrado si se activa HTTPS (`dllm tls enable`).
 - **Carga bajo demanda**: es opt-in (`--on-demand`) porque cualquier cliente con acceso a la API podría provocar cargas
   y expulsiones; la API key sigue siendo obligatoria desde la red. Solo se cargan ficheros de la carpeta de modelos
   (`resolve_model` rechaza rutas fuera de ella) y nunca se expulsan los modelos `pinned`.
@@ -83,7 +85,8 @@ exige demostrar que se conoce el secreto del clúster.
 3. **Cortafuegos** en los nodos: 8765 y 50051 solo desde la IP del orquestador. En Windows el asistente crea esas
    reglas (por programa, puerto e IP remota); en Linux/macOS muestra los comandos (ver
    [INSTALACION](INSTALACION.md#cortafuegos)). En el rol *Ambos* el agente solo escucha en `127.0.0.1`.
-4. No expongas el puerto 8080 fuera de la LAN; si lo necesitas, ponlo detrás de un proxy inverso con TLS y
+4. Activa **HTTPS** (`dllm tls enable`, o `--cert/--key` con un certificado de tu CA) si el panel o la API se usan
+   desde otros equipos. No expongas el puerto 8080 fuera de la LAN; si lo necesitas, ponlo detrás de un proxy inverso con TLS y
    autenticación.
 5. **Rotar el secreto**: el asistente conserva el secreto al reinstalar el orquestador. Para generar uno nuevo, borra
    la línea `"secret"` de `~/.dllm/config.json` del orquestador, vuelve a ejecutar el asistente y reinstala cada nodo

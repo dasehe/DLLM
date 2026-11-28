@@ -373,6 +373,9 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
         <div class="mut" style="font-size:12px;margin-top:8px">Siempre cifradas. La contraseña se guarda en este equipo (<code>backup_schedule.json</code>, permisos 600) para poder hacerlas sin nadie delante: protege las copias que lleves a otro sitio (NAS, nube). Apunta la contraseña en lugar seguro: sin ella no se pueden restaurar. Solo se borran las copias antiguas creadas aquí (<code>dllm-auto-*.dllmbak</code>).</div></div>
     </div>
   </section>
+  <section><h2>HTTPS</h2><div id="tls_st"></div>
+    <div class="mut" style="font-size:12px;margin-top:6px">Se activa en el orquestador con <code>dllm tls enable</code> (certificado autofirmado) o <code>dllm tls enable --cert cert.pem --key clave.pem</code> y reiniciando DLLM. Con HTTPS, desde la red solo se acepta HTTPS (HTTP redirige); desde el propio equipo sigue funcionando HTTP para la terminal y las aplicaciones locales. Con certificado autofirmado, el navegador avisa la primera vez: comprueba que la huella coincide antes de aceptarlo.</div>
+  </section>
   <section><h2>Alertas (webhooks)</h2>
     <div class="mut">Envía los eventos que elijas (nodo caído, fallo del modelo, seguridad…) por HTTP POST a otra aplicación: Slack, Mattermost, Discord, n8n, Home Assistant o tu propio servicio. Cada envío va firmado: <code>X-DLLM-Signature: sha256=HMAC(secreto, "timestamp.cuerpo")</code> con <code>X-DLLM-Timestamp</code>.</div>
     <table style="margin-top:10px"><thead><tr><th>Nombre</th><th>URL</th><th>Formato</th><th>Desde nivel</th><th>Tipos</th><th>Último envío</th><th></th></tr></thead><tbody id="wh_t"></tbody></table>
@@ -661,7 +664,9 @@ function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||
 async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
 
 /* ---------- sistema: copia de seguridad ---------- */
-function sysLoad(){whLoad();bsLoad()}
+function sysLoad(){whLoad();bsLoad();tlsLoad()}
+async function tlsLoad(){try{const a=await api('GET','/api/access');const t=a.tls;
+  $('tls_st').innerHTML=t?`<span class="pill g">activado</span> ${t.mode==='self-signed'?'certificado autofirmado':'certificado propio'} · huella SHA-256: <code class="notr" style="word-break:break-all">${esc(t.fingerprint)}</code>`:'<span class="pill">desactivado</span> <span class="mut">el tráfico del panel y la API va sin cifrar: úsalo en una red de confianza o activa HTTPS.</span>'}catch(e){}}
 let BS=null;
 function bsShow(b){BS=b;$('bs_on').checked=b.enabled;$('bs_h').value=b.every_hours;$('bs_k').value=b.keep;if(document.activeElement!==$('bs_dir'))$('bs_dir').value=b.dir;$('bs_logs').checked=b.include_logs;
   $('bs_pw').placeholder=b.has_passphrase?'(guardada; vacío = no cambiarla)':'';

@@ -267,6 +267,7 @@ choose *None* as its projector.
 | `dllm join-code` | Shows the join code (orchestrator). In the panel: Nodes → 🔑 Join code (only on the computer itself). Installed package: `python3 ~/.dllm/dllm.pyz join-code` (Windows: `py %USERPROFILE%\.dllm\dllm.pyz join-code`) |
 | `dllm doctor` | Local computer diagnostics |
 | `dllm backup export\|import\|inspect [FILE]` | Full backup (encrypted by default) and restore |
+| `dllm tls status\|enable\|disable [--cert C --key K]` | HTTPS for the panel and the API (see [HTTPS](#https-optional)) |
 | `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Uninstalls: program, autostart and firewall; with `--purge` also llama.cpp and the configuration; with `--models` the models in the DLLM folder |
 
 Global option: `--lang en|es` before the subcommand. `MODEL` is the path relative to the models folder, e.g.
@@ -401,6 +402,27 @@ identifiers and stay as they are.
   items with *Prometheus pattern* preprocessing, e.g. `dllm_state{state="READY"}` and `dllm_node_up{node="mini-pc"}`.
   Useful triggers: the `READY` item at 0 for 5 min, a `dllm_node_up` at 0, or `change()` of `dllm_recoveries_total`
   greater than 0.
+
+## HTTPS (optional)
+
+The panel, the API and the Ollama-compatible API can be served over HTTPS (TLS ≥ 1.2). On the orchestrator:
+
+```bash
+dllm tls enable                                   # self-signed certificate (created with openssl in ~/.dllm/tls/)
+dllm tls enable --cert cert.pem --key key.pem     # your own certificate (e.g. from your CA or Let's Encrypt)
+dllm tls status                                   # state and SHA-256 fingerprint
+dllm tls disable
+```
+
+and restart DLLM (the service, or `dllm up … --tls-self-signed` / `--tls-cert … --tls-key …` by hand). The same port
+serves both protocols: from the network only HTTPS is accepted (plain HTTP gets a `301` to `https://`, so no password
+travels in clear), while from the orchestrator itself plain HTTP keeps working for the terminal, the desktop shortcut and
+local apps. Over HTTPS the session cookie is `Secure`. With a self-signed certificate the browser warns the first time:
+compare the **fingerprint** (shown at startup in the terminal/log and in *System → HTTPS*) before accepting it. Clients
+of the API (AnythingLLM, Open WebUI…) must then use `https://IP:8080/v1` and trust the certificate (or use your CA's).
+The self-signed certificate needs `openssl` (Linux/macOS have it; on Windows it comes with Git for Windows); it is valid
+for 825 days and includes `localhost`, the computer name, `127.0.0.1` and the LAN/advertised IP. Traffic between the
+orchestrator and the nodes does not change (authenticated, not encrypted: see [SECURITY](SECURITY.md)).
 
 ## Webhook alerts
 

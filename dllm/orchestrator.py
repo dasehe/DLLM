@@ -14,6 +14,7 @@ import os
 import pkgutil
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -24,7 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import audit, backup, backup_schedule, webhooks, discovery, engine, eventlog, i18n, users
+from . import audit, backup, backup_schedule, tls, webhooks, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -278,6 +279,7 @@ class Cluster:
     El slot 0 (el «principal») además hace de coordinador: crea y reúne los demás (`self.slots`) y comparte con
     ellos el registro de nodos, el gestor de modelos y el libro de memoria (`ledger`)."""
     users = None        # usuarios y permisos (users.Users), lo asigna run()
+    tls = None          # HTTPS: {"mode", "cert", "fingerprint"} o None
     bsched = None       # copias programadas (backup_schedule.BackupScheduler), lo asigna run()
     local_token = None  # token local de la terminal (users.write_local_token)
 
@@ -1963,8 +1965,9 @@ def make_handler(cfg, cl):
                              level="warn", kind="security")
                 else:
                     cl.event(f"«{user}» ha iniciado sesión desde {ip}", kind="security")
+                sec = "; Secure" if isinstance(self.connection, ssl.SSLSocket) else ""
                 return self._send(200, self._me(user), headers={
-                    "Set-Cookie": f"dllm_session={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age={users.SESSION_TTL}"})
+                    "Set-Cookie": f"dllm_session={tok}; HttpOnly; SameSite=Strict; Path=/; Max-Age={users.SESSION_TTL}{sec}"})
             if path == "/api/logout" and self.command == "POST":
                 self._audit("logout", UM.session_user(self._cookie("dllm_session")))
                 UM.end_session(self._cookie("dllm_session"))
@@ -2166,8 +2169,9 @@ def make_handler(cfg, cl):
                     out = {"local": local, "key_required": False, "login": True,
                            "ollama_port": getattr(cfg, "ollama_port", 0),
                            "exposed": cfg.host not in ("127.0.0.1", "localhost", "::1")}
+                    out["tls"] = {k: cl.tls[k] for k in ("mode", "fingerprint")} if cl.tls else None
                     if local and out["exposed"]:
-                        out["lan_url"] = f"http://{config.lan_ip()}:{cfg.port}/"
+                        out["lan_url"] = f"{'https' if cl.tls else 'http'}://{config.lan_ip()}:{cfg.port}/"
                     return self._send(200, out)
                 if path == "/api/state":
                     return self._send(200, cl.snapshot())
@@ -2430,20 +2434,29 @@ def run(cfg):
         threading.Thread(target=fn, daemon=True).start()
     threading.Thread(target=reg.beacon_loop, args=(cfg.beacon_port,), daemon=True).start()
 
+    try:
+        ssl_ctx, cl.tls = tls.setup(cfg, config.home(), getattr(cfg, "advertise_host", None) or config.lan_ip())
+    except tls.TLSError as e:
+        sys.exit(f"HTTPS: {e}")
+    scheme = "https" if ssl_ctx else "http"
     oport = getattr(cfg, "ollama_port", 0)
     if oport:  # API compatible con Ollama en su propio puerto (mismas reglas: fuera de loopback, API key)
         from . import ollama_api
         try:
-            osrv = FastHTTPServer((cfg.host, oport), ollama_api.make_handler(cfg, cl))
+            osrv = tls.TLSHTTPServer((cfg.host, oport), ollama_api.make_handler(cfg, cl))
+            osrv.ssl_ctx = ssl_ctx
             threading.Thread(target=osrv.serve_forever, daemon=True).start()
-            log(f"API compatible con Ollama en http://{cfg.host}:{oport}")
+            log(f"API compatible con Ollama en {scheme}://{cfg.host}:{oport}")
         except OSError as e:
             cl.event(f"API compatible con Ollama desactivada: no se puede abrir el puerto {oport} ({e}); "
                      "¿hay un Ollama real usándolo? Usa --ollama-port con otro puerto", level="warn")
-    srv = FastHTTPServer((cfg.host, cfg.port), make_handler(cfg, cl))
+    srv = tls.TLSHTTPServer((cfg.host, cfg.port), make_handler(cfg, cl))
+    srv.ssl_ctx = ssl_ctx
     srv.daemon_threads = True
     log(legal_notice().replace("\n", " · "))
-    log(f"DLLM {__version__} · UI y API en http://{cfg.host}:{cfg.port} · modelos: {cfg.models_dir}")
+    log(f"DLLM {__version__} · UI y API en {scheme}://{cfg.host}:{cfg.port} · modelos: {cfg.models_dir}")
+    if cl.tls:
+        log(f"HTTPS ({cl.tls['mode']}) · huella SHA-256 del certificado: {cl.tls['fingerprint']}")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

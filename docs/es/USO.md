@@ -260,6 +260,7 @@ solo como texto, elige *Ninguno* en su proyector.
 | `dllm join-code` | Muestra el código de unión (orquestador). En el panel: Nodos → 🔑 Código de unión (solo en el propio equipo). Paquete instalado: `python3 ~/.dllm/dllm.pyz join-code` (Windows: `py %USERPROFILE%\.dllm\dllm.pyz join-code`) |
 | `dllm doctor` | Diagnóstico del equipo local |
 | `dllm backup export\|import\|inspect [FICHERO]` | Copia de seguridad completa (cifrada por defecto) y restauración |
+| `dllm tls status\|enable\|disable [--cert C --key K]` | HTTPS del panel y la API (ver [HTTPS](#https-opcional)) |
 | `dllm uninstall [--gui\|--interactive] [--purge] [--models]` | Desinstala: programa, arranque automático y cortafuegos; con `--purge` también llama.cpp y la configuración; con `--models` los modelos de la carpeta de DLLM |
 
 `MODELO` es la ruta relativa a la carpeta de modelos, p. ej. `qwen/qwen2.5-32b-instruct-q4_k_m.gguf`.
@@ -390,6 +391,27 @@ viene del propio equipo (127.0.0.1).
   dependientes con preprocesado *Prometheus pattern*, p. ej. `dllm_state{state="READY"}` y
   `dllm_node_up{node="mini-pc"}`. Disparadores útiles: el ítem de `READY` a 0 durante 5 min, un `dllm_node_up` a 0,
   o `change()` de `dllm_recoveries_total` mayor que 0.
+
+## HTTPS (opcional)
+
+El panel, la API y la API compatible con Ollama pueden servirse por HTTPS (TLS ≥ 1.2). En el orquestador:
+
+```bash
+dllm tls enable                                    # certificado autofirmado (se crea con openssl en ~/.dllm/tls/)
+dllm tls enable --cert cert.pem --key clave.pem    # certificado propio (p. ej. de tu CA o de Let's Encrypt)
+dllm tls status                                    # estado y huella SHA-256
+dllm tls disable
+```
+
+y reinicia DLLM (el servicio, o `dllm up … --tls-self-signed` / `--tls-cert … --tls-key …` a mano). El mismo puerto
+atiende los dos protocolos: desde la red solo se acepta HTTPS (el HTTP sin cifrar recibe un `301` a `https://`, así
+ninguna contraseña viaja en claro), y desde el propio orquestador sigue funcionando HTTP para la terminal, el acceso
+directo y las aplicaciones locales. Por HTTPS la cookie de sesión es `Secure`. Con certificado autofirmado el navegador
+avisa la primera vez: compara la **huella** (aparece al arrancar en la terminal/registro y en *Sistema → HTTPS*) antes de
+aceptarlo. Los clientes de la API (AnythingLLM, Open WebUI…) deben usar entonces `https://IP:8080/v1` y confiar en el
+certificado (o usar el de tu CA). El autofirmado necesita `openssl` (Linux/macOS lo traen; en Windows viene con Git for
+Windows); dura 825 días e incluye `localhost`, el nombre del equipo, `127.0.0.1` y la IP de la LAN o anunciada. El
+tráfico entre el orquestador y los nodos no cambia (autenticado, no cifrado: ver [SEGURIDAD](SEGURIDAD.md)).
 
 ## Alertas por webhook
 

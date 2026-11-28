@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.15.0] - 2026-11-28
+
+### Añadido
+- **HTTPS opcional** para el panel, la API y la API Ollama (TLS ≥ 1.2): `dllm tls enable` (autofirmado con openssl en
+  `~/.dllm/tls/`, clave 600) o `--cert/--key` propios; `dllm tls status|disable`; opciones `dllm up --tls-self-signed`
+  y `--tls-cert/--tls-key`. Mismo puerto para HTTP y HTTPS: desde la red solo HTTPS (HTTP → 301), desde el propio
+  equipo HTTP sigue funcionando. Cookie `Secure` por HTTPS. Huella SHA-256 al arrancar y en Sistema → HTTPS.
+
 ## [0.14.0] - 2026-11-28
 
 ### Añadido

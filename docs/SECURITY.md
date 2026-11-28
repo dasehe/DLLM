@@ -33,13 +33,15 @@ knowledge of the cluster secret.
 | llama.cpp downloads | sha256 published by GitHub; extraction rejects path traversal, escaping links and special files |
 | Backups | Optional encryption with PBKDF2-HMAC-SHA256 (600k iterations) + HMAC; files written with permissions 600; restore checks the integrity tag before decrypting and the sha256 of every file, and only accepts an allowlist of file names |
 | Scheduled backups | Always encrypted (same scheme as manual backups), files 600 in a 700 folder; the password lives in `backup_schedule.json` (600) and is never returned by the API; only `dllm-auto-*.dllmbak` files are rotated |
+| HTTPS (optional) | `dllm tls enable` (self-signed with openssl, key 600) or own certificate; TLS ≥ 1.2 on the panel/API and the Ollama API; from the network only HTTPS (plain HTTP → 301 to `https://`); session cookie `Secure` over HTTPS; SHA-256 fingerprint shown in the terminal and in *System* |
 | Secrets on disk | `~/.dllm/config.json` with permissions 600; the service does not carry the secret in its definition |
 | Service | Per user, unprivileged; on Linux `NoNewPrivileges` and `PrivateTmp` |
 
 ## What it does NOT protect (accepted risks)
 
-- **Confidentiality**: prompts, answers and weights travel **unencrypted** over the LAN. Someone on the same network can
-  read them.
+- **Confidentiality**: between the orchestrator and the nodes, prompts, answers and weights travel **unencrypted** over
+  the LAN (the RPC tunnel is authenticated, not encrypted). Someone on the same network can read them. Panel and API
+  traffic is encrypted only if HTTPS is enabled (`dllm tls enable`).
 - **On-demand loading**: it is opt-in (`--on-demand`) because any client with API access could trigger loads and
   evictions; the API key is still required from the network. Only files in the models folder are loaded
   (`resolve_model` rejects paths outside it) and `pinned` models are never evicted.
@@ -86,7 +88,9 @@ knowledge of the cluster secret.
 3. **Firewall** on the nodes: 8765 and 50051 only from the orchestrator's IP. On Windows the wizard creates those rules
    (per program, port and remote IP); on Linux/macOS it shows the commands (see
    [INSTALLATION](INSTALLATION.md#firewall)). In the *Both* role the agent listens only on `127.0.0.1`.
-4. Do not expose port 8080 outside the LAN; if you need to, put it behind a reverse proxy with TLS and authentication.
+4. Enable **HTTPS** (`dllm tls enable`, or `--cert/--key` with a certificate from your CA) if the panel or the API are
+   used from other computers. Do not expose port 8080 outside the LAN; if you need to, put it behind a reverse proxy
+   with TLS and authentication.
 5. **Rotate the secret**: the wizard keeps the secret when reinstalling the orchestrator. To generate a new one, delete
    the `"secret"` line from the orchestrator's `~/.dllm/config.json`, run the wizard again and reinstall each node with
    the new code.

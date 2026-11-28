@@ -240,6 +240,43 @@ def cmd_join_code(a):
     print(wizard.Setup.join_code(cfg, a.advertise_host or cfg.get("advertise_host")))
 
 
+def cmd_tls(a):
+    from . import tls
+    cfg = config.load()
+    if not cfg or cfg["role"] == "node":
+        sys.exit("este equipo no es un orquestador: ejecuta el asistente y elige Orquestador")
+    o = cfg["orchestrator"]
+    if a.action == "enable":
+        if bool(a.cert) != bool(a.key):
+            sys.exit("indica a la vez --cert y --key (o ninguno para un certificado autofirmado)")
+        if a.cert:
+            cert, key = os.path.abspath(a.cert), os.path.abspath(a.key)
+            tls.make_context(cert, key)  # comprueba que se pueden cargar
+            o["tls"] = {"cert": cert, "key": key}
+        else:
+            cert, _ = tls.self_signed(config.home() / "tls", hosts=[cfg.get("advertise_host"), config.lan_ip()])
+            o["tls"] = {"mode": "self-signed"}
+        config.save(cfg)
+        print(f"HTTPS activado. Huella SHA-256: {tls.fingerprint(cert)}")
+        print("Reinicia DLLM para aplicarlo (o reinicia el equipo).")
+    elif a.action == "disable":
+        o.pop("tls", None)
+        config.save(cfg)
+        print("HTTPS desactivado. Reinicia DLLM para aplicarlo.")
+    else:
+        t = o.get("tls")
+        if not t:
+            print("HTTPS: desactivado (`dllm tls enable` para activarlo)")
+            return
+        cert = t.get("cert") or str(config.home() / "tls" / "dllm-cert.pem")
+        print(f"HTTPS: activado ({'autofirmado' if t.get('mode') == 'self-signed' else 'certificado propio'})")
+        print(f"Certificado: {cert}")
+        try:
+            print(f"Huella SHA-256: {tls.fingerprint(cert)}")
+        except (OSError, ValueError) as e:
+            print(f"No se puede leer el certificado: {e}")
+
+
 def _passphrase(a, confirm=False):
     import getpass
     if a.passphrase_file:
@@ -379,6 +416,11 @@ def build_parser():
     s.set_defaults(fn=cmd_setup)
 
     sub.add_parser("run", help="arranca según config.json (rol del equipo)").set_defaults(fn=cmd_run)
+    s = sub.add_parser("tls", help="HTTPS del panel y la API: activar, desactivar o ver la huella")
+    s.add_argument("action", choices=["status", "enable", "disable"])
+    s.add_argument("--cert", help="enable: certificado PEM propio (si no, autofirmado)")
+    s.add_argument("--key", help="enable: clave privada PEM del certificado propio")
+    s.set_defaults(fn=cmd_tls)
     s = sub.add_parser("join-code", help="muestra el código de unión para nodos")
     s.add_argument("--advertise-host", help="IP a incluir en el código (por defecto la de la LAN)")
     s.set_defaults(fn=cmd_join_code)
@@ -466,6 +508,10 @@ def build_parser():
     s.add_argument("--llama-arg", action="append", help="argumento extra para llama-server (repetible)")
     s.add_argument("--ollama-port", type=int, default=11434,
                    help="puerto de la API compatible con Ollama (def. 11434; 0 = desactivada)")
+    s.add_argument("--tls-cert", help="HTTPS: certificado PEM (con --tls-key)")
+    s.add_argument("--tls-key", help="HTTPS: clave privada PEM del certificado")
+    s.add_argument("--tls-self-signed", action="store_true",
+                   help="HTTPS con un certificado autofirmado (se crea con openssl en ~/.dllm/tls/)")
     s.add_argument("--no-direct-local", action="store_true",
                    help="no ejecutar sin RPC los modelos que caben en la GPU local (por defecto sí)")
     s.add_argument("--min-mbps", type=float, default=800.0, help="red mínima orquestador↔nodo (def. 800)")

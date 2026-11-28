@@ -139,6 +139,11 @@ def up_argv(cfg):
         argv += ["--ollama-port", str(o["ollama_port"])]
     if cfg.get("advertise_host"):
         argv += ["--advertise-host", cfg["advertise_host"]]
+    t = o.get("tls") or {}
+    if t.get("cert") and t.get("key"):  # HTTPS con certificado propio
+        argv += ["--tls-cert", t["cert"], "--tls-key", t["key"]]
+    elif t.get("mode") == "self-signed":
+        argv += ["--tls-self-signed"]
     if cfg["role"] == "both":  # el agente local es un nodo más
         argv += ["--node", f"127.0.0.1:{cfg['agent']['port']}"]
     return argv
