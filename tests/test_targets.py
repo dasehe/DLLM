@@ -257,6 +257,34 @@ class Targets(unittest.TestCase):
         self.assertEqual(self.api("POST", "/api/reload", {"slot": 7})[0], 400)
         self.api("POST", "/api/unload", {"slot": s})
 
+    def test_7_gpu_and_ram_of_the_same_node(self):
+        write_gguf(os.path.join(self.tmp, "models", "mid.gguf"), 9 * GiB)
+        tg = [{"node": "gpu1", "device": "both"}]
+        p = self.plan("mid.gguf", targets=tg)
+        self.assertTrue(p["ok"], p.get("reason"))
+        self.assertEqual([(a["name"], a["device"]) for a in p["assignments"]], [("gpu1", "gpu"), ("gpu1", "cpu")])
+        # tope con el deslizante: menos RAM de la necesaria → no cabe
+        p2 = self.plan("mid.gguf", targets=[{"node": "gpu1", "device": "both", "ram_gb": 0.5}])
+        self.assertFalse(p2["ok"])
+        st, r = self.api("POST", "/api/load", {"model": "mid.gguf", "ctx": 2048, "slot": "new", "targets": tg})
+        self.assertEqual(st, 202, r)
+        s = r["slot"]
+        self.wait(lambda: self.slots()[s]["state"] == "READY", 60, "mid listo en GPU+RAM de gpu1")
+        args = json.load(open(self.args_file))
+        self.assertEqual(args[args.index("-d") + 1], "Vulkan0,CPU")  # un rpc-server con los dos dispositivos
+        res = self.api("GET", "/api/resources")[1]
+        g = next(n for n in res["nodes"] if n["name"] == "gpu1")
+        self.assertGreater(g["ram_reserved"], 1 * GiB)  # su RAM queda reservada para este modelo
+        self.api("POST", "/api/unload", {"slot": s})
+        # prioridad del nodo: en automático, gpu1 (GPU y RAM) antes que cpu1
+        gid = next(n["id"] for n in self.api("GET", "/api/state")[1]["nodes"] if n["name"] == "gpu1")
+        self.assertEqual(self.api("POST", "/api/node/settings", {"node": gid, "priority": 5})[0], 200)
+        p = self.plan("mid.gguf")
+        self.assertTrue(p["ok"], p.get("reason"))
+        self.assertEqual([a["name"] for a in p["assignments"]][:2], ["gpu1", "gpu1"])
+        self.assertEqual(self.api("POST", "/api/node/settings", {"node": gid, "priority": 11})[0], 400)
+        self.api("POST", "/api/node/settings", {"node": gid, "priority": None})
+
 
 if __name__ == "__main__":
     unittest.main()

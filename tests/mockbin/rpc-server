@@ -26,6 +26,10 @@ while _i < len(sys.argv):
         if _arg not in ("-h", "--help"):
             print(f"error: unknown argument: {_arg}", file=sys.stderr)
         print(f"Usage: {sys.argv[0]} [options]", file=sys.stderr)
+        if os.environ.get("MOCK_RPC_SINGLE"):  # rpc-server antiguo: un solo dispositivo
+            print("  -d DEV, --device DEV   device to use", file=sys.stderr)
+        else:
+            print("  -d, --device <dev1,dev2,...>   comma-separated list of devices", file=sys.stderr)
         sys.exit(0)
     _i += 2 if _arg in WITH_VALUE else 1
 
@@ -45,6 +49,13 @@ if "-d" in a:
         for name, desc, total, free in devs:
             print(f"  {name}: {desc} ({total} MiB, {free} MiB free)", file=sys.stderr)
         sys.exit(1)
+if "-d" in a:
+    exposed = a[a.index("-d") + 1].split(",")
+else:  # como el real: todos los aceleradores o, si no hay, la CPU
+    exposed = [d[0] for d in devs if d[0] != "CPU"] or ["CPU"]
+if os.environ.get("MOCK_RPC_SINGLE") and len(exposed) > 1:
+    print("error: unknown device: " + ",".join(exposed), file=sys.stderr)
+    sys.exit(1)
 if os.environ.get("MOCK_ARGS_FILE"):
     with open(os.environ["MOCK_ARGS_FILE"], "w") as f:
         json.dump(a, f)
@@ -59,8 +70,14 @@ print(f"mock rpc-server en {host}:{port}", flush=True)
 
 def echo(c):
     try:
+        first = True
         while True:
             d = c.recv(65536)
+            if first and d == b"DEVS":  # el llama-server simulado pregunta cuántos dispositivos expone
+                c.sendall(b"%04d" % len(exposed))
+                first = False
+                continue
+            first = False
             if not d:
                 break
             c.sendall(d)

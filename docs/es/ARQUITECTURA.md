@@ -135,6 +135,15 @@ Minimizar esa suma con `Σ bytes_i = M` y `bytes_i ≤ capacidad_i` se resuelve 
 ancho de banda de memoria** y usando **el mínimo de nodos** (cada nodo extra añade latencia). Las capas se asignan
 proporcionalmente con el método del resto mayor. Margen por nodo: 512 MiB + 5 % libre.
 
+**GPU + RAM del mismo nodo (0.17):** un nodo con GPU cuyo `rpc-server` expone varios dispositivos ofrece dos entradas al
+planificador: su VRAM y su RAM (`host` = el mismo equipo, ancho de banda de RAM ~20 GB/s salvo que se indique). Las dos
+comparten túnel y cuentan como **un solo salto de red**, y van juntas y en el orden de los dispositivos (GPU y luego
+CPU) porque el nodo arranca un único `rpc-server -d <GPU>,CPU`; llama-server ve dos dispositivos remotos y
+`--tensor-split` da a cada uno su parte. Orden de preferencia entre repartos que caben: (1) la **prioridad** elegida
+para los nodos (bytes en nodos con prioridad), (2) el tier más alto usado, (3) equipos remotos (saltos), (4) tiempo
+estimado por token, (5) número de equipos. Así, sin prioridades, un modelo que no cabe en una GPU usa la RAM de ese
+equipo antes de añadir otro equipo.
+
 ### Slots de modelo y libro de memoria
 
 Cada modelo cargado ocupa un *slot* (0-7). El slot es un `Cluster` con su `llama-server` (puerto interno efímero en

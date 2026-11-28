@@ -44,8 +44,18 @@ De arriba abajo:
    en total y por nodo (el orquestador figura aparte si no es también un nodo).
 2. **Cargar o simular un modelo**. *Destino*: **sustituir el modelo principal** o **añadir otro modelo a la vez**.
    *Dónde ejecutar*: **Automático** (el planificador elige) o **Elegir nodos y dispositivo**: marca los nodos y, en cada
-   uno, **GPU** o **CPU (RAM)**. Así un modelo pequeño puede usar la RAM de un nodo concreto y dejar la GPU libre para
-   los grandes. Un nodo con GPU puede usar su CPU; «Orquestador (RAM local)» va solo (no se combina con nodos).
+   uno, **GPU**, **GPU + RAM** (lo que no cabe en su VRAM va a la RAM del mismo equipo) o **CPU (RAM)**, con
+   **deslizantes** para limitar cuánta VRAM y RAM de cada nodo puede usar este modelo y una **prioridad** (qué nodo se
+   llena primero). Así un modelo pequeño puede usar la RAM de un nodo concreto y dejar la GPU libre para los grandes.
+   «Orquestador (RAM local)» va solo (no se combina con nodos).
+
+   **GPU + RAM del mismo nodo** (también en *Automático*): si un modelo no cabe en la VRAM de un nodo, el resto va primero
+   a **la RAM de ese nodo** (mismo equipo: sin otro salto de red y por el mismo túnel) y solo lo que aún no cabe pasa al
+   siguiente nodo. El plan muestra claramente qué coge de cada equipo (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`, con GiB
+   y capas). Necesita un llama.cpp reciente cuyo `rpc-server` exponga varios dispositivos (`-d CUDA0,CPU`; el agente lo
+   detecta); con uno antiguo el nodo presta solo su GPU. En el propio equipo del orquestador se ejecuta directo con
+   `-ngl` (capas en GPU) y el resto en su RAM, sin RPC. Por nodo se puede desactivar (*Usar también su RAM*) o limitar
+   (*RAM máxima para modelos*).
    **Simular** no carga nada: calcula el reparto y dibuja en *Recursos* en naranja lo que añadiría el modelo.
 3. **Modelos en memoria**: una fila por modelo (qué es el «slot»: una ranura de memoria; el 0 es el principal).
    Muestra estado, **dónde corre** (nodo, GPU/CPU, GiB), uso y rendimiento (peticiones, errores, media, p95, tok/s).
@@ -145,6 +155,9 @@ Interruptor **Modo avanzado** (cabecera): sin él se ve lo esencial; con él, to
 | Ajuste | Dónde vive | Efecto |
 |---|---|---|
 | Usar este nodo en los repartos | Orquestador | Desactivado = nunca se le asigna nada (sigue visible en el monitor) |
+| Prioridad (0-10) | Orquestador | Los nodos con más prioridad se llenan antes (su GPU y, si hace falta, su RAM); el resto pasa a los demás. 0 = normal (el reparto elige lo más eficiente) |
+| Usar también su RAM | Orquestador | Nodos con GPU: lo que no cabe en su VRAM va a su RAM (por defecto sí) |
+| RAM máxima para modelos | Orquestador | Nodos con GPU: tope de RAM que se usa junto a su GPU (vacío = la libre menos el margen de seguridad) |
 | Capas fijas | Orquestador | Cuántas capas del modelo lleva este nodo; el resto se reparte solo. Útil para afinar a mano |
 | Ancho de banda de memoria | Orquestador | Ordena los nodos por velocidad (los más rápidos se llenan primero). Ej.: RTX 3060 = 360, RX 7600 XT = 288 GB/s |
 | Dispositivo | Nodo | Qué GPU presta (o CPU). Automático = la de más memoria |

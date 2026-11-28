@@ -126,6 +126,21 @@ def classify(local, rtt_ms, mbps):
     return 2
 
 
+def host_of(n):
+    """Equipo físico de una entrada del reparto: un nodo con GPU puede aportar dos (su VRAM y su RAM), que comparten
+    equipo, túnel y salto de red."""
+    return n.get("host") or n["id"]
+
+
+def overhead(n):
+    return n.get("overhead", OVERHEAD_NODE)
+
+
+def prio(n):
+    """Prioridad elegida para el nodo (0 = normal; más alto = se llena antes). Manda sobre el tier y la velocidad."""
+    return n.get("priority") or 0
+
+
 def node_tier(n):
     return n["tier"] if n.get("tier") is not None else classify(n.get("local"), n.get("rtt_ms"), n.get("mbps"))
 
@@ -133,7 +148,7 @@ def node_tier(n):
 def _fill(subset, remaining, usable):
     """Llena el subconjunto por orden de tier y de velocidad; devuelve [(nodo, bytes)] o None si no cabe."""
     out = []
-    for n in sorted(subset, key=lambda n: (node_tier(n), -n["bw_gbps"], -n["cap_bytes"])):
+    for n in sorted(subset, key=lambda n: (-prio(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"])):
         if remaining <= 0:
             break
         take = min(usable(n), remaining)
@@ -146,9 +161,12 @@ def _choose(free, remaining, need, model, forced, usable, max_nodes=None):
     """Mejor subconjunto de `free` (más los nodos `forced`, ya fijados) para colocar `remaining` bytes."""
     def cost(picks):
         fo = list(forced) + [n for n, _ in picks]
-        t = sum((take / need) * model["size"] / (n["bw_gbps"] * 1e9 * EFFICIENCY) + (n.get("rtt_ms") or 0.5) / 1000
-                for n, take in picks)
-        return (max([node_tier(n) for n in fo] or [0]), sum(1 for n in fo if node_tier(n) > 0), t, len(picks))
+        t = sum((take / need) * model["size"] / (n["bw_gbps"] * 1e9 * EFFICIENCY) for n, take in picks)
+        t += sum((rtt or 0.5) / 1000 for rtt in {host_of(n): n.get("rtt_ms") for n, _ in picks}.values())
+        hosts = {host_of(n) for n in fo if node_tier(n) > 0}  # saltos de red: equipos remotos, no entradas
+        pr = -sum(take * prio(n) for n, take in picks)          # lo más posible en los nodos con prioridad
+        return (pr, max([node_tier(n) for n in fo] or [0]), len(hosts), t, len({host_of(n) for n, _ in picks}),
+                len(picks))
 
     if len(free) > MAX_SUBSET_NODES and not max_nodes:  # demasiados nodos: voraz por tier y velocidad
         return _fill(free, remaining, usable)
@@ -194,6 +212,10 @@ def max_context(model, usable_bytes, step=256, k_type="f16", v_type="f16"):
     return min(ctx, top) if model.get("ctx_train") else ctx
 
 
+def label(n):
+    return n["name"] + (" (RAM)" if n.get("aux") else "")
+
+
 def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max_nodes=None):
     """nodes: lista de dicts {id,name,backend,cap_bytes,bw_gbps,mbps,rtt_ms[,layers]}. `layers` fija cuántas capas
     lleva ese nodo (el resto se reparte automáticamente). Devuelve dict JSON."""
@@ -212,19 +234,20 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
             res["excluded"].append({"node": n["name"],
                                     "reason": f"red {n['mbps']:.0f} Mbps < mínimo {min_mbps:.0f} Mbps "
                                               "(en Nodos puedes usarlo igualmente, modo forzado)"})
-        elif n["cap_bytes"] - OVERHEAD_NODE < 256 << 20:
-            res["excluded"].append({"node": n["name"], "reason": "memoria libre insuficiente"})
+        elif n["cap_bytes"] - overhead(n) < 256 << 20:
+            if not n.get("aux"):  # la RAM extra de un nodo con GPU: si no hay, simplemente no se ofrece
+                res["excluded"].append({"node": n["name"], "reason": "memoria libre insuficiente"})
         else:
             elig.append(n)
-    elig.sort(key=lambda n: (node_tier(n), -n["bw_gbps"], -n["cap_bytes"]))
+    elig.sort(key=lambda n: (-prio(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"]))
 
     remaining, picks = need, []
-    total_usable = sum((n["cap_bytes"] - OVERHEAD_NODE) * HEADROOM for n in elig)
+    total_usable = sum((n["cap_bytes"] - overhead(n)) * HEADROOM for n in elig)
     res["max_ctx"] = max_context(model, total_usable, k_type=k_type, v_type=v_type)
     if model.get("ctx_train") and ctx > model["ctx_train"]:
         res["warnings"].append(f"contexto {ctx} mayor que el de entrenamiento del modelo ({model['ctx_train']}): "
                                "la calidad empeora más allá de ese punto")
-    usable = lambda n: int((n["cap_bytes"] - OVERHEAD_NODE) * HEADROOM)
+    usable = lambda n: int((n["cap_bytes"] - overhead(n)) * HEADROOM)
     n_layers = model.get("n_layers")
     fixed = [n for n in elig if n.get("layers")]
     if fixed and not n_layers:
@@ -255,7 +278,7 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
         res["reason"] = (f"no cabe: necesito {need / GiB:.1f} GiB (modelo {model['size'] / GiB:.1f} + "
                          f"KV {kv / GiB:.1f} + margen) y los nodos elegibles aportan {total_usable / GiB:.1f} GiB"
                          + ("; libre por nodo: " + ", ".join(
-                             f"{n['name']} {max(0, usable(n)) / GiB:.1f} GiB" for n in elig) if elig else "")
+                             f"{label(n)} {max(0, usable(n)) / GiB:.1f} GiB" for n in elig) if elig else "")
                          + ("; excluidos: " + ", ".join(f"{e['node']} ({e['reason']})" for e in res["excluded"])
                             if res["excluded"] else "")
                          + (f"; con esta memoria cabe un contexto de hasta {res['max_ctx']} tokens"
@@ -265,7 +288,12 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
         return res
 
     order = {n["id"]: i for i, n in enumerate(elig)}
-    picks.sort(key=lambda p: order[p[0]["id"]])  # en orden de velocidad, también los fijados
+    first = {}
+    for n, _ in sorted(picks, key=lambda p: order[p[0]["id"]]):
+        first.setdefault(host_of(n), order[n["id"]])
+    # en orden de velocidad, también los fijados, y juntas las entradas del mismo equipo (GPU antes que su RAM: es el
+    # orden en que su rpc-server expone los dispositivos)
+    picks.sort(key=lambda p: (first[host_of(p[0])], p[0].get("device") == "cpu", order[p[0]["id"]]))
     if fixed_layers:
         free_picks = [(n, t) for n, t in picks if n["id"] not in fixed_layers]
         rest = n_layers - sum(fixed_layers.values())
@@ -279,32 +307,39 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
         shares = [t / need for _, t in picks]
         layers = _largest_remainder(shares, n_layers) if n_layers else [None] * len(picks)
     t_tok = HOST_MS / 1000
+    seen = set()
     for (n, take), share, ly in zip(picks, shares, layers):
-        t_tok += share * model["size"] / (n["bw_gbps"] * 1e9 * EFFICIENCY) + (n.get("rtt_ms") or 0.5) / 1000
-        res["assignments"].append({"node_id": n["id"], "name": n["name"], "backend": n["backend"],
+        t_tok += share * model["size"] / (n["bw_gbps"] * 1e9 * EFFICIENCY)
+        if host_of(n) not in seen:  # un salto de red por equipo
+            seen.add(host_of(n))
+            t_tok += (n.get("rtt_ms") or 0.5) / 1000
+        res["assignments"].append({"node_id": n["id"], "host_id": host_of(n), "name": n["name"],
+                                   "device": n.get("device"), "backend": n["backend"],
                                    "bytes": take, "share": round(share, 4), "layers": ly,
                                    "fixed": n["id"] in fixed_layers,
                                    "bw_gbps": n["bw_gbps"], "mbps": round(n["mbps"]), "rtt_ms": n.get("rtt_ms"),
-                                   "tier": node_tier(n), "tier_name": TIER_NAMES[node_tier(n)]})
+                                   "tier": node_tier(n), "tier_name": TIER_NAMES[node_tier(n)],
+                                   "priority": prio(n)})
     res["tensor_split"] = [round(s, 4) for s in shares]
     res["est_tok_s"] = round(1 / t_tok, 2)
     res["ok"] = True
 
-    used_ids = {n["id"] for n, _ in picks}
+    used_ids = {host_of(n) for n, _ in picks}
     forced_slow = [n["name"] for n, _ in picks if n["mbps"] < min_mbps]
     if forced_slow:
         res["warnings"].append(f"modo forzado: {', '.join(forced_slow)} tiene una red por debajo de {min_mbps:.0f} Mbps; "
                                "vale para pruebas, la velocidad será baja")
-    res["unused"] = [{"node": n["name"], "tier": node_tier(n)} for n in elig if n["id"] not in used_ids]
+    res["unused"] = list({n["name"]: {"node": n["name"], "tier": node_tier(n)}
+                          for n in elig if host_of(n) not in used_ids}.values())
     top = max(node_tier(n) for n, _ in picks)
     res["max_tier"] = top
     if top >= 3:
         slow = [n["name"] for n, _ in picks if node_tier(n) == 3]
         res["warnings"].append(f"usa un enlace de tier 3 ({', '.join(slow)}: RTT > {TIER3_RTT_MS:.0f} ms): cada token "
                                "cruza ese enlace y la velocidad cae; el modelo no cabe solo en nodos de tier 0-2")
-    if len(picks) == 1:
+    if len(used_ids) == 1 and len(picks) == 1:
         res["warnings"].append("el modelo cabe en un solo nodo: repartirlo no daría más velocidad")
-    if len(picks) >= 4:
+    if len(used_ids) >= 4:
         res["warnings"].append("4+ nodos: cada nodo añade un salto de red por token")
     if res["est_tok_s"] < 1:
         res["warnings"].append("estimación < 1 token/s: usable solo para pruebas")

@@ -90,5 +90,13 @@
  [
   "^máximo (\\d+) webhooks$",
   "maximum $1 webhooks"
+ ],
+ [
+  "(\\d+) núcleos",
+  "$1 cores"
+ ],
+ [
+  "\\+([\\d.,]+ ?[KMGT]i?B) simulado",
+  "+$1 simulated"
  ]
 ]

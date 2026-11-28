@@ -56,6 +56,7 @@ fieldset{border:1px solid var(--bd);border-radius:9px;padding:10px 14px 14px;mar
 .scroll{max-height:300px;overflow:auto}
 .rb{position:relative;height:8px;background:var(--track);border-radius:4px;overflow:hidden;margin-top:3px}.rb .rr{position:absolute;left:0;top:0;height:100%;background:var(--ac)}.rb .ra{position:absolute;top:0;height:100%;background:var(--warn);opacity:.9}
 .UNLOADING{background:var(--warn);color:#fff}.lv-error{background:var(--bad);color:#fff}.lv-warn{background:var(--warn);color:#fff}.lv-info{background:var(--track)}
+.wsls{grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding-left:24px}.wsl input{width:160px;vertical-align:middle}
 .wn{display:grid;grid-template-columns:minmax(150px,auto) 130px 1fr;gap:6px 12px;align-items:center;margin-top:8px;font-size:13px}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--mut);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .switch{display:flex;align-items:center;gap:8px;color:var(--fg)!important;font-size:13px!important;flex-direction:row!important}
@@ -167,6 +168,9 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
         <div class="form">
           <label class="switch"><input type="checkbox" id="ne_enabled"> Usar este nodo en los repartos</label>
           <label class="switch" title="Solo aplica si este nodo es el propio equipo del orquestador"><input type="checkbox" id="ne_direct"> Permitir ejecución directa en su GPU (sin RPC) cuando un modelo quepa</label>
+          <label>Prioridad (0-10)<input id="ne_prio" type="number" min="0" max="10" step="1" placeholder="0"><span class="help">Los nodos con más prioridad se llenan antes (su GPU y, si hace falta, su RAM); lo que no quepa pasa a los demás. 0 = normal: el reparto elige lo más eficiente.</span></label>
+          <label class="switch" title="Solo nodos con GPU: lo que no cabe en su VRAM va a su RAM (mismo equipo, sin otro salto de red)"><input type="checkbox" id="ne_useram"> Usar también su RAM cuando el modelo no quepa en su GPU</label>
+          <label class="adv">RAM máxima para modelos (GiB)<input id="ne_ramgb" type="number" min="0.5" step="0.5" placeholder="automático"><span class="help">Solo nodos con GPU: tope de RAM que se usa junto a su GPU. Vacío = la libre menos el margen de seguridad.</span></label>
           <label class="adv">Capas fijas<input id="ne_layers" type="number" min="1" step="1" placeholder="automático"><span class="help">Cuántas capas del modelo lleva este nodo. Vacío = las decide el reparto.</span></label>
           <label class="adv">Ancho de banda de memoria (GB/s)<input id="ne_bw" type="number" min="1" step="1" placeholder="estimado"><span class="help">Para ordenar nodos por velocidad. Ej.: RTX 3060 = 360, RX 7600 XT = 288.</span></label>
         </div>
@@ -589,14 +593,15 @@ function editNode(id){if(!S)return;const n=S.nodes.find(x=>x.id===id);if(!n)retu
   $('ne_title').textContent='Configurar '+n.name;
   $('ne_hw').textContent=`${n.cores??'?'} hilos · ${gib(n.ram_total)} RAM${n.gpu?' · '+n.gpu.name+' '+gib(n.gpu.total):''} · recomendado: ${gib(n.recommended&&n.recommended.mem_bytes)} y ${n.recommended?n.recommended.threads:'?'} hilos · máximo: ${gib(n.ceiling)}`;
   $('ne_enabled').checked=s.enabled!==false;$('ne_direct').checked=s.direct_local!==false;$('ne_layers').value=s.layers??'';$('ne_bw').value=s.bw_gbps??'';
+  $('ne_prio').value=s.priority??'';$('ne_useram').checked=s.use_ram!==false;$('ne_ramgb').value=s.ram_gb??'';
   const man=n.limits_mode==='manual';$('ne_manual').classList.toggle('hide',!man);$('ne_auto').classList.toggle('hide',man);$('ne_autob').classList.toggle('hide',man);
   const devs=(n.devices||[]);$('ne_dev').innerHTML='<option value="">Automático (el de más memoria)</option>'+devs.map(d=>`<option value="${esc(d.name)}">${esc(d.name)} · ${esc(d.desc)} (${gib(d.total)})</option>`).join('')+(devs.some(d=>/^cpu/i.test(d.name))?'':'<option value="CPU">CPU (no prestar GPU)</option>');
   $('ne_dev').value=n.backend==='cpu'&&n.device==null&&devs.length?'CPU':'';if(n.device&&devs.some(d=>d.name===n.device))$('ne_dev').value=n.device;
   $('ne_share').value=l.share||50;$('ne_sharev').textContent=l.share||50;$('ne_mem').value=l.mem_gb??'';$('ne_thr').value=l.threads??'';
   $('ne_msg1').textContent=$('ne_msg2').textContent='';$('nedit').classList.remove('hide');$('nedit').scrollIntoView({behavior:'smooth',block:'nearest'})}
 function closeNode(){editing=null;$('nedit').classList.add('hide')}
-async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,direct_local:true,layers:null,bw_gbps:null}:{node:editing,enabled:$('ne_enabled').checked,direct_local:$('ne_direct').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null};
-  try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_direct').checked=true;$('ne_layers').value='';$('ne_bw').value=''}refresh()}
+async function saveNodeCfg(reset){if(!editing)return;const b=reset?{node:editing,enabled:true,direct_local:true,layers:null,bw_gbps:null,priority:null,use_ram:true,ram_gb:null}:{node:editing,enabled:$('ne_enabled').checked,direct_local:$('ne_direct').checked,layers:$('ne_layers').value||null,bw_gbps:$('ne_bw').value||null,priority:$('ne_prio').value===''?null:+$('ne_prio').value,use_ram:$('ne_useram').checked,ram_gb:$('ne_ramgb').value||null};
+  try{const r=await api('POST','/api/node/settings',b);$('ne_msg1').className='ok';$('ne_msg1').textContent='Guardado'+(r.in_use?' · se aplica al recargar el modelo':'');if(reset){$('ne_enabled').checked=true;$('ne_direct').checked=true;$('ne_layers').value='';$('ne_bw').value='';$('ne_prio').value='';$('ne_useram').checked=true;$('ne_ramgb').value=''}refresh()}
   catch(e){$('ne_msg1').className='err';$('ne_msg1').textContent=e.message}}
 async function saveLimits(reset){if(!editing)return;const n=S.nodes.find(x=>x.id===editing)||{};
   const b=reset?{node:editing,reset:true}:{node:editing,share:+$('ne_share').value,mem_gb:$('ne_mem').value||null,threads:$('ne_thr').value||null};
@@ -609,8 +614,8 @@ const dev=d=>d==='cpu'?'CPU':d==='gpu'?'GPU':'';
 function renderPlan(p){if(!p){$('plan').innerHTML='';return}
   let h=`<div class="mut" style="margin-top:10px">${esc(p.model)} · necesita ${gib(p.need_bytes)} (KV ${gib(p.kv_bytes)}${p.kv_types&&(p.kv_types[0]!=='f16'||p.kv_types[1]!=='f16')?' en '+p.kv_types.join('/'):''})</div>`;
   if(!p.ok)h+=`<div class="err">✗ ${esc(p.reason)}</div>`;
-  else{h+='<div class="bar">'+p.assignments.map((a,i)=>`<div style="width:${a.share*100}%;background:${colors[i%6]}" title="${esc(a.name)}">${esc(a.name)} ${(a.share*100).toFixed(0)}%</div>`).join('')+'</div>';
-    h+='<table>'+p.assignments.map(a=>`<tr><td>${esc(a.name)}</td><td><span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${dev(a.device)||esc(a.backend)}</span></td><td>${gib(a.bytes)}</td><td>${a.layers} capas${a.fixed?' (fijas)':''}</td><td>${a.mbps==null?'local':a.mbps+' Mbps · '+a.rtt_ms+' ms'}</td></tr>`).join('')+'</table>';
+  else{h+='<div class="bar">'+p.assignments.map((a,i)=>`<div style="width:${a.share*100}%;background:${colors[i%6]}" title="${esc(a.name)}">${esc(a.name)}${a.entry&&a.entry.endsWith('#ram')?' RAM':a.device==='gpu'?' GPU':''} ${(a.share*100).toFixed(0)}%</div>`).join('')+'</div>';
+    h+='<table>'+p.assignments.map(a=>`<tr><td>${esc(a.name)}</td><td><span class="badge ${a.device==='cpu'?'b-off':'b-use'}">${a.entry&&a.entry.endsWith('#ram')?'<span data-en="RAM (CPU)">RAM (CPU)</span>':dev(a.device)||esc(a.backend)}</span>${a.priority?` <span class="mut" title="Prioridad del nodo">★${a.priority}</span>`:''}</td><td>${gib(a.bytes)}</td><td>${a.layers} capas${a.fixed?' (fijas)':''}</td><td>${a.mbps==null?'local':a.mbps+' Mbps · '+a.rtt_ms+' ms'}</td></tr>`).join('')+'</table>';
     h+=p.est_tok_s?`<div style="margin-top:6px">≈ <b>${p.est_tok_s} tok/s</b> <span class="mut">(estimación gruesa)</span></div>`:`<div class="mut" style="margin-top:6px">${esc(p.policy||'')} · sin estimación de velocidad</div>`}
   if(p.max_ctx)h+=`<div>Contexto máximo con la memoria de los nodos: <b>${p.max_ctx}</b> tokens${p.ctx_train?` <span class="mut">(el modelo admite hasta ${p.ctx_train})</span>`:''} <button class="sec sm" onclick="$('ctx').value=${p.max_ctx};plan()">Usar</button></div>`;
   h+=(p.excluded||[]).map(e=>`<div class="mut">✗ ${esc(e.node)}: ${esc(e.reason)}</div>`).join('');
@@ -633,16 +638,25 @@ function renderRes(){if(!R)return;const X=PROJ||R,t=X.totals,K=R.totals;
   const h=X.host;$('res_nodes').innerHTML=rows+(R.host.shared_with_node?'':`<tr><td><b>Orquestador</b><br><span class="mut">RAM local (modelos solo CPU)</span></td><td><span class="mut">—</span></td><td>${rcell(h.ram_reserved,h.ram_after,R.host.ram_total)}</td><td>${R.host.cores}</td><td class="mut">local</td></tr>`);
   $('res_note').textContent=PROJ?'Simulación: las barras naranjas muestran lo que añadiría el modelo. Pulsa «Cargar» para aplicarlo.':''}
 function whChange(){$('wh_box').classList.toggle('hide',$('wh').value!=='manual');renderWhere()}
+const GB=2**30;
+function wslider(key,kind,max){const w=WSEL[key]||{},v=w[kind]==null?max:Math.min(w[kind],max);const lbl=kind==='vram'?'VRAM':'RAM';
+  return `<label class="mut wsl">${lbl} <input type="range" min="0" max="${(max/GB).toFixed(1)}" step="0.5" value="${(v/GB).toFixed(1)}" oninput="wset('${esc(key)}','${kind}',this.value*${GB});this.nextElementSibling.textContent=gib(this.value*${GB})+' / '+gib(${max})"><span>${gib(v)} / ${gib(max)}</span></label>`}
+function wset(k,kind,v){const w=WSEL[k];if(!w)return;w[kind]=v===null?null:+v;PROJ=null;renderRes()}
 function renderWhere(){if($('wh').value!=='manual'||!R)return;
-  const row=(key,label,info,opts)=>{const on=key in WSEL,d=WSEL[key]||opts[0][0];return `<label><input type="checkbox" ${on?'checked':''} onchange="wsel('${esc(key)}',this.checked,'${opts[0][0]}')"> <b>${esc(label)}</b></label>
-    <select ${on?'':'disabled'} onchange="WSEL['${esc(key)}']=this.value;PROJ=null;renderRes()">${opts.map(o=>`<option value="${o[0]}" ${o[0]===d?'selected':''}>${o[1]}</option>`).join('')}</select><span class="mut">${info}</span>`};
-  let h='<div class="mut" style="margin-top:8px;font-size:12px">Marca los nodos donde puede ejecutarse y si debe usar su <b>GPU</b> o su <b>CPU (RAM)</b>. Útil para dejar la GPU libre para modelos grandes y poner uno pequeño en la RAM de un nodo concreto.</div><div class="wn">';
-  h+=R.nodes.filter(n=>n.up).map(n=>{const o=[];if(n.gpu)o.push(['gpu','GPU']);if(!n.gpu||n.cpu_device)o.push(['cpu','CPU (RAM)']);
-    const info=(n.gpu?`VRAM libre ${gib(Math.max(0,n.vram_cap-n.vram_reserved))} · `:'')+`RAM libre ${gib(Math.max(0,(n.ram_cap||n.ram_total)-n.ram_reserved))} · ${n.cores} núcleos`;return row(n.name,n.name,info,o)}).join('');
+  const row=(key,label,info,opts,n)=>{const on=key in WSEL,w=WSEL[key]||{},d=w.device||opts[0][0];
+    const fv=n?Math.max(0,n.vram_cap-n.vram_reserved):0,fr=n?Math.max(0,(n.ram_cap||n.ram_total)-n.ram_reserved):0;
+    const sl=on&&n?((d==='gpu'||d==='both')&&n.gpu?wslider(key,'vram',fv):'')+((d==='cpu'||d==='both')?wslider(key,'ram',fr):'')+`<label class="mut">Prioridad <input type="number" min="0" max="10" style="width:56px" value="${w.prio??''}" placeholder="0" onchange="wset('${esc(key)}','prio',this.value===''?null:this.value)"></label>`:'';
+    return `<label><input type="checkbox" ${on?'checked':''} onchange="wsel('${esc(key)}',this.checked,'${opts[0][0]}')"> <b>${esc(label)}</b></label>
+    <select ${on?'':'disabled'} onchange="WSEL['${esc(key)}'].device=this.value;PROJ=null;renderWhere();renderRes()">${opts.map(o=>`<option value="${o[0]}" ${o[0]===d?'selected':''}>${o[1]}</option>`).join('')}</select><span class="mut">${info}</span>${sl?`<div class="wsls">${sl}</div>`:''}`};
+  let h='<div class="mut" style="margin-top:8px;font-size:12px">Marca los nodos donde puede ejecutarse y qué usar de cada uno: su <b>GPU</b>, su <b>GPU + RAM</b> (lo que no cabe en la VRAM va a la RAM del mismo equipo) o solo su <b>CPU (RAM)</b>. Con los deslizantes limitas cuánta VRAM y RAM de cada nodo puede usar este modelo, y con la prioridad decides qué nodo se llena primero.</div><div class="wn">';
+  h+=R.nodes.filter(n=>n.up).map(n=>{const o=[];if(n.gpu)o.push(['gpu','GPU']);if(n.gpu&&n.cpu_device&&n.multi_device)o.push(['both','GPU + RAM']);if(!n.gpu||n.cpu_device)o.push(['cpu','CPU (RAM)']);
+    const info=(n.gpu?`VRAM libre ${gib(Math.max(0,n.vram_cap-n.vram_reserved))} · `:'')+`RAM libre ${gib(Math.max(0,(n.ram_cap||n.ram_total)-n.ram_reserved))} · ${n.cores} núcleos`;return row(n.name,n.name,info,o,n)}).join('');
   h+=row('@host','Orquestador (RAM local)',`RAM libre ${gib(Math.max(0,R.host.ram_total-R.host.ram_reserved))} · ${R.host.cores} núcleos · no se combina con nodos`,[['cpu','CPU (RAM)']]);
   $('wh_box').innerHTML=h+'</div>'}
-function wsel(k,on,d){if(on){if(k==='@host')WSEL={'@host':'cpu'};else{delete WSEL['@host'];WSEL[k]=d}}else delete WSEL[k];PROJ=null;renderWhere();renderRes()}
-function targets(){if($('wh').value!=='manual')return [];const t=Object.entries(WSEL).map(([node,device])=>({node,device}));if(!t.length)throw new Error('Marca al menos un nodo (o elige «Automático»).');return t}
+function wsel(k,on,d){if(on){if(k==='@host')WSEL={'@host':{device:'cpu'}};else{delete WSEL['@host'];WSEL[k]={device:d}}}else delete WSEL[k];PROJ=null;renderWhere();renderRes()}
+function targets(){if($('wh').value!=='manual')return [];const t=Object.entries(WSEL).map(([node,w])=>{const o={node,device:w.device};
+    if(w.vram!=null&&(w.device==='gpu'||w.device==='both'))o.vram_gb=Math.round(w.vram/GB*10)/10;if(w.ram!=null&&(w.device==='cpu'||w.device==='both'))o.ram_gb=Math.round(w.ram/GB*10)/10;if(w.prio!=null)o.priority=+w.prio;return o});
+  if(!t.length)throw new Error('Marca al menos un nodo (o elige «Automático»).');return t}
 async function plan(){$('plan').dataset.manual='1';try{const tg=targets(),sl=$('slotsel').value;$('plan').innerHTML='<div class="mut">midiendo red y calculando…</div>';
   const p=await api('POST','/api/plan',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':0,targets:tg});PROJ=p.ok?p.resources:null;renderPlan(p);renderRes()}catch(e){PROJ=null;$('plan').innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
 async function load(){delete $('plan').dataset.manual;PROJ=null;try{const tg=targets(),sl=$('slotsel').value;await api('POST','/api/load',{model:$('models').value,ctx:+$('ctx').value,slot:sl==='new'?'new':+sl,pinned:$('pinned').checked,targets:tg});refresh();loadRes()}catch(e){alert(e.message)}}

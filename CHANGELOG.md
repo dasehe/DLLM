@@ -4,6 +4,21 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.17.0] - 2026-11-28
+
+### Añadido
+- **GPU + RAM del mismo nodo**: si un modelo no cabe en la VRAM de un nodo, el resto va primero a la RAM de ese nodo
+  (mismo equipo, un solo salto de red, un `rpc-server -d <GPU>,CPU`) y solo lo que no cabe pasa al siguiente nodo. En el
+  propio orquestador, directo con `-ngl` y el resto en su RAM. El plan muestra qué coge de cada equipo (GPU / RAM / CPU).
+  Requiere un `rpc-server` con varios dispositivos (el agente lo detecta; si no, solo la GPU).
+- **Prioridad por nodo** (0-10, Nodos → Configurar, o por modelo en «Elegir nodos»): los nodos con prioridad se llenan
+  antes. Ajustes de nodo *Usar también su RAM* y *RAM máxima para modelos*.
+- **Dónde ejecutar → Elegir nodos**: opción **GPU + RAM**, deslizantes de VRAM y RAM por nodo y prioridad.
+
+### Corregido
+- El plan decía «no cabe» con RAM libre de sobra en el clúster porque un nodo con GPU solo aportaba su VRAM.
+- Textos «núcleos» y «simulado» sin traducir en Recursos.
+
 ## [0.16.1] - 2026-11-28
 
 ### Corregido

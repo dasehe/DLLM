@@ -53,6 +53,15 @@ def probe_rpc_server(rpc_bin, timeout=60):
     return parse(_run([rpc_bin, "-d", PROBE_NAME], timeout))
 
 
+def rpc_multi_device(rpc_bin, timeout=30):
+    """¿Este rpc-server expone varios dispositivos a la vez (`-d GPU,CPU`)? Las versiones de llama.cpp desde finales de
+    2025 lo anuncian en su ayuda («-d, --device <dev1,dev2,...>»). Con eso un nodo con GPU presta también su RAM."""
+    try:
+        return bool(re.search(r"dev1,\s*dev2|comma-separated list of devices", _run([rpc_bin, "--help"], timeout)))
+    except RuntimeError:
+        return False
+
+
 def probe_llama_server(llama_bin, rpc=None, timeout=120):
     cmd = [llama_bin] + (["--rpc", ",".join(rpc)] if rpc else []) + ["--list-devices"]
     return parse(_run(cmd, timeout))

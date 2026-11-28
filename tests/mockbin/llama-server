@@ -29,14 +29,18 @@ if "--list-devices" in args:
     for item in filter(None, os.environ.get("MOCK_LOCAL_DEVICES", "").split(";")):
         name, desc, total, free = item.split("|")
         print(f"  {name}: {desc} ({total} MiB, {free} MiB free)")
-    for i, ep in enumerate(e for e in (opt("--rpc") or "").split(",") if e):
+    k = 0
+    for ep in (e for e in (opt("--rpc") or "").split(",") if e):
         h, p = ep.rsplit(":", 1)
         s = socket.create_connection((h, int(p)), timeout=5)  # el real se conecta a cada rpc-server
-        s.sendall(b"PING")
-        s.recv(4)
+        s.sendall(b"DEVS")  # y le pregunta qué dispositivos expone (pueden ser varios: GPU y CPU)
+        r = s.recv(4)
         s.close()
-        print(f"  RPC{i}[{ep}]: RPC backend ({os.environ.get('MOCK_RPC_MIB', '16384')} MiB, "
-              f"{os.environ.get('MOCK_RPC_FREE', '15000')} MiB free)")
+        n = int(r) if r.isdigit() else 1
+        for _ in range(n):
+            print(f"  RPC{k}[{ep}]: RPC backend ({os.environ.get('MOCK_RPC_MIB', '16384')} MiB, "
+                  f"{os.environ.get('MOCK_RPC_FREE', '15000')} MiB free)")
+            k += 1
     sys.exit(0)
 
 

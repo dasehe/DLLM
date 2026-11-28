@@ -141,6 +141,14 @@ Minimizing that sum with `Σ bytes_i = M` and `bytes_i ≤ capacity_i` is solved
 highest memory bandwidth** and using **the minimum number of nodes** (each extra node adds latency). Layers are assigned
 proportionally with the largest remainder method. Margin per node: 512 MiB + 5 % free.
 
+**GPU + RAM of the same node (0.17):** a GPU node whose `rpc-server` exposes several devices offers two entries to the
+planner: its VRAM and its RAM (`host` = the same computer, RAM bandwidth ~20 GB/s unless set). Both entries share the
+tunnel and count as **one network hop**, and they are kept together and in device order (GPU, then CPU) because the
+node starts a single `rpc-server -d <GPU>,CPU`; llama-server sees two remote devices and `--tensor-split` gives each its
+share. Order of preference between splits that fit: (1) the **priority** chosen for the nodes (bytes on prioritized
+nodes), (2) the highest tier used, (3) remote computers (hops), (4) estimated time per token, (5) number of computers.
+So with no priority set, a model that does not fit in a GPU uses that computer's RAM before adding another computer.
+
 ### Model slots and memory ledger
 
 Each loaded model takes a *slot* (0-7). The slot is a `Cluster` with its `llama-server` (ephemeral internal port on

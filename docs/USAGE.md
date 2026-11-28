@@ -44,9 +44,19 @@ From top to bottom:
 1. **Cluster resources**: total VRAM, RAM and CPU cores, what loaded models **reserve** and what is free, in total and
    per node (the orchestrator is listed separately if it is not also a node).
 2. **Load or simulate a model**. *Target*: **replace the main model** or **add another model at the same time**. *Where
-   to run*: **Automatic** (the planner decides) or **Choose nodes and device**: tick the nodes and, on each one, **GPU**
-   or **CPU (RAM)**. So a small model can use a specific node's RAM and keep the GPU free for large ones. A node with a
-   GPU can use its CPU; "Orchestrator (local RAM)" goes alone (not combined with nodes). **Simulate** loads nothing: it
+   to run*: **Automatic** (the planner decides) or **Choose nodes and device**: tick the nodes and, on each one, **GPU**,
+   **GPU + RAM** (what does not fit in its VRAM goes to the RAM of the same computer) or **CPU (RAM)**, with **sliders**
+   to limit how much VRAM and RAM of each node this model may use and a **priority** (which node is filled first). So a
+   small model can use a specific node's RAM and keep the GPU free for large ones. "Orchestrator (local RAM)" goes alone
+   (not combined with nodes).
+
+   **GPU + RAM of the same node** (also in *Automatic*): when a model does not fit in a node's VRAM, the rest goes first
+   to **that node's RAM** (same computer: no extra network hop and the same tunnel), and only what still does not fit
+   goes to the next node. The plan shows clearly what each computer takes (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`
+   with GiB and layers). It needs a recent llama.cpp whose `rpc-server` exposes several devices (`-d CUDA0,CPU`; the
+   agent detects it); with an older one the node lends only its GPU. On the orchestrator's own computer it runs directly
+   with `-ngl` (GPU layers) and the rest in its RAM, without RPC. Per node it can be disabled (*Use its RAM too*) or
+   capped (*Maximum RAM for models*). **Simulate** loads nothing: it
    computes the split and draws in orange in *Resources* what the model would add.
 3. **Models in memory**: one row per model (a "slot" is a memory slot; 0 is the main one). It shows state, **where it
    runs** (node, GPU/CPU, GiB, *direct* when it uses the local GPU without RPC), usage and performance (requests,
@@ -150,6 +160,9 @@ remembered by the browser.
 |---|---|---|
 | Use this node in splits | Orchestrator | Disabled = nothing is ever assigned to it (still visible in the monitor) |
 | Allow direct execution on its GPU | Orchestrator | Only for the orchestrator's own computer: whether models that fit in its GPU run there without RPC (see [Direct local GPU](#direct-local-gpu)) |
+| Priority (0-10) | Orchestrator | Nodes with higher priority are filled first (their GPU and, if needed, their RAM); the rest goes to the others. 0 = normal (the planner picks the most efficient) |
+| Use its RAM too | Orchestrator | GPU nodes: what does not fit in its VRAM goes to its RAM (default: yes) |
+| Maximum RAM for models | Orchestrator | GPU nodes: cap on the RAM used together with its GPU (empty = free RAM minus the safety margin) |
 | Fixed layers | Orchestrator | How many model layers this node holds; the rest is split automatically. Useful for manual tuning |
 | Memory bandwidth | Orchestrator | Ranks nodes by speed (faster ones fill first). E.g.: RTX 3060 = 360, RX 7600 XT = 288 GB/s |
 | Device | Node | Which GPU it lends (or CPU). Automatic = the one with most memory |

@@ -89,6 +89,7 @@ class Agent:
             return
         try:
             self.devices = devices.probe_rpc_server(self.rpc_bin)
+            self.multi_device = devices.rpc_multi_device(self.rpc_bin)
             forced_cpu = self.a.backend == "cpu"
             dev = None if forced_cpu else devices.choose(self.devices, getattr(self.a, "device", None))
             self.device, self.device_error = dev, ""
@@ -207,7 +208,9 @@ class Agent:
         r.port = hw.free_port()  # puerto nuevo cada vez: evita choques con sockets en TIME_WAIT
         cmd = [self.rpc_bin, "-H", "127.0.0.1", "-p", str(r.port)]
         cmd += ["-t", str(self.probe.snapshot(self.limits)["threads"])]  # límite real de CPU
-        if r.device_pref == "cpu":
+        if r.device_pref == "gpu+cpu":  # GPU y RAM del nodo en el mismo rpc-server (por ese orden)
+            cmd += ["-d", self.device["name"] + "," + next(d["name"] for d in self.devices if devices.is_cpu(d))]
+        elif r.device_pref == "cpu":
             cmd += ["-d", next(d["name"] for d in self.devices if devices.is_cpu(d))]  # RAM del nodo, GPU libre
         elif self.device:
             cmd += ["-d", self.device["name"]]  # solo la GPU elegida (por defecto rpc-server las expone todas)
@@ -243,11 +246,14 @@ class Agent:
 
     def start_rpc(self, slot=0, device=None):
         """device: 'cpu' fuerza el dispositivo CPU de rpc-server para este modelo (la RAM del nodo, dejando la GPU libre
-        para otros); None o 'gpu' usa el dispositivo elegido del agente."""
-        if device not in (None, "", "gpu", "cpu"):
-            raise ValueError("dispositivo no válido (gpu o cpu)")
-        if device == "cpu" and not any(devices.is_cpu(d) for d in self.devices):
+        para otros); 'gpu+cpu' expone la GPU y la RAM a la vez (lo que no cabe en VRAM va a la RAM del nodo); None o
+        'gpu' usa el dispositivo elegido del agente."""
+        if device not in (None, "", "gpu", "cpu", "gpu+cpu"):
+            raise ValueError("dispositivo no válido (gpu, cpu o gpu+cpu)")
+        if device in ("cpu", "gpu+cpu") and not any(devices.is_cpu(d) for d in self.devices):
             raise RuntimeError("este nodo no expone un dispositivo CPU en rpc-server")
+        if device == "gpu+cpu" and not (self.device and getattr(self, "multi_device", False)):
+            raise RuntimeError("este nodo no puede exponer GPU y RAM a la vez (sin GPU o rpc-server antiguo)")
         if not self.rpc_bin:
             raise RuntimeError("rpc-server no encontrado (usa --bin-dir o --rpc-bin)")
         if not (isinstance(slot, int) and 0 <= slot < auth.MAX_SLOTS):
@@ -410,7 +416,7 @@ class Agent:
         s.update({"limits_mode": self.mode, "limits": self.limits})
         s.update({"name": self.name, "version": __version__, "rpc_bin": bool(self.rpc_bin),
                   "rpc_build": self.build, "rpc_running": self.rpc_running(), "rpc_port": self.a.rpc_port,
-                  "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "cpu_device": any(devices.is_cpu(d) for d in self.devices), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
+                  "rpc_restarts": self.restarts, "rpc_last_exit": self.last_rpc_exit(), "cpu_device": any(devices.is_cpu(d) for d in self.devices), "multi_device": bool(getattr(self, "multi_device", False)), "rpc_slots": sorted(k for k, r in self.rpcs.items() if r.alive()), "uptime": int(time.time() - self.t0),
                   "devices": self.devices, "device": self.device and self.device["name"],
                   "device_desc": self.device and self.device["desc"], "device_error": self.device_error,
                   "gpu_warning": self.gpu_warning,

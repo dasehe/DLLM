@@ -29,6 +29,8 @@ from . import audit, backup, backup_schedule, tls, webhooks, discovery, engine, 
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
+RAM_SUFFIX = "#ram"           # entrada del reparto para la RAM de un nodo que también aporta su GPU
+RAM_ENTRY_OVERHEAD = 256 << 20  # buffers del dispositivo CPU de ese rpc-server
 CPU_BW_GBPS = 20  # ancho de banda de memoria supuesto al usar la RAM de un nodo con GPU (estimación gruesa)
 IDLE, LOADING, READY, RECOVERING, ERROR = "IDLE", "LOADING", "READY", "RECOVERING", "ERROR"
 UNLOADING = "UNLOADING"  # descargando / cancelando la carga
@@ -404,6 +406,13 @@ class Cluster:
                 cur["direct_local"] = False
             else:
                 cur.pop("direct_local", None)
+        if "use_ram" in req:  # nodo con GPU: usar también su RAM cuando el modelo no cabe en la VRAM (por defecto sí)
+            if req["use_ram"] not in (True, False, None):
+                raise ValueError("'use_ram' debe ser true o false")
+            if req["use_ram"] is False:
+                cur["use_ram"] = False
+            else:
+                cur.pop("use_ram", None)
         if "allow_slow" in req:
             if not isinstance(req["allow_slow"], bool):
                 raise ValueError("'allow_slow' debe ser true o false")
@@ -412,7 +421,8 @@ class Cluster:
             cur["allow_slow"] = req["allow_slow"]
             if not req["allow_slow"]:
                 cur.pop("allow_slow", None)
-        for k, lo, hi, typ in (("layers", 1, 4096, int), ("bw_gbps", 1.0, 10000.0, float)):
+        for k, lo, hi, typ in (("layers", 1, 4096, int), ("bw_gbps", 1.0, 10000.0, float), ("priority", 0, 10, int),
+                               ("ram_gb", 0.5, 4096.0, float), ("ram_bw_gbps", 1.0, 10000.0, float)):
             if k in req:
                 v = req[k]
                 if v in (None, ""):
@@ -507,7 +517,7 @@ class Cluster:
             vres = self.ledger.reserved(n.id, "vram", skip)
             rres = self.ledger.reserved(n.id, "ram", skip)
             row = {"id": n.id, "name": n.name, "up": up, "gpu": gpu, "backend": i.get("backend"),
-                   "device_desc": i.get("device_desc"), "cpu_device": bool(i.get("cpu_device")),
+                   "device_desc": i.get("device_desc"), "cpu_device": bool(i.get("cpu_device")), "multi_device": bool(i.get("multi_device")),
                    "vram_cap": cap if gpu else 0, "vram_reserved": vres if gpu else 0,
                    "vram_after": (vres if gpu else 0) + int(exv.get(n.id, 0)),
                    "ram_total": ram_total, "ram_free": int(i.get("ram_free") or 0), "ram_reserved": rres,
@@ -540,7 +550,8 @@ class Cluster:
 
     @staticmethod
     def parse_targets(targets):
-        """[{node, device}] → {nodo: 'gpu'|'cpu'}; None/[] = automático. Valida el formato."""
+        """[{node, device[, vram_gb, ram_gb]}] → {nodo: 'gpu'|'cpu'|'both'}; None/[] = automático. Valida el formato.
+        'both' = la GPU del nodo y además su RAM para las capas que no quepan en VRAM."""
         if not targets:
             return {}
         if not isinstance(targets, list) or len(targets) > 32:
@@ -550,9 +561,27 @@ class Cluster:
             if not isinstance(t, dict) or not isinstance(t.get("node"), str) or not t["node"]:
                 raise ValueError("cada destino necesita «node»")
             dev = str(t.get("device") or "gpu").lower()
-            if dev not in ("gpu", "cpu"):
-                raise ValueError(f"dispositivo no válido para {t['node']}: use gpu o cpu")
+            if dev not in ("gpu", "cpu", "both"):
+                raise ValueError(f"dispositivo no válido para {t['node']}: use gpu, cpu o both")
+            for k in ("vram_gb", "ram_gb"):
+                v = t.get(k)
+                if v not in (None, "") and (isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 4096):
+                    raise ValueError(f"{k} de {t['node']}: GiB entre 0 y 4096")
+            v = t.get("priority")
+            if v not in (None, "") and (isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 10):
+                raise ValueError(f"prioridad de {t['node']}: número entero entre 0 y 10")
             out[t["node"]] = dev
+        return out
+
+    @staticmethod
+    def target_caps(targets):
+        """Topes elegidos con los deslizantes: {nodo: {"vram": bytes|None, "ram": bytes|None}}."""
+        out = {}
+        for t in targets or []:
+            if isinstance(t, dict) and isinstance(t.get("node"), str):
+                out[t["node"]] = {k[:-3]: (int(float(t[k]) * hw.GiB) if t.get(k) not in (None, "") else None)
+                                  for k in ("vram_gb", "ram_gb")}
+                out[t["node"]]["priority"] = t.get("priority") if t.get("priority") not in (None, "") else None
         return out
 
     def make_plan(self, mpath, ctx, force_bench=True, ignore=(), targets=None, own=True):
@@ -564,7 +593,9 @@ class Cluster:
         skip = ({self.slot} if own else set()) | set(ignore)  # own=False: un slot nuevo, no sustituye a este
         kt, vt = ms.get("cache_type_k"), ms.get("cache_type_v")
         policy = ms.get("device_policy", "auto")
-        tmap = self.parse_targets(self.targets if targets is None else targets)
+        tsel = self.targets if targets is None else targets
+        tmap = self.parse_targets(tsel)
+        tcaps = self.target_caps(tsel)
         if HOST in tmap:
             if len(tmap) > 1:
                 p = scheduler.plan(m, [], ctx, self.cfg.min_mbps, kt, vt)
@@ -592,9 +623,11 @@ class Cluster:
         for n in up:
             i = n.info
             gpu_native = i.get("backend", "cpu") != "cpu"
-            dev = tmap.get(n.name)           # None: automático; 'gpu' o 'cpu': elegido a mano
+            dev = tmap.get(n.name)           # None: automático; 'gpu', 'cpu' o 'both': elegido a mano
             gpu = gpu_native and dev != "cpu"
-            if dev == "gpu" and not gpu_native:
+            if dev == "both" and not gpu_native:
+                dev = "cpu"                  # «GPU + RAM» en un nodo sin GPU: su RAM
+            if dev in ("gpu", "both") and not gpu_native:
                 excluded.append({"node": n.name, "reason": "se pidió GPU y el nodo no tiene"})
             elif dev == "cpu" and gpu_native and not i.get("cpu_device"):
                 excluded.append({"node": n.name, "reason": "se pidió CPU y su agente no la ofrece (actualízalo)"})
@@ -629,14 +662,40 @@ class Cluster:
                 held = self.ledger.reserved(n.id, "vram" if gpu else "ram", skip)
                 if held:
                     excluded_note.append(f"{n.name}: {held / hw.GiB:.1f} GiB reservados por otros modelos")
-                ok_nodes.append({"id": n.id, "name": n.name, "backend": "cpu" if cpu_on_gpu else i.get("backend", "cpu"),
+                caps = tcaps.get(n.name) or {}
+                if caps.get("vram" if gpu else "ram") is not None:  # tope elegido con el deslizante
+                    cap = min(cap, caps["vram" if gpu else "ram"] + scheduler.OVERHEAD_NODE)
+                prio_n = caps["priority"] if caps.get("priority") is not None else (ns.get("priority") or 0)
+                net = {"mbps": n.net["mbps"] if n.net else None, "rtt_ms": n.net["rtt_ms"] if n.net else None,
+                       "local": n.net.get("local") if n.net else None, "tier": n.net.get("tier") if n.net else None}
+                ok_nodes.append({"id": n.id, "host": n.id, "name": n.name,
+                                 "backend": "cpu" if cpu_on_gpu else i.get("backend", "cpu"),
                                  "gpu": gpu, "device": "gpu" if gpu else "cpu", "cap_bytes": cap,
                                  "bw_gbps": ns.get("bw_gbps") or (CPU_BW_GBPS if cpu_on_gpu else i.get("bw_gbps", 10)),
                                  "layers": ns.get("layers"), "allow_slow": bool(ns.get("allow_slow")),
-                                 "mbps": n.net["mbps"] if n.net else None,
-                                 "rtt_ms": n.net["rtt_ms"] if n.net else None,
-                                 "local": n.net.get("local") if n.net else None,
-                                 "tier": n.net.get("tier") if n.net else None})
+                                 "priority": prio_n, **net})
+                # GPU + RAM del mismo nodo: lo que no cabe en su VRAM va a su RAM (un solo rpc-server con los dos
+                # dispositivos: mismo túnel y mismo salto de red). Necesita un rpc-server con varios dispositivos.
+                want_ram = dev == "both" or (dev is None and policy in ("auto", "gpu_with_cpu_fallback")
+                                             and ns.get("use_ram") is not False)
+                if gpu and want_ram:
+                    if not (i.get("multi_device") and i.get("cpu_device")):
+                        if dev == "both":
+                            excluded_note.append(f"{n.name}: solo su GPU (su rpc-server no admite GPU y RAM a la vez: "
+                                                 "actualiza llama.cpp o el agente del nodo)")
+                    else:
+                        rcap = self.ledger.available_ram(n.id, int(i.get("ram_total") or 0), i.get("ram_free"), skip)
+                        rcap = max(0, rcap - scheduler.IO_RAM)
+                        if ns.get("ram_gb"):
+                            rcap = min(rcap, int(ns["ram_gb"] * hw.GiB))
+                        if caps.get("ram") is not None:
+                            rcap = min(rcap, caps["ram"] + RAM_ENTRY_OVERHEAD)
+                        ok_nodes.append({"id": n.id + RAM_SUFFIX, "host": n.id, "name": n.name, "aux": True,
+                                         "backend": "cpu", "gpu": False, "device": "cpu", "cap_bytes": rcap,
+                                         "overhead": RAM_ENTRY_OVERHEAD,
+                                         "bw_gbps": ns.get("ram_bw_gbps") or CPU_BW_GBPS, "layers": None,
+                                         "allow_slow": bool(ns.get("allow_slow")),
+                                         "priority": prio_n, **net})
         place = ms.get("placement", "auto")
         if place == "auto":
             place = engine.driver_for(ms).default_placement()
@@ -653,12 +712,14 @@ class Cluster:
             by = {n["id"]: n for n in ok_nodes}
             vr, rr = {}, {}
             for a in p["assignments"]:
-                a["device"] = by[a["node_id"]]["device"]
-                if by[a["node_id"]].get("gpu"):
-                    vr[a["node_id"]] = a["bytes"] + scheduler.OVERHEAD_NODE
-                    rr[a["node_id"]] = scheduler.IO_RAM
+                e = by.get(a["node_id"]) or {}
+                host = e.get("host") or a["node_id"]
+                a["entry"], a["node_id"], a["device"] = a["node_id"], host, e.get("device", a.get("device"))
+                if e.get("gpu"):
+                    vr[host] = vr.get(host, 0) + a["bytes"] + scheduler.OVERHEAD_NODE
+                    rr[host] = rr.get(host, 0) + scheduler.IO_RAM
                 else:
-                    rr[a["node_id"]] = a["bytes"] + scheduler.OVERHEAD_NODE
+                    rr[host] = rr.get(host, 0) + a["bytes"] + scheduler.overhead(e)
             if p.get("host_ram"):
                 rr[HOST] = p["host_ram"]
             p["reserve"] = {"vram": vr, "ram": rr}
@@ -1084,15 +1145,23 @@ class Cluster:
                         raise LoadError(plan["reason"])
                     rsv = plan.get("reserve") or {}
                     self.ledger.reserve(self.slot, rsv.get("vram"), rsv.get("ram"))
-                used = [self.reg.get(a["node_id"]) for a in plan["assignments"]]
+                hosts = list(dict.fromkeys(a["node_id"] for a in plan["assignments"]))  # equipos, en orden
+                used = [self.reg.get(h) for h in hosts]
                 self.direct = self._direct_device(plan, used)
                 if self.direct:
-                    self.event(f"el modelo cabe en la GPU local ({self.direct['desc']}): se ejecuta directamente, sin RPC",
-                               kind="load")
+                    if len(plan["assignments"]) > 1:  # GPU local + RAM local: -ngl con las capas de la GPU
+                        plan["ngl"] = plan["assignments"][0]["layers"]
+                        self.event(f"GPU local ({self.direct['desc']}) + RAM de este equipo, sin RPC: "
+                                   f"{plan['ngl']} capas en GPU", kind="load")
+                    else:
+                        self.event(f"el modelo cabe en la GPU local ({self.direct['desc']}): se ejecuta directamente, "
+                                   "sin RPC", kind="load")
                 else:
                     for n in used:
-                        self.event(f"arrancando rpc-server en {n.name}" + (f" (slot {self.slot})" if self.slot else ""))
-                        dev = next((a.get("device") for a in plan["assignments"] if a["node_id"] == n.id), None)
+                        devs = {a.get("device") for a in plan["assignments"] if a["node_id"] == n.id}
+                        dev = "gpu+cpu" if devs == {"gpu", "cpu"} else next(iter(devs), None)
+                        self.event(f"arrancando rpc-server en {n.name}" + (f" (slot {self.slot})" if self.slot else "")
+                                   + (" con GPU y RAM" if dev == "gpu+cpu" else ""))
                         call_agent(self.reg.secret, n, "POST", "/rpc/start", {"slot": self.slot, "device": dev},
                                    timeout=40)
                         self._chk(gen)
@@ -1145,7 +1214,7 @@ class Cluster:
         if len(used) != 1 or not used[0]:
             return None, "el reparto usa más de un nodo"
         n, a = used[0], plan["assignments"][0]
-        if a.get("device") == "cpu" or a.get("backend") == "cpu":
+        if a.get("device") == "cpu" or a.get("backend") == "cpu":  # (la GPU va primero si también usa su RAM)
             return None, "el reparto es en CPU"
         if not is_local_host(n.host):
             return None, f"el nodo {n.name} no es este equipo"
@@ -1217,9 +1286,10 @@ class Cluster:
         if not rem:
             self.event("aviso: esta versión de llama-server no lista los dispositivos remotos; se lanza sin --device")
             return []
-        if len(rem) != len(rpc):
-            raise LoadError(f"los nodos exponen {len(rem)} dispositivos y se esperaban {len(rpc)} (uno por nodo): "
-                            "actualiza los agentes o fija el dispositivo de cada nodo con --device")
+        if len(rem) != len(plan["assignments"]):
+            raise LoadError(f"los nodos exponen {len(rem)} dispositivos y se esperaban {len(plan['assignments'])} "
+                            "(uno por GPU o RAM del reparto): actualiza los agentes o fija el dispositivo de cada nodo "
+                            "con --device")
         for d, a in zip(rem, plan["assignments"]):
             if a["bytes"] > d["free"]:
                 self.event(f"aviso: a {a['name']} se le asignan {a['bytes'] / hw.GiB:.1f} GiB y su dispositivo "
