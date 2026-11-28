@@ -71,6 +71,34 @@ class GpuRam(unittest.TestCase):
         self.assertIn("vAI1 (RAM)", p["reason"])
 
 
+class GpuAntesQueRam(unittest.TestCase):
+    def test_todas_las_gpu_antes_que_cualquier_ram(self):
+        # 2 nodos con GPU y RAM: el modelo no cabe en una GPU → GPU1 + GPU2, sin tocar la RAM
+        nodes = gpu("a", 12, 14, local=True, rtt=0.05) + gpu("b", 12, 14, rtt=0.3)
+        p = scheduler.plan(MODEL, nodes, ctx=8128)
+        self.assertTrue(p["ok"], p["reason"])
+        self.assertEqual([(a["host_id"], a["device"]) for a in p["assignments"]], [("a", "gpu"), ("b", "gpu")])
+
+    def test_ram_solo_cuando_no_caben_todas_las_gpu(self):
+        nodes = gpu("a", 6, 14, local=True, rtt=0.05) + gpu("b", 6, 14, rtt=0.3) + gpu("c", 5, 14, rtt=0.3)
+        p = scheduler.plan(MODEL, nodes, ctx=8128)
+        self.assertTrue(p["ok"], p["reason"])
+        gpus = [a for a in p["assignments"] if a["device"] == "gpu"]
+        self.assertEqual(len(gpus), 3)                       # las tres GPU llenas primero
+        ram = sum(a["bytes"] for a in p["assignments"] if a["device"] == "cpu")
+        self.assertLess(ram, 6 * GiB)                        # y solo lo que falta en RAM (~5.5 GiB)
+        hosts = [a["host_id"] for a in p["assignments"]]
+        self.assertEqual(hosts, sorted(hosts, key=hosts.index))  # cada equipo junto (un rpc-server por equipo)
+
+    def test_granja_de_gpus_voraz(self):
+        nodes = []
+        for i in range(10):  # 20 entradas: reparto voraz, también GPU antes que RAM
+            nodes += gpu(f"g{i}", 3, 14, rtt=0.3)
+        p = scheduler.plan(MODEL, nodes, ctx=8128)
+        self.assertTrue(p["ok"], p["reason"])
+        self.assertTrue(all(a["device"] == "gpu" for a in p["assignments"]))
+
+
 class RpcMultiDevice(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "binarios simulados POSIX")
     def test_detecta_rpc_server_con_varios_dispositivos(self):

@@ -4,6 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.17.1] - 2026-11-28
+
+### Cambiado
+- **Primero todas las GPU, luego la RAM**: con varios nodos con GPU y RAM, el reparto llena GPU1 + GPU2 + … antes que
+  RAM1 + RAM2 + … (la VRAM siempre es más rápida), también en granjas grandes (reparto voraz en el mismo orden). La
+  prioridad por nodo sigue mandando por encima, y los enlaces de tier 3 solo se usan si no cabe sin ellos.
+
 ## [0.17.0] - 2026-11-28
 
 ### Añadido

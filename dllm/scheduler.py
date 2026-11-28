@@ -11,9 +11,10 @@ hasta su capacidad, y usando el mínimo de nodos (cada nodo extra añade un salt
 Es una estimación gruesa: sirve para ordenar y para avisar, no como benchmark.
 
 Topología de red (0.5.0): cada nodo tiene un TIER según su enlace con el orquestador (ver `classify`). Entre los
-repartos que caben, se elige por este orden: (1) el tier más alto usado, lo más bajo posible, (2) menos saltos de
-red (nodos remotos), (3) menor tiempo por token estimado, (4) menos nodos. Un nodo de tier 3 solo entra si el
-modelo no cabe sin él.
+repartos que caben, se elige por este orden (0.17.1): (1) lo más posible en los nodos con prioridad, (2) sin enlaces de
+tier 3 si se puede, (3) **lo más posible en GPU**: GPU1+GPU2+… antes que RAM1+RAM2+… (la VRAM siempre es mucho más
+rápida), (4) el tier más alto usado, lo más bajo posible, (5) menos saltos de red (equipos remotos; la GPU y la RAM de un
+mismo equipo cuentan como uno), (6) menor tiempo por token estimado, (7) menos equipos.
 """
 from itertools import combinations
 
@@ -141,6 +142,11 @@ def prio(n):
     return n.get("priority") or 0
 
 
+def is_ram(n):
+    """¿Esta entrada es RAM (CPU)? Las GPU siempre van antes: su memoria es mucho más rápida."""
+    return n.get("device") == "cpu" or n.get("backend") == "cpu"
+
+
 def node_tier(n):
     return n["tier"] if n.get("tier") is not None else classify(n.get("local"), n.get("rtt_ms"), n.get("mbps"))
 
@@ -148,7 +154,7 @@ def node_tier(n):
 def _fill(subset, remaining, usable):
     """Llena el subconjunto por orden de tier y de velocidad; devuelve [(nodo, bytes)] o None si no cabe."""
     out = []
-    for n in sorted(subset, key=lambda n: (-prio(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"])):
+    for n in sorted(subset, key=lambda n: (-prio(n), is_ram(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"])):
         if remaining <= 0:
             break
         take = min(usable(n), remaining)
@@ -165,8 +171,10 @@ def _choose(free, remaining, need, model, forced, usable, max_nodes=None):
         t += sum((rtt or 0.5) / 1000 for rtt in {host_of(n): n.get("rtt_ms") for n, _ in picks}.values())
         hosts = {host_of(n) for n in fo if node_tier(n) > 0}  # saltos de red: equipos remotos, no entradas
         pr = -sum(take * prio(n) for n, take in picks)          # lo más posible en los nodos con prioridad
-        return (pr, max([node_tier(n) for n in fo] or [0]), len(hosts), t, len({host_of(n) for n, _ in picks}),
-                len(picks))
+        tiers = [node_tier(n) for n in fo] or [0]
+        far = max(tiers) >= 3                                   # Wi-Fi/VPN/WAN: solo si no cabe sin ellos
+        ram = sum(take for n, take in picks if is_ram(n))       # GPU1+GPU2+… antes que RAM1+RAM2+…
+        return (pr, far, ram, max(tiers), len(hosts), t, len({host_of(n) for n, _ in picks}), len(picks))
 
     if len(free) > MAX_SUBSET_NODES and not max_nodes:  # demasiados nodos: voraz por tier y velocidad
         return _fill(free, remaining, usable)
@@ -239,7 +247,7 @@ def plan(model, nodes, ctx=4096, min_mbps=800.0, k_type="f16", v_type="f16", max
                 res["excluded"].append({"node": n["name"], "reason": "memoria libre insuficiente"})
         else:
             elig.append(n)
-    elig.sort(key=lambda n: (-prio(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"]))
+    elig.sort(key=lambda n: (-prio(n), is_ram(n), node_tier(n), -n["bw_gbps"], -n["cap_bytes"]))
 
     remaining, picks = need, []
     total_usable = sum((n["cap_bytes"] - overhead(n)) * HEADROOM for n in elig)

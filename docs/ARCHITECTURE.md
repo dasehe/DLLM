@@ -145,9 +145,12 @@ proportionally with the largest remainder method. Margin per node: 512 MiB + 5 %
 planner: its VRAM and its RAM (`host` = the same computer, RAM bandwidth ~20 GB/s unless set). Both entries share the
 tunnel and count as **one network hop**, and they are kept together and in device order (GPU, then CPU) because the
 node starts a single `rpc-server -d <GPU>,CPU`; llama-server sees two remote devices and `--tensor-split` gives each its
-share. Order of preference between splits that fit: (1) the **priority** chosen for the nodes (bytes on prioritized
-nodes), (2) the highest tier used, (3) remote computers (hops), (4) estimated time per token, (5) number of computers.
-So with no priority set, a model that does not fit in a GPU uses that computer's RAM before adding another computer.
+share. Order of preference between splits that fit (0.17.1): (1) the **priority** chosen for the nodes (bytes on
+prioritized nodes), (2) no tier-3 links if possible, (3) **as much as possible on GPU**: GPU1 + GPU2 + … before RAM1 +
+RAM2 + … (VRAM is always much faster), (4) the highest tier used, (5) remote computers (hops), (6) estimated time per
+token, (7) number of computers. So, with no priority set, all the cluster's GPUs are filled first (also in large
+farms: with more than 12 entries the planner fills greedily in that same order) and only what does not fit goes to RAM,
+using first the RAM of computers already in the split.
 
 ### Model slots and memory ledger
 

@@ -49,9 +49,10 @@ De arriba abajo:
    llena primero). Así un modelo pequeño puede usar la RAM de un nodo concreto y dejar la GPU libre para los grandes.
    «Orquestador (RAM local)» va solo (no se combina con nodos).
 
-   **GPU + RAM del mismo nodo** (también en *Automático*): si un modelo no cabe en la VRAM de un nodo, el resto va primero
-   a **la RAM de ese nodo** (mismo equipo: sin otro salto de red y por el mismo túnel) y solo lo que aún no cabe pasa al
-   siguiente nodo. El plan muestra claramente qué coge de cada equipo (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`, con GiB
+   **Primero GPU, luego RAM** (también en *Automático*): el modelo llena primero **todas las GPU** del clúster (GPU1 +
+   GPU2 + …) y solo lo que no cabe va a RAM (RAM1 + RAM2 + …), empezando por la de los equipos que ya están en el reparto
+   (mismo equipo: sin otro salto de red y por el mismo túnel). Con una **prioridad** puedes pedir que llene antes un nodo
+   concreto (su GPU y luego su RAM) que los demás. El plan muestra claramente qué coge de cada equipo (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`, con GiB
    y capas). Necesita un llama.cpp reciente cuyo `rpc-server` exponga varios dispositivos (`-d CUDA0,CPU`; el agente lo
    detecta); con uno antiguo el nodo presta solo su GPU. En el propio equipo del orquestador se ejecuta directo con
    `-ngl` (capas en GPU) y el resto en su RAM, sin RPC. Por nodo se puede desactivar (*Usar también su RAM*) o limitar

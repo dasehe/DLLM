@@ -50,9 +50,10 @@ From top to bottom:
    small model can use a specific node's RAM and keep the GPU free for large ones. "Orchestrator (local RAM)" goes alone
    (not combined with nodes).
 
-   **GPU + RAM of the same node** (also in *Automatic*): when a model does not fit in a node's VRAM, the rest goes first
-   to **that node's RAM** (same computer: no extra network hop and the same tunnel), and only what still does not fit
-   goes to the next node. The plan shows clearly what each computer takes (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`
+   **GPU first, then RAM** (also in *Automatic*): the model fills **all the GPUs** of the cluster first (GPU1 + GPU2 +
+   …) and only what does not fit goes to RAM (RAM1 + RAM2 + …), starting with the RAM of computers already in the split
+   (same computer: no extra network hop and the same tunnel). With a **priority** you can tell it to fill one node
+   first (its GPU and then its RAM) before the others. The plan shows clearly what each computer takes (`vAI1 GPU`, `vAI1 RAM (CPU)`, `vAI2 CPU`
    with GiB and layers). It needs a recent llama.cpp whose `rpc-server` exposes several devices (`-d CUDA0,CPU`; the
    agent detects it); with an older one the node lends only its GPU. On the orchestrator's own computer it runs directly
    with `-ngl` (GPU layers) and the rest in its RAM, without RPC. Per node it can be disabled (*Use its RAM too*) or
