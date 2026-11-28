@@ -32,6 +32,7 @@ knowledge of the cluster secret.
 | Update ordered by the orchestrator | `POST /llama/install` signed with HMAC; only a validated `bNNNN` tag; the agent downloads only from the official ggml-org/llama.cpp releases with sha256. Can be disabled with `--no-auto-update` (node) or `--no-auto-sync` (orchestrator) |
 | llama.cpp downloads | sha256 published by GitHub; extraction rejects path traversal, escaping links and special files |
 | Backups | Optional encryption with PBKDF2-HMAC-SHA256 (600k iterations) + HMAC; files written with permissions 600; restore checks the integrity tag before decrypting and the sha256 of every file, and only accepts an allowlist of file names |
+| Scheduled backups | Always encrypted (same scheme as manual backups), files 600 in a 700 folder; the password lives in `backup_schedule.json` (600) and is never returned by the API; only `dllm-auto-*.dllmbak` files are rotated |
 | Secrets on disk | `~/.dllm/config.json` with permissions 600; the service does not carry the secret in its definition |
 | Service | Per user, unprivileged; on Linux `NoNewPrivileges` and `PrivateTmp` |
 

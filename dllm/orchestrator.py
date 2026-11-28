@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import (__version__, auth, config, devices, gguf, hw, installer, legal_notice, models, pairing, presence,
                scheduler)
-from . import audit, backup, webhooks, discovery, engine, eventlog, i18n, users
+from . import audit, backup, backup_schedule, webhooks, discovery, engine, eventlog, i18n, users
 from .ledger import HOST, Ledger
 from .util import FastHTTPServer, Tunnel, log, probe_link
 
@@ -278,6 +278,7 @@ class Cluster:
     El slot 0 (el «principal») además hace de coordinador: crea y reúne los demás (`self.slots`) y comparte con
     ellos el registro de nodos, el gestor de modelos y el libro de memoria (`ledger`)."""
     users = None        # usuarios y permisos (users.Users), lo asigna run()
+    bsched = None       # copias programadas (backup_schedule.BackupScheduler), lo asigna run()
     local_token = None  # token local de la terminal (users.write_local_token)
 
     def __init__(self, cfg, reg, slot=0, parent=None, pinned=True):
@@ -2241,6 +2242,22 @@ def make_handler(cfg, cl):
                     except ValueError:
                         raise ValueError("'since' debe ser una marca de tiempo")
                     return self._send(200, cl.telemetry(since))
+                if path == "/api/backup/schedule":
+                    if cl.bsched is None:
+                        return self._send(404, {"error": "no encontrado"})
+                    try:
+                        if self.command == "POST":
+                            return self._send(200, cl.bsched.configure(req))
+                        return self._send(200, cl.bsched.view())
+                    except backup_schedule.ScheduleError as e:
+                        return self._send(400, {"error": str(e)})
+                if path == "/api/backup/schedule/run" and self.command == "POST":
+                    if cl.bsched is None:
+                        return self._send(404, {"error": "no encontrado"})
+                    try:
+                        return self._send(200, {**cl.bsched.run_now(), "schedule": cl.bsched.view()})
+                    except backup_schedule.ScheduleError as e:
+                        return self._send(409, {"error": str(e)})
                 if path == "/api/backup/export" and self.command == "POST":
                     blob, fname = cl.export_backup(req.get("passphrase"), req.get("plain") is True,
                                                    req.get("include_logs") is True)
@@ -2399,6 +2416,11 @@ def run(cfg):
     if cfg.api_key and not cl.users.key_user(cfg.api_key)[0]:  # la API key de siempre pasa a ser de admin
         cl.users.create_key(users.ADMIN, "clave de config.json", key=cfg.api_key)
     cl.local_token = users.write_local_token(config.home())
+    host = socket.gethostname()
+    cl.bsched = backup_schedule.BackupScheduler(
+        config.home(), lambda pw, logs: backup.build(config.home(), cl.inventory(), __version__, host, logs, pw),
+        event=lambda m, lv: cl.event(m, level=lv, kind="backup"), host=host)
+    threading.Thread(target=cl.bsched.loop, daemon=True).start()
     for x in cl.added_nodes():  # nodos añadidos a mano en otras sesiones
         try:
             reg.add(discovery.valid_host(x["host"]), discovery.valid_port(x.get("port")), static=True)

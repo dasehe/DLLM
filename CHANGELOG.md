@@ -4,6 +4,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); v
 
 ## [Sin publicar]
 
+## [0.14.0] - 2026-11-28
+
+### Añadido
+- **Copias de seguridad programadas y siempre cifradas** (Sistema → Copias programadas): cada N horas en la carpeta
+  elegida (p. ej. un NAS), ficheros 600, retención de las N últimas (solo borra `dllm-auto-*.dllmbak`), botón *Hacer
+  copia ahora*. La contraseña se guarda en `backup_schedule.json` (600) y nunca sale por la API. Aciertos y fallos en
+  Registros y alertas. API `GET|POST /api/backup/schedule` y `POST /api/backup/schedule/run`.
+
 ## [0.13.0] - 2026-11-28
 
 ### Añadido

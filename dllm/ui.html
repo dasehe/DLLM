@@ -359,6 +359,18 @@ footer{max-width:1240px;margin:0 auto;padding:8px 16px 24px;font-size:12px;text-
         <div id="bk_go" class="hide"><label class="switch" style="margin-top:6px"><input type="checkbox" id="bk_ok"> Entiendo que sustituye la configuración actual (se guarda una copia previa)</label>
           <div class="row" style="margin-top:8px"><button onclick="bkImport()">Restaurar ahora</button></div></div>
         <div id="bk_res" style="margin-top:10px"></div></div>
+      <div class="card"><h3>🕒 Copias programadas</h3>
+        <label class="switch" style="margin-top:10px"><input type="checkbox" id="bs_on"> Activar</label>
+        <div class="form" style="margin-top:8px">
+          <label>Cada (horas)<input id="bs_h" type="number" min="1" max="720"></label>
+          <label>Conservar (copias)<input id="bs_k" type="number" min="1" max="100"></label>
+          <label>Carpeta<input id="bs_dir" class="notr"></label>
+          <label>Contraseña de cifrado (mín. 8)<input id="bs_pw" type="password" autocomplete="new-password"></label></div>
+        <label class="switch adv" style="margin-top:6px"><input type="checkbox" id="bs_logs"> Incluir también los registros históricos</label>
+        <div class="row" style="margin-top:10px"><button onclick="bsSave()">Guardar</button><button class="sec" onclick="bsRun()">Hacer copia ahora</button></div>
+        <div id="bs_msg" style="margin-top:6px"></div>
+        <div id="bs_st" class="mut" style="font-size:12px;margin-top:6px"></div>
+        <div class="mut" style="font-size:12px;margin-top:8px">Siempre cifradas. La contraseña se guarda en este equipo (<code>backup_schedule.json</code>, permisos 600) para poder hacerlas sin nadie delante: protege las copias que lleves a otro sitio (NAS, nube). Apunta la contraseña en lugar seguro: sin ella no se pueden restaurar. Solo se borran las copias antiguas creadas aquí (<code>dllm-auto-*.dllmbak</code>).</div></div>
     </div>
   </section>
   <section><h2>Alertas (webhooks)</h2>
@@ -649,7 +661,15 @@ function renderSlots(){const sl=(S&&S.slots||[]).filter(x=>x.model||x.slot===0||
 async function unload(){try{await api('POST','/api/unload');renderPlan(null);refresh()}catch(e){alert(e.message)}}
 
 /* ---------- sistema: copia de seguridad ---------- */
-function sysLoad(){whLoad()}
+function sysLoad(){whLoad();bsLoad()}
+let BS=null;
+function bsShow(b){BS=b;$('bs_on').checked=b.enabled;$('bs_h').value=b.every_hours;$('bs_k').value=b.keep;if(document.activeElement!==$('bs_dir'))$('bs_dir').value=b.dir;$('bs_logs').checked=b.include_logs;
+  $('bs_pw').placeholder=b.has_passphrase?'(guardada; vacío = no cambiarla)':'';
+  const l=b.last;$('bs_st').innerHTML=(l?(l.ok?`✅ Última: ${when(l.t)} · <code class="notr">${esc(l.file||'')}</code> · ${gib(l.size)}`:`❌ Última: ${when(l.t)} · ${esc(l.error||'')}`):'Todavía no se ha hecho ninguna.')+
+    (b.next?` · Próxima: ${when(b.next)}`:'')+` · ${b.files.length} copias en la carpeta`}
+async function bsLoad(){try{bsShow(await api('GET','/api/backup/schedule'))}catch(e){}}
+async function bsSave(){const m=$('bs_msg');try{bsShow(await api('POST','/api/backup/schedule',{enabled:$('bs_on').checked,every_hours:Number($('bs_h').value),keep:Number($('bs_k').value),dir:$('bs_dir').value.trim(),include_logs:$('bs_logs').checked,passphrase:$('bs_pw').value}));$('bs_pw').value='';m.innerHTML='<span class="ok">Guardado.</span>'}catch(e){m.innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
+async function bsRun(){const m=$('bs_msg');m.innerHTML='<span class="mut">Creando copia…</span>';try{const r=await api('POST','/api/backup/schedule/run',{});bsShow(r.schedule);m.innerHTML=r.ok?'<span class="ok">Copia creada.</span>':'<span class="err">'+esc(r.error||'error')+'</span>'}catch(e){m.innerHTML='<span class="err">'+esc(e.message)+'</span>'}}
 let WH=null;
 const lvlTxt=l=>({warn:'avisos y errores',error:'solo errores',info:'todo'}[l]||l);
 async function whLoad(){try{WH=await api('GET','/api/webhooks')}catch(e){return}

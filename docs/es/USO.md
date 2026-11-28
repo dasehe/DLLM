@@ -469,6 +469,16 @@ re-descargan). **Restaurar copia** muestra qué contiene y qué cambiaría; ante
 `~/.dllm/backups/` (conserva 5). Equivalente en terminal: `dllm backup export|inspect|import`. Si la restauración cambia
 el secreto o la API key, pide reiniciar. En un equipo nuevo: instalador → *Restaurar desde una copia*.
 
+**Copias programadas** (*Sistema* → *🕒 Copias programadas*): cada N horas (1–720, por defecto 24) crea una copia
+**siempre cifrada** en la carpeta elegida (ruta absoluta; por defecto `~/.dllm/scheduled-backups`, p. ej. un montaje del
+NAS) con permisos 600 y conserva las N más recientes (1–100, por defecto 7). Al activarlas se hace la primera en menos de un minuto;
+*Hacer copia ahora* hace una cuando quieras. Solo se borran las copias antiguas creadas por la programación
+(`dllm-auto-*.dllmbak`). La contraseña de cifrado se guarda en el orquestador (`~/.dllm/backup_schedule.json`, permisos
+600, nunca la devuelve la API) para poder hacerlas sin nadie delante: protege las copias que lleves a otro sitio; apúntala
+en lugar seguro, sin ella no se pueden restaurar. Los aciertos y fallos van a *Registros* (tipo `backup`) y, por tanto, a
+las alertas por webhook. API: `GET|POST /api/backup/schedule` (`{enabled, every_hours, keep, dir, include_logs,
+passphrase}`; contraseña vacía = conservar la actual) y `POST /api/backup/schedule/run` (permiso `system`).
+
 ### Varios modelos a la vez
 
 Cada modelo cargado ocupa un *slot* (hasta 8) con su propio `llama-server` y sus `rpc-server`; la memoria de cada nodo se

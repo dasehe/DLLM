@@ -293,6 +293,23 @@ class LoginE2E(unittest.TestCase):
         finally:
             rx.close()
 
+    def test_7_copias_programadas(self):
+        tok = Path(self.home, "local.token").read_text().strip()
+        out = os.path.join(self.tmp, "copias")
+        st, j, _ = self.req("POST", "/api/backup/schedule", {"enabled": True, "every_hours": 24, "keep": 3,
+                                                             "dir": out, "passphrase": "frase-programada"}, bearer=tok)
+        self.assertEqual(st, 200, j)
+        self.assertNotIn("frase-programada", json.dumps(j))
+        if not Path(self.home, "config.json").exists():  # instalado con argumentos: sin config.json que copiar
+            st, r, _ = self.req("POST", "/api/backup/schedule/run", {}, bearer=tok)
+            self.assertEqual((st, r["ok"]), (200, False))       # el fallo se informa (y queda en Registros)
+            Path(self.home, "config.json").write_text("{}")
+        st, r, _ = self.req("POST", "/api/backup/schedule/run", {}, bearer=tok)
+        self.assertEqual((st, r["ok"]), (200, True), r)
+        self.assertTrue(os.path.isfile(r["file"]) and r["file"].startswith(out))
+        self.assertNotIn("frase-programada", Path(self.home, "audit.jsonl").read_text(encoding="utf-8"))
+        self.assertEqual(self.req("POST", "/api/backup/schedule", {"dir": "x/y"}, bearer=tok)[0], 400)
+
 
 if __name__ == "__main__":
     unittest.main()

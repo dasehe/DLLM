@@ -480,6 +480,16 @@ re-downloaded). **Restore backup** shows what it contains and what would change;
 current state in `~/.dllm/backups/` (keeps 5). Terminal equivalent: `dllm backup export|inspect|import`. If the restore
 changes the secret or the API key, it asks for a restart. On a new computer: installer → *Restore from a backup*.
 
+**Scheduled backups** (*System* → *🕒 Scheduled backups*): every N hours (1–720, default 24) it creates an
+**always encrypted** backup in the chosen folder (absolute path; default `~/.dllm/scheduled-backups`, e.g. a NAS mount)
+with permissions 600 and keeps the latest N (1–100, default 7). When enabled, the first one is made within a minute; *Back up
+now* makes one at any time. Only old backups created by the schedule (`dllm-auto-*.dllmbak`) are deleted. The encryption
+password is stored on the orchestrator (`~/.dllm/backup_schedule.json`, permissions 600, never returned by the API) so
+they run unattended: it protects the copies you take elsewhere; write it down somewhere safe, without it they cannot be
+restored. Success and failures go to *Logs* (type `backup`) and therefore to the webhook alerts. API:
+`GET|POST /api/backup/schedule` (`{enabled, every_hours, keep, dir, include_logs, passphrase}`; empty passphrase keeps
+the current one) and `POST /api/backup/schedule/run` (permission `system`).
+
 ### Several models at once
 
 Each loaded model takes a *slot* (up to 8) with its own `llama-server` and its `rpc-server`s; each node's memory is

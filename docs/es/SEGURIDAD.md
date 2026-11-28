@@ -30,6 +30,7 @@ exige demostrar que se conoce el secreto del clúster.
 | Token de Hugging Face | `~/.dllm/secrets.json` (600); solo se envía a huggingface.co: se quita de la petición si una redirección lleva a otro host (CDN) |
 | Actualización ordenada por el orquestador | `POST /llama/install` firmado con HMAC; solo una etiqueta `bNNNN` validada; el agente descarga únicamente de las releases oficiales de ggml-org/llama.cpp con sha256. Desactivable con `--no-auto-update` (nodo) o `--no-auto-sync` (orquestador) |
 | Descargas de llama.cpp | sha256 publicado por GitHub; extracción que rechaza path traversal, enlaces que escapan y ficheros especiales |
+| Copias programadas | Siempre cifradas (mismo esquema que las manuales), ficheros 600 en carpeta 700; la contraseña está en `backup_schedule.json` (600) y la API nunca la devuelve; solo se rotan los ficheros `dllm-auto-*.dllmbak` |
 | Secretos en disco | `~/.dllm/config.json` con permisos 600; el servicio no lleva el secreto en su definición |
 | Servicio | De usuario, sin privilegios; en Linux `NoNewPrivileges` y `PrivateTmp` |
 
